@@ -221,7 +221,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               'Se connecter',
               style: AppTextStyles.interSemiBold.copyWith(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: AppColors.primary,
                 decoration: TextDecoration.underline,
               ),
             ),

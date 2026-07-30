@@ -3,20 +3,23 @@ import 'package:flutter/material.dart';
 /// Couleurs de l'application JOEM
 /// Design System cohérent et réutilisable
 class AppColors {
-  // Couleur principale - Violet premium
-  static const Color primary = Color(0xFF6C63FF);
-  static const Color primaryLight = Color(0xFF9B8CFF);
-  static const Color primaryDark = Color(0xFF5A52D5);
-  static const Color secondary = Color(0xFF9B8CFF);
+  // Couleur principale - Mauve doux JOEM
+  static const Color primary = Color(0xFFA855F7);
+  static const Color primaryLight = Color(0xFFC58AF9);
+  static const Color primaryLighter = Color(0xFFD8B4FE);
+  static const Color primaryLightest = Color(0xFFEAD8FF);
+  static const Color primaryDark = Color(0xFF9333EA);
+  static const Color secondary = Color(0xFFC58AF9);
 
-  // Couleurs de fond
-  static const Color background = Color(0xFF0A0A0F);
-  static const Color surface = Color(0xFF1A1A2E);
+  // Couleurs de fond (thème clair pour dashboard)
+  static const Color background = Color(0xFFFFFFFF); // Blanc pur
+  static const Color surface = Color(0xFFF9FAFB);
+  static const Color cardBackground = Color(0xFFFFFFFF);
 
-  // Couleurs de texte
-  static const Color textPrimary = Colors.white;
-  static const Color textSecondary = Color(0xCCFFFFFF); // rgba(255,255,255,0.80)
-  static const Color textTertiary = Color(0x99FFFFFF); // rgba(255,255,255,0.60)
+  // Couleurs de texte (thème clair)
+  static const Color textPrimary = Color(0xFF1A1A2E);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textTertiary = Color(0xFF9CA3AF);
 
   // Couleurs d'overlay
   static const Color overlayTop = Color(0x73000000); // opacity 0.45

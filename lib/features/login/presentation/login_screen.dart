@@ -7,6 +7,9 @@ import 'package:joem/core/widgets/glass_button.dart';
 import 'package:joem/core/widgets/google_sign_in_button.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/or_divider.dart';
+import 'package:joem/core/services/auth_service.dart';
+import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
+import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 
 /// Écran "Connexion" : pas de wizard, un simple formulaire email + mot
 /// de passe (ou Google) sur fond blanc, même identité visuelle que les
@@ -22,6 +25,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -38,9 +43,55 @@ class _LoginScreenState extends State<LoginScreen> {
     debugPrint('Navigation vers mot de passe oublié');
   }
 
-  void _onSubmit() {
-    // TODO: Authentification email + mot de passe
-    debugPrint('Connexion avec ${_emailController.text}, se souvenir: $_rememberMe');
+  Future<void> _onSubmit() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez remplir tous les champs'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final success = await _authService.login(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (success && mounted) {
+      // Rediriger vers le dashboard approprié
+      if (_authService.isEmployer()) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const EmployerDashboard(),
+          ),
+        );
+      } else if (_authService.isJobSeeker()) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const JobSeekerDashboard(),
+          ),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email ou mot de passe incorrect'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   @override
@@ -156,8 +207,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: GlassButton(
-                              label: 'Se connecter',
-                              onTap: _onSubmit,
+                              label: _isLoading ? 'Connexion...' : 'Se connecter',
+                              onTap: _isLoading ? null : _onSubmit,
                             ),
                           ),
                         ],

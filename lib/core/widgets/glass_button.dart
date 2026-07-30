@@ -40,7 +40,7 @@ class GlassButton extends StatelessWidget {
         border: _isFilled
             ? null
             : Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
-        boxShadow: _isFilled ? AppShadows.glow() : null,
+        boxShadow: _isFilled ? AppShadows.glowShadow : null,
       ),
       child: Material(
         color: Colors.transparent,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:joem/features/welcome/presentation/welcome_screen.dart';
+import 'package:joem/features/splash/presentation/splash_screen.dart';
 
 void main() {
   runApp(const JOEMApp());
@@ -17,7 +17,7 @@ class JOEMApp extends StatelessWidget {
         // Material Design 3
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
+          seedColor: const Color(0xFFA855F7),
           brightness: Brightness.dark,
         ),
         // Désactiver le splash par défaut pour un look plus premium
@@ -40,7 +40,7 @@ class JOEMApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const WelcomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
