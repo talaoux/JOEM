@@ -4,10 +4,10 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_shadows.dart';
-import '../../../../core/services/auth_service.dart';
-import '../widgets/dashboard_header.dart';
-import '../widgets/greeting_section.dart';
-import '../widgets/search_bar_widget.dart';
+import '../widgets/job_seeker_header.dart';
+import 'job_search_screen.dart';
+import 'job_notifications_screen.dart';
+import 'job_profile_screen.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/category_card.dart';
@@ -26,8 +26,8 @@ class JobSeekerDashboard extends StatefulWidget {
 class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
-  final AuthService _authService = AuthService();
   int _currentNavIndex = 0;
+  final int _notificationCount = 5;
 
   // Données mockées
   final List<Map<String, dynamic>> _categories = [
@@ -166,45 +166,19 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header (barre de recherche + notification + avatar)
               FadeTransition(
                 opacity: _animationController,
-                child: DashboardHeader(
-                  userName: _authService.currentUser?.firstName ?? 'Jean',
+                child: JobSeekerHeader(
+                  controller: _searchController,
+                  notificationCount: _notificationCount,
                 ),
               ),
 
               const SizedBox(height: AppSpacing.sectionSpacing),
 
-              // Message de salutation
-              FadeTransition(
-                opacity: _animationController,
-                child: GreetingSection(
-                  firstName: _authService.currentUser?.firstName ?? 'Jean',
-                ),
-              ),
-
-              const SizedBox(height: AppSpacing.sectionSpacing),
-
-              // Barre de recherche
-              SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, -0.5),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: _animationController,
-                  curve: AppDurations.easeOutCubic,
-                )),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.safeAreaHorizontal,
-                  ),
-                  child: SearchBarWidget(
-                    controller: _searchController,
-                    onFilterTap: () {},
-                  ),
-                ),
-              ),
+              // Offres recommandées
+              _buildRecommendedJobsSection(),
 
               const SizedBox(height: AppSpacing.sectionSpacing),
 
@@ -242,16 +216,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
 
               const SizedBox(height: AppSpacing.sectionSpacing),
 
-              // Offres recommandées
-              _buildRecommendedJobsSection(),
-
-              const SizedBox(height: AppSpacing.sectionSpacing),
-
-              // Section "Continuer ma recherche"
-              _buildContinueSearchSection(),
-
-              const SizedBox(height: AppSpacing.sectionSpacing),
-
               // Entretiens
               _buildInterviewsSection(),
 
@@ -273,11 +237,30 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
         opacity: _animationController,
         child: BottomNavigation(
           currentIndex: _currentNavIndex,
-          onTap: (index) {
+          onTap: (index) async {
+            if (index == 1 || index == 3 || index == 4) {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) {
+                    if (index == 1) return const JobSearchScreen();
+                    if (index == 3) return const JobNotificationsScreen();
+                    return const JobProfileScreen();
+                  },
+                ),
+              );
+              if (mounted) {
+                setState(() {
+                  _currentNavIndex = 0;
+                });
+              }
+              return;
+            }
             setState(() {
               _currentNavIndex = index;
             });
           },
+          notificationCount: _notificationCount,
         ),
       ),
     );
@@ -413,23 +396,9 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.safeAreaHorizontal,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recommandées pour vous',
-                style: AppTypography.sectionTitle,
-              ),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  'Voir tout',
-                  style: AppTypography.secondaryButton.copyWith(
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
+          child: Text(
+            'Recommandées pour vous',
+            style: AppTypography.sectionTitle,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -459,78 +428,18 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
             );
           },
         ),
-      ],
-    );
-  }
-
-  Widget _buildContinueSearchSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.safeAreaHorizontal,
-          ),
-          child: Text(
-            'Continuer ma recherche',
-            style: AppTypography.sectionTitle,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.safeAreaHorizontal,
+        Center(
+          child: TextButton(
+            onPressed: () {},
+            child: Text(
+              'Voir plus',
+              style: AppTypography.secondaryButton.copyWith(
+                fontSize: 13,
+              ),
             ),
-            children: [
-              _buildSearchChip('Développeur Flutter'),
-              const SizedBox(width: AppSpacing.sm),
-              _buildSearchChip('CDI Antananarivo'),
-              const SizedBox(width: AppSpacing.sm),
-              _buildSearchChip('Salaire +2M'),
-              const SizedBox(width: AppSpacing.sm),
-              _buildSearchChip('Remote'),
-            ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSearchChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.history_rounded,
-            size: 16,
-            color: const Color(0xFF9CA3AF),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: AppTypography.interRegular.copyWith(
-              fontSize: 13,
-              color: const Color(0xFF6B7280),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

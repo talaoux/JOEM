@@ -6,12 +6,18 @@ import 'package:joem/core/theme/app_typography.dart';
 
 class SearchBarWidget extends StatelessWidget {
   final TextEditingController controller;
-  final VoidCallback onFilterTap;
+  final VoidCallback? onFilterTap;
+  final bool showFilterButton;
+  final ValueChanged<String>? onChanged;
+  final bool autofocus;
 
   const SearchBarWidget({
     super.key,
     required this.controller,
-    required this.onFilterTap,
+    this.onFilterTap,
+    this.showFilterButton = true,
+    this.onChanged,
+    this.autofocus = false,
   });
 
   @override
@@ -42,6 +48,8 @@ class SearchBarWidget extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              onChanged: onChanged,
+              autofocus: autofocus,
               style: AppTypography.interRegular.copyWith(
                 fontSize: 15,
                 color: const Color(0xFF1A1A2E),
@@ -62,25 +70,28 @@ class SearchBarWidget extends StatelessWidget {
           ),
 
           // Bouton filtre
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: IconButton(
-              onPressed: onFilterTap,
-              icon: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.tune_rounded,
-                  color: Colors.white,
-                  size: 20,
+          if (showFilterButton)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: IconButton(
+                onPressed: onFilterTap,
+                icon: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(width: AppSpacing.lg),
         ],
       ),
     );

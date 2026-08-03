@@ -4,15 +4,18 @@ import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/theme/app_shadows.dart';
+import 'package:joem/core/widgets/notification_badge.dart';
 
 class BottomNavigation extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final int notificationCount;
 
   const BottomNavigation({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.notificationCount = 0,
   });
 
 
@@ -118,6 +121,7 @@ class BottomNavigation extends StatelessWidget {
                     labelFontSize: labelFontSize,
                     itemHorizontalPadding: itemHorizontalPadding,
                     itemVerticalPadding: itemVerticalPadding,
+                    badgeCount: notificationCount,
                   ),
                   _buildNavItem(
                     icon: Icons.person_rounded,
@@ -147,6 +151,7 @@ class BottomNavigation extends StatelessWidget {
     required double labelFontSize,
     required double itemHorizontalPadding,
     required double itemVerticalPadding,
+    int badgeCount = 0,
   }) {
     return GestureDetector(
       onTap: () => onTap(index),
@@ -165,10 +170,13 @@ class BottomNavigation extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isActive ? AppColors.primary : const Color(0xFF9CA3AF),
-              size: iconSize,
+            NotificationBadge(
+              count: badgeCount,
+              child: Icon(
+                icon,
+                color: isActive ? AppColors.primary : const Color(0xFF9CA3AF),
+                size: iconSize,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
