@@ -12,10 +12,15 @@ import 'package:joem/main.dart';
 
 void main() {
   testWidgets('Welcome screen loads', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+    // Build our app and let the splash screen redirect to the welcome screen.
     await tester.pumpWidget(const JOEMApp());
+    await tester.pump(const Duration(milliseconds: 3000));
+    await tester.pump(const Duration(milliseconds: 500));
 
-    // Verify that the welcome screen loads with the JOEM logo image.
-    expect(find.image(const AssetImage('assets/images/joem_logo.png')), findsOneWidget);
+    // Verify that the welcome screen loads with its key content.
+    expect(find.text('Réussissez.'), findsOneWidget);
+    expect(find.text('Je suis recruteur'), findsOneWidget);
+    expect(find.text('Je cherche un emploi'), findsOneWidget);
+    expect(find.text('Se connecter'), findsOneWidget);
   });
 }

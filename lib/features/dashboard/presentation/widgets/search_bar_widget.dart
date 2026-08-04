@@ -10,6 +10,8 @@ class SearchBarWidget extends StatelessWidget {
   final bool showFilterButton;
   final ValueChanged<String>? onChanged;
   final bool autofocus;
+  final VoidCallback? onTap;
+  final bool readOnly;
 
   const SearchBarWidget({
     super.key,
@@ -18,6 +20,8 @@ class SearchBarWidget extends StatelessWidget {
     this.showFilterButton = true,
     this.onChanged,
     this.autofocus = false,
+    this.onTap,
+    this.readOnly = false,
   });
 
   @override
@@ -50,6 +54,8 @@ class SearchBarWidget extends StatelessWidget {
               controller: controller,
               onChanged: onChanged,
               autofocus: autofocus,
+              readOnly: readOnly,
+              onTap: onTap,
               style: AppTypography.interRegular.copyWith(
                 fontSize: 15,
                 color: const Color(0xFF1A1A2E),

@@ -93,8 +93,8 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
-                    icon: Icons.search_rounded,
-                    label: 'Recherche',
+                    icon: Icons.category_rounded,
+                    label: 'Catégorie',
                     index: 1,
                     isActive: currentIndex == 1,
                     iconSize: iconSize,
@@ -103,8 +103,8 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
-                    icon: Icons.favorite_rounded,
-                    label: 'Favoris',
+                    icon: Icons.post_add_rounded,
+                    label: 'Publier',
                     index: 2,
                     isActive: currentIndex == 2,
                     iconSize: iconSize,

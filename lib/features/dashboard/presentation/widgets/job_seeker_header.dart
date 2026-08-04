@@ -7,11 +7,15 @@ import 'search_bar_widget.dart';
 class JobSeekerHeader extends StatelessWidget {
   final TextEditingController controller;
   final int notificationCount;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onSearchTap;
 
   const JobSeekerHeader({
     super.key,
     required this.controller,
     this.notificationCount = 0,
+    this.onAvatarTap,
+    this.onSearchTap,
   });
 
   @override
@@ -28,6 +32,8 @@ class JobSeekerHeader extends StatelessWidget {
             child: SearchBarWidget(
               controller: controller,
               showFilterButton: false,
+              readOnly: onSearchTap != null,
+              onTap: onSearchTap,
             ),
           ),
 
@@ -42,10 +48,7 @@ class JobSeekerHeader extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.background,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                  width: 1,
-                ),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
               ),
               child: IconButton(
                 onPressed: () {},
@@ -62,9 +65,14 @@ class JobSeekerHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
 
           // Photo utilisateur
-          const CircleAvatar(
-            radius: 20,
-            backgroundImage: AssetImage('assets/images/avatar_portfolio1.jpg'),
+          GestureDetector(
+            onTap: onAvatarTap,
+            child: const CircleAvatar(
+              radius: 20,
+              backgroundImage: AssetImage(
+                'assets/images/avatar_portfolio1.jpg',
+              ),
+            ),
           ),
         ],
       ),
