@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// A labeled input field styled for a wizard's white card: light grey
 /// fill, grey hairline border that turns violet on focus, dark text.
@@ -66,7 +66,7 @@ class _LightTextFieldState extends State<LightTextField> {
               color: const Color(0xFFF5F5F8),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _focused ? AppColors.primary : const Color(0xFFE3E3EC),
+                color: _focused ? OnboardingColors.violet : const Color(0xFFE3E3EC),
                 width: _focused ? 1.5 : 1,
               ),
             ),
@@ -78,7 +78,7 @@ class _LightTextFieldState extends State<LightTextField> {
                 if (widget.icon != null) ...[
                   Padding(
                     padding: EdgeInsets.only(top: isMultiline ? 2 : 0),
-                    child: Icon(widget.icon, color: AppColors.primary, size: 20),
+                    child: Icon(widget.icon, color: OnboardingColors.violet, size: 20),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -89,7 +89,7 @@ class _LightTextFieldState extends State<LightTextField> {
                     keyboardType: widget.keyboardType,
                     maxLines: isMultiline ? widget.maxLines : 1,
                     style: const TextStyle(fontSize: 15, color: Color(0xFF1C1C26)),
-                    cursorColor: AppColors.primary,
+                    cursorColor: OnboardingColors.violet,
                     decoration: InputDecoration(
                       hintText: widget.hint,
                       hintStyle: const TextStyle(fontSize: 15, color: Color(0xFFA6A6B4)),

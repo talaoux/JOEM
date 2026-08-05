@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/theme/app_durations.dart';
-import 'package:joem/core/widgets/centered_logo.dart';
 import 'package:joem/core/widgets/form_surface.dart';
+import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/registration_stepper.dart';
 import 'package:joem/core/widgets/step_one_account.dart';
 import 'package:joem/core/widgets/wizard_navigation.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 import 'widgets/step_three_validation.dart';
 import 'widgets/step_two_personal_info.dart';
 
 /// Écran "Inscription Recruteur" : un wizard à 3 étapes (Compte, Info,
-/// Validation) sur fond blanc, qui reste sur une seule page — les
+/// Validation) sur fond dégradé façon onboarding, qui reste sur une seule page — les
 /// étapes changent uniquement le contenu du formulaire, jamais l'écran.
 class RecruiterRegistrationScreen extends StatefulWidget {
   const RecruiterRegistrationScreen({super.key});
@@ -116,8 +117,16 @@ class _RecruiterRegistrationScreenState
     final horizontalPadding = isTablet ? 48.0 : (isLargeScreen ? 40.0 : 24.0);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+      backgroundColor: OnboardingColors.bgTop,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [OnboardingColors.bgTop, OnboardingColors.bgBottom],
+          ),
+        ),
+        child: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Center(
@@ -130,7 +139,7 @@ class _RecruiterRegistrationScreenState
                 child: Column(
                   children: [
                     const SizedBox(height: 32),
-                    const CenteredLogo(),
+                    const JoemGradientLogo(),
                     const SizedBox(height: 36),
 
                     RegistrationStepper(
@@ -177,6 +186,7 @@ class _RecruiterRegistrationScreenState
               ),
             ),
           ),
+        ),
         ),
       ),
     );

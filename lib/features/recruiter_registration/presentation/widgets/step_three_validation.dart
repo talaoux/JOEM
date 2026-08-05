@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// Étape 3 — "Validation" : relecture des informations saisies aux
 /// étapes précédentes avant la création du compte.
@@ -135,7 +135,7 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppColors.primary, size: 18),
+        Icon(icon, color: OnboardingColors.violet, size: 18),
         const SizedBox(width: 10),
         Expanded(
           child: Column(

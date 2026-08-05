@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
-import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 
@@ -164,7 +164,7 @@ class _ProfilePhotoPicker extends StatelessWidget {
               ),
               child: Icon(
                 selected ? Icons.check_circle_rounded : Icons.person_outline_rounded,
-                color: AppColors.primary,
+                color: OnboardingColors.violet,
                 size: 36,
               ),
             ),
@@ -176,7 +176,7 @@ class _ProfilePhotoPicker extends StatelessWidget {
                 height: 30,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                 ),
                 child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 15),
               ),

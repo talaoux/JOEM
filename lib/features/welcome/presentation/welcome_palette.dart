@@ -28,10 +28,10 @@ class OnboardingLayout {
   static const double brandToTitleGap = 0.008;
   static const double brand = 0.106;
   static const double title = 0.115;
-  static const double divider = 0.020;
-  static const double description = 0.125;
-  static const double spacerSm = 0.029;
-  static const double card = 0.087;
+  static const double divider = 0.011;
+  static const double description = 0.098;
+  static const double spacerSm = 0.019;
+  static const double card = 0.11;
 
   /// Largeur minimale (dp) sous laquelle les grilles de points sont masquées.
   static const double dotGridMinWidth = 360;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+
 import '../theme/app_durations.dart';
 import '../theme/app_text_styles.dart';
 
@@ -69,15 +70,15 @@ class _StepNode extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isHighlighted ? AppColors.primary : Colors.white,
+              color: isHighlighted ? OnboardingColors.violet : Colors.white,
               border: Border.all(
-                color: isHighlighted ? AppColors.primary : const Color(0xFFD8D8E2),
+                color: isHighlighted ? OnboardingColors.violet : const Color(0xFFD8D8E2),
                 width: 1.5,
               ),
               boxShadow: isActive
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.35),
+                        color: OnboardingColors.violet.withValues(alpha: 0.35),
                         blurRadius: 16,
                         spreadRadius: -2,
                         offset: const Offset(0, 6),
@@ -131,7 +132,7 @@ class _StepLine extends StatelessWidget {
                 return FractionallySizedBox(
                   widthFactor: value,
                   alignment: Alignment.centerLeft,
-                  child: Container(color: AppColors.primary),
+                  child: Container(color: OnboardingColors.violet),
                 );
               },
             ),

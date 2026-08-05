@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+
 import 'google_sign_in_button.dart';
 import 'light_text_field.dart';
 import 'or_divider.dart';
@@ -32,7 +34,7 @@ class StepOneAccount extends StatelessWidget {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+            color: OnboardingColors.navy,
           ),
         ),
         const SizedBox(height: 20),

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/core/widgets/centered_logo.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/glass_button.dart';
 import 'package:joem/core/widgets/google_sign_in_button.dart';
+import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/or_divider.dart';
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
 import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// Écran "Connexion" : pas de wizard, un simple formulaire email + mot
-/// de passe (ou Google) sur fond blanc, même identité visuelle que les
+/// de passe (ou Google) sur fond dégradé façon onboarding, même identité visuelle que les
 /// écrans d'inscription.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -102,8 +104,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final horizontalPadding = isTablet ? 48.0 : (isLargeScreen ? 40.0 : 24.0);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+      backgroundColor: OnboardingColors.bgTop,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [OnboardingColors.bgTop, OnboardingColors.bgBottom],
+          ),
+        ),
+        child: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Center(
@@ -116,19 +126,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 48),
-                    const CenteredLogo(),
+                    const JoemGradientLogo(),
                     const SizedBox(height: 36),
 
                     FormSurface(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Connexion',
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1C1C26),
+                              color: OnboardingColors.navy,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -167,11 +177,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       width: 20,
                                       height: 20,
                                       decoration: BoxDecoration(
-                                        color: _rememberMe ? AppColors.primary : Colors.transparent,
+                                        color: _rememberMe
+                                            ? OnboardingColors.violet
+                                            : Colors.transparent,
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
                                           color: _rememberMe
-                                              ? AppColors.primary
+                                              ? OnboardingColors.violet
                                               : const Color(0xFFD8D8E2),
                                           width: 1.5,
                                         ),
@@ -196,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.primary,
+                                    color: OnboardingColors.violet,
                                   ),
                                 ),
                               ),
@@ -209,6 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: GlassButton(
                               label: _isLoading ? 'Connexion...' : 'Se connecter',
                               onTap: _isLoading ? null : _onSubmit,
+                              color: OnboardingColors.violet,
                             ),
                           ),
                         ],
@@ -220,6 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

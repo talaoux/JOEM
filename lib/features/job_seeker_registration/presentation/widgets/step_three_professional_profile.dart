@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 
 /// One "compétence" row: a skill name plus a 1-5 star rating.
@@ -69,10 +70,10 @@ class StepThreeProfessionalProfile extends StatelessWidget {
 
         TextButton.icon(
           onPressed: onAddSkill,
-          icon: const Icon(Icons.add_rounded, color: AppColors.primary, size: 20),
+          icon: const Icon(Icons.add_rounded, color: OnboardingColors.violet, size: 20),
           label: const Text(
             'Ajouter une compétence',
-            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+            style: TextStyle(color: OnboardingColors.violet, fontWeight: FontWeight.w600),
           ),
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
@@ -190,7 +191,7 @@ class _CvDropZone extends StatelessWidget {
               children: [
                 Icon(
                   selected ? Icons.check_circle_rounded : Icons.picture_as_pdf_outlined,
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                   size: 26,
                 ),
                 const SizedBox(height: 6),

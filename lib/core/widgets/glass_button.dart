@@ -18,6 +18,7 @@ class GlassButton extends StatelessWidget {
     this.variant = GlassButtonVariant.filled,
     this.leadingIcon,
     this.trailingIcon,
+    this.color,
   });
 
   final String label;
@@ -26,20 +27,25 @@ class GlassButton extends StatelessWidget {
   final IconData? leadingIcon;
   final IconData? trailingIcon;
 
+  /// Overrides the default [AppColors.primary] tint, e.g. to match a
+  /// specific screen's palette (login follows the onboarding violet).
+  final Color? color;
+
   bool get _isFilled => variant == GlassButtonVariant.filled;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = _isFilled ? Colors.white : AppColors.primaryLight;
+    final accent = color ?? AppColors.primary;
+    final foreground = _isFilled ? Colors.white : (color ?? AppColors.primaryLight);
 
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: _isFilled ? AppColors.primary : Colors.transparent,
+        color: _isFilled ? accent : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         border: _isFilled
             ? null
-            : Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
+            : Border.all(color: accent.withValues(alpha: 0.5), width: 1.5),
         boxShadow: _isFilled ? AppShadows.glowShadow : null,
       ),
       child: Material(

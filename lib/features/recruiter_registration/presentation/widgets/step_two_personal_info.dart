@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
-import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 
@@ -172,7 +172,7 @@ class _LogoPicker extends StatelessWidget {
               children: [
                 Icon(
                   selected ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                   size: 26,
                 ),
                 const SizedBox(height: 6),

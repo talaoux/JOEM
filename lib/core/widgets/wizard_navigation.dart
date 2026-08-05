@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/widgets/glass_button.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// The "Retour" / "Suivant" (→ "Créer mon compte" on the last step) button
 /// pair shown at the bottom of the form card.
@@ -26,6 +27,7 @@ class WizardNavigation extends StatelessWidget {
             leadingIcon: Icons.arrow_back_rounded,
             variant: GlassButtonVariant.outline,
             onTap: onBack,
+            color: OnboardingColors.violet,
           ),
         ),
         const SizedBox(width: 16),
@@ -34,6 +36,7 @@ class WizardNavigation extends StatelessWidget {
             label: isLastStep ? 'Créer mon compte' : 'Suivant',
             trailingIcon: Icons.arrow_forward_rounded,
             onTap: onNext,
+            color: OnboardingColors.violet,
           ),
         ),
       ],

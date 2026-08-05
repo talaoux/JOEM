@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -162,8 +163,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           child: _ActionCard(
                             icon: Icons.work,
                             title: 'Je suis recruteur',
-                            subtitle:
-                                'Publiez des offres et trouvez les meilleurs talents.',
+                            subtitleLines: const [
+                              'Publier des offres et trouvez',
+                              'les meilleur talent',
+                            ],
                             onTap: _onRecruiterTap,
                             animation: _mainAnimation,
                             scale: scale,
@@ -179,8 +182,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           child: _ActionCard(
                             icon: Icons.person,
                             title: 'Je cherche un emploi',
-                            subtitle:
-                                "Trouvez l'opportunité qui correspond à votre profil.",
+                            subtitleLines: const [
+                              "Trouvez l'opportunité qui correspond",
+                              'à votre profil',
+                            ],
                             onTap: _onJobSeekerTap,
                             animation: _mainAnimation,
                             scale: scale,
@@ -651,7 +656,7 @@ class _DescriptionBlock extends StatelessWidget {
 class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final List<String> subtitleLines;
   final VoidCallback onTap;
   final Animation<double> animation;
   final double scale;
@@ -660,7 +665,7 @@ class _ActionCard extends StatelessWidget {
   const _ActionCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.subtitleLines,
     required this.onTap,
     required this.animation,
     required this.scale,
@@ -720,37 +725,36 @@ class _ActionCard extends StatelessWidget {
                       // deux ne peut jamais dépasser l'espace disponible,
                       // quelle que soit la taille d'écran.
                       Expanded(
-                        flex: 2,
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.visible,
-                              style: GoogleFonts.poppins(
-                                fontSize: 18 * scale,
-                                fontWeight: FontWeight.w700,
-                                color: OnboardingColors.navy,
-                              ),
+                          // _AutoFitText (plutôt que FittedBox) : le titre
+                          // peut se répartir sur 2 lignes si besoin, ce qui
+                          // permet une police bien plus grande qu'en le
+                          // forçant sur une seule ligne à côté de l'icône.
+                          child: _AutoFitText(
+                            text: title,
+                            maxLines: 2,
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                              fontSize: 19 * scale,
+                              fontWeight: FontWeight.w700,
+                              color: OnboardingColors.navy,
+                              height: 1.1,
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Expanded(
-                        flex: 3,
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: _AutoFitText(
-                            text: subtitle,
-                            maxLines: 2,
-                            textAlign: TextAlign.left,
+                          child: _RotatingSubtitle(
+                            lines: subtitleLines,
+                            initialDelay: Duration(
+                              milliseconds: 600 * delayIndex,
+                            ),
                             style: GoogleFonts.poppins(
-                              fontSize: 13.5 * scale,
+                              fontSize: 12 * scale,
                               fontWeight: FontWeight.w400,
                               color: OnboardingColors.textMuted,
                               height: 1.35,
@@ -770,6 +774,82 @@ class _ActionCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sous-titre de carte à plusieurs lignes qui défilent en boucle : chaque
+/// ligne s'affiche quelques secondes, puis disparaît vers le haut pendant
+/// que la suivante entre en glissant depuis le bas (effet "ticker").
+class _RotatingSubtitle extends StatefulWidget {
+  static const Duration _interval = Duration(milliseconds: 2400);
+
+  final List<String> lines;
+  final TextStyle style;
+  final Duration initialDelay;
+
+  const _RotatingSubtitle({
+    required this.lines,
+    required this.style,
+    this.initialDelay = Duration.zero,
+  });
+
+  @override
+  State<_RotatingSubtitle> createState() => _RotatingSubtitleState();
+}
+
+class _RotatingSubtitleState extends State<_RotatingSubtitle> {
+  Timer? _delayTimer;
+  Timer? _periodicTimer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.lines.length > 1) {
+      _delayTimer = Timer(widget.initialDelay, _startTicking);
+    }
+  }
+
+  void _startTicking() {
+    _periodicTimer = Timer.periodic(_RotatingSubtitle._interval, (_) {
+      setState(() => _index = (_index + 1) % widget.lines.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _delayTimer?.cancel();
+    _periodicTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 420),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) {
+          final isOutgoing = anim.status == AnimationStatus.reverse;
+          final offset = Tween<Offset>(
+            begin: isOutgoing ? const Offset(0, -0.5) : const Offset(0, 0.5),
+            end: Offset.zero,
+          ).animate(anim);
+          return SlideTransition(
+            position: offset,
+            child: FadeTransition(opacity: anim, child: child),
+          );
+        },
+        child: _AutoFitText(
+          key: ValueKey<int>(_index),
+          text: widget.lines[_index],
+          maxLines: 1,
+          textAlign: TextAlign.left,
+          style: widget.style,
         ),
       ),
     );
@@ -880,6 +960,7 @@ class _AutoFitText extends StatelessWidget {
   final TextAlign textAlign;
 
   const _AutoFitText({
+    super.key,
     required this.text,
     required this.style,
     this.maxLines = 3,

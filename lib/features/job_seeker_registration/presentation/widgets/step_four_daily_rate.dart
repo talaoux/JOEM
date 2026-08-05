@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 
@@ -122,10 +122,10 @@ class _WorkModeCheckbox extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: checked ? AppColors.primary : Colors.transparent,
+                color: checked ? OnboardingColors.violet : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: checked ? AppColors.primary : const Color(0xFFD8D8E2),
+                  color: checked ? OnboardingColors.violet : const Color(0xFFD8D8E2),
                   width: 1.5,
                 ),
               ),
