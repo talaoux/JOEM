@@ -736,7 +736,7 @@ class _ActionCard extends StatelessWidget {
                             maxLines: 2,
                             textAlign: TextAlign.left,
                             style: GoogleFonts.poppins(
-                              fontSize: 19 * scale,
+                              fontSize: 16 * scale,
                               fontWeight: FontWeight.w700,
                               color: OnboardingColors.navy,
                               height: 1.1,

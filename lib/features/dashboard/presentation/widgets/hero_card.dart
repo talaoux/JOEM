@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 
 class HeroCard extends StatelessWidget {
   final VoidCallback onFindJobTap;
@@ -15,7 +15,7 @@ class HeroCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primaryLightest, AppColors.primaryLighter],
+          colors: [OnboardingColors.lavender, OnboardingColors.violetLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -48,7 +48,7 @@ class HeroCard extends StatelessWidget {
                   ElevatedButton(
                     onPressed: onFindJobTap,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: OnboardingColors.violet,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.xl,
@@ -81,7 +81,7 @@ class HeroCard extends StatelessWidget {
               child: Icon(
                 Icons.work_outline_rounded,
                 size: 60,
-                color: AppColors.primary.withOpacity(0.4),
+                color: OnboardingColors.violet.withOpacity(0.4),
               ),
             ),
           ],

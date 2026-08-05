@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:joem/core/theme/app_durations.dart';
 import 'package:joem/core/widgets/form_surface.dart';
@@ -36,13 +39,15 @@ class _JobSeekerRegistrationScreenState
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _googleAccountCreated = false;
 
   // Étape 2 — Info personnelle
-  bool _photoPicked = false;
+  final _imagePicker = ImagePicker();
+  Uint8List? _photoBytes;
   final _nomController = TextEditingController();
   final _prenomController = TextEditingController();
   final _telephoneController = TextEditingController();
-  String? _localisation;
+  final _localisationController = TextEditingController();
   final _titreProfessionnelController = TextEditingController();
   final _presentationController = TextEditingController();
 
@@ -56,6 +61,17 @@ class _JobSeekerRegistrationScreenState
   final Set<WorkMode> _workModes = {};
 
   @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_onFieldChanged);
+    _passwordController.addListener(_onFieldChanged);
+    _confirmPasswordController.addListener(_onFieldChanged);
+    _nomController.addListener(_onFieldChanged);
+    _prenomController.addListener(_onFieldChanged);
+    _titreProfessionnelController.addListener(_onFieldChanged);
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -63,6 +79,7 @@ class _JobSeekerRegistrationScreenState
     _nomController.dispose();
     _prenomController.dispose();
     _telephoneController.dispose();
+    _localisationController.dispose();
     _titreProfessionnelController.dispose();
     _presentationController.dispose();
     for (final skill in _skills) {
@@ -70,6 +87,55 @@ class _JobSeekerRegistrationScreenState
     }
     _rateController.dispose();
     super.dispose();
+  }
+
+  void _onFieldChanged() => setState(() {});
+
+  Future<void> _pickPhoto() async {
+    final file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() => _photoBytes = bytes);
+  }
+
+  /// L'étape 1 est valide si le compte a été créé via Google, ou si les 3
+  /// champs (email, mot de passe, confirmation) sont tous remplis, que
+  /// l'email a un format plausible, et que les deux mots de passe
+  /// correspondent.
+  bool get _isStepOneValid =>
+      _googleAccountCreated ||
+      (_emailController.text.trim().isNotEmpty &&
+          isPlausibleEmail(_emailController.text) &&
+          _passwordController.text.trim().isNotEmpty &&
+          _confirmPasswordController.text.trim().isNotEmpty &&
+          _passwordController.text == _confirmPasswordController.text);
+
+  /// L'étape 2 est valide si nom, prénom et titre professionnel sont
+  /// remplis (téléphone, localisation et présentation restent optionnels).
+  bool get _isStepTwoValid =>
+      _nomController.text.trim().isNotEmpty &&
+      _prenomController.text.trim().isNotEmpty &&
+      _titreProfessionnelController.text.trim().isNotEmpty;
+
+  /// L'étape 4 est valide si disponibilité et au moins un mode de travail
+  /// sont renseignés (tarif reste optionnel).
+  bool get _isStepFourValid => _availability != null && _workModes.isNotEmpty;
+
+  bool get _canProceedFromCurrentStep {
+    switch (_currentStep) {
+      case 0:
+        return _isStepOneValid;
+      case 1:
+        return _isStepTwoValid;
+      case 3:
+        return _isStepFourValid;
+      default:
+        return true;
+    }
   }
 
   void _goToPreviousStep() {
@@ -97,17 +163,17 @@ class _JobSeekerRegistrationScreenState
           emailController: _emailController,
           passwordController: _passwordController,
           confirmPasswordController: _confirmPasswordController,
+          onGoogleSignIn: () => setState(() => _googleAccountCreated = true),
         );
       case 1:
         return StepTwoPersonalInfo(
           key: const ValueKey('step-2'),
-          photoPicked: _photoPicked,
-          onPhotoTap: () => setState(() => _photoPicked = !_photoPicked),
+          photoBytes: _photoBytes,
+          onPickPhoto: _pickPhoto,
           nomController: _nomController,
           prenomController: _prenomController,
           telephoneController: _telephoneController,
-          localisation: _localisation,
-          onLocalisationChanged: (value) => setState(() => _localisation = value),
+          localisationController: _localisationController,
           titreProfessionnelController: _titreProfessionnelController,
           presentationController: _presentationController,
         );
@@ -143,11 +209,11 @@ class _JobSeekerRegistrationScreenState
         return StepFiveValidation(
           key: const ValueKey('step-5'),
           email: _emailController.text,
-          photoPicked: _photoPicked,
+          photoPicked: _photoBytes != null,
           nom: _nomController.text,
           prenom: _prenomController.text,
           telephone: _telephoneController.text,
-          localisation: _localisation,
+          localisation: _localisationController.text,
           titreProfessionnel: _titreProfessionnelController.text,
           presentation: _presentationController.text,
           skills: _skills,
@@ -225,7 +291,7 @@ class _JobSeekerRegistrationScreenState
                           WizardNavigation(
                             isLastStep: _currentStep == _totalSteps - 1,
                             onBack: _goToPreviousStep,
-                            onNext: _goToNextStep,
+                            onNext: _canProceedFromCurrentStep ? _goToNextStep : null,
                           ),
                         ],
                       ),

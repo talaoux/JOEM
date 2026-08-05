@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -68,7 +69,7 @@ class _JobPublishScreenState extends State<JobPublishScreen> {
               child: TextButton(
                 onPressed: _publish,
                 style: TextButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: OnboardingColors.violet,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
@@ -253,7 +254,7 @@ class _JobPublishScreenState extends State<JobPublishScreen> {
                       child: ElevatedButton(
                         onPressed: _publish,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: OnboardingColors.violet,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.md,

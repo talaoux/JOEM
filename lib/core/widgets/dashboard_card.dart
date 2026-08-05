@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 
 import 'package:joem/core/theme/app_radii.dart';
 import 'package:joem/core/theme/app_shadows.dart';
-
 /// The white, softly-shadowed rounded card used everywhere on the Espace
 /// Employeur dashboard (KPI cards, job cards, candidate cards, sidebar
 /// cards...). Centralizes the 28px radius + soft shadow so every card

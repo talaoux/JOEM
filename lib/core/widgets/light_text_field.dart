@@ -16,6 +16,7 @@ class LightTextField extends StatefulWidget {
     this.keyboardType,
     this.maxLines = 1,
     this.suffixText,
+    this.errorText,
   });
 
   final String? label;
@@ -26,6 +27,10 @@ class LightTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final int maxLines;
   final String? suffixText;
+
+  /// Message affiché sous le champ, en rouge, avec la bordure assortie.
+  /// `null` (ou vide) laisse le champ dans son état normal.
+  final String? errorText;
 
   @override
   State<LightTextField> createState() => _LightTextFieldState();
@@ -38,6 +43,8 @@ class _LightTextFieldState extends State<LightTextField> {
   @override
   Widget build(BuildContext context) {
     final isMultiline = widget.maxLines > 1;
+    final hasError = widget.errorText != null && widget.errorText!.isNotEmpty;
+    const errorColor = Color(0xFFE53935);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,8 +73,10 @@ class _LightTextFieldState extends State<LightTextField> {
               color: const Color(0xFFF5F5F8),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _focused ? OnboardingColors.violet : const Color(0xFFE3E3EC),
-                width: _focused ? 1.5 : 1,
+                color: hasError
+                    ? errorColor
+                    : (_focused ? OnboardingColors.violet : const Color(0xFFE3E3EC)),
+                width: _focused || hasError ? 1.5 : 1,
               ),
             ),
             child: Row(
@@ -124,6 +133,13 @@ class _LightTextFieldState extends State<LightTextField> {
             ),
           ),
         ),
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          Text(
+            widget.errorText!,
+            style: const TextStyle(fontSize: 12, color: errorColor),
+          ),
+        ],
       ],
     );
   }

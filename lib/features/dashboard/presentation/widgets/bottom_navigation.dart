@@ -11,11 +11,17 @@ class BottomNavigation extends StatelessWidget {
   final Function(int) onTap;
   final int notificationCount;
 
+  /// Surcharge la couleur d'accent par défaut (`AppColors.primary`, mauve
+  /// dashboard) — le dashboard chercheur d'emploi lui passe le violet de
+  /// l'onboarding, le dashboard employeur ne passe rien et garde le mauve.
+  final Color? accentColor;
+
   const BottomNavigation({
     super.key,
     required this.currentIndex,
     required this.onTap,
     this.notificationCount = 0,
+    this.accentColor,
   });
 
 
@@ -163,7 +169,7 @@ class BottomNavigation extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isActive
-              ? AppColors.primary.withOpacity(0.1)
+              ? (accentColor ?? AppColors.primary).withOpacity(0.1)
               : Colors.transparent,
           borderRadius: AppRadius.bottomNavPillRadius,
         ),
@@ -174,7 +180,7 @@ class BottomNavigation extends StatelessWidget {
               count: badgeCount,
               child: Icon(
                 icon,
-                color: isActive ? AppColors.primary : const Color(0xFF9CA3AF),
+                color: isActive ? (accentColor ?? AppColors.primary) : const Color(0xFF9CA3AF),
                 size: iconSize,
               ),
             ),

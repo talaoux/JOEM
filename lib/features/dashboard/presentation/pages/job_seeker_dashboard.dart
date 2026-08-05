@@ -19,6 +19,7 @@ import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/profile_side_panel.dart';
 import '../../../../features/welcome/presentation/welcome_screen.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 
 class JobSeekerDashboard extends StatefulWidget {
   const JobSeekerDashboard({super.key});
@@ -211,7 +212,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                     ),
                   ),
 
-                  const SizedBox(height: AppSpacing.sectionSpacing),
+                  const SizedBox(height: AppSpacing.sm),
 
                   // Offres recommandées
                   _buildRecommendedJobsSection(),
@@ -295,6 +296,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                 });
               },
               notificationCount: _notificationCount,
+              accentColor: OnboardingColors.violet,
             ),
           ),
         ),

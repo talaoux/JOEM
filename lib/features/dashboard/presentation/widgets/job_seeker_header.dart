@@ -23,7 +23,7 @@ class JobSeekerHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.safeAreaHorizontal,
-        vertical: AppSpacing.headerPadding,
+        vertical: AppSpacing.md,
       ),
       child: Row(
         children: [

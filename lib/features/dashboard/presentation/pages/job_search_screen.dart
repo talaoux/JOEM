@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../widgets/search_bar_widget.dart';
@@ -91,7 +92,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                       'Voir tout',
                       style: AppTypography.secondaryButton.copyWith(
                         fontSize: 13,
-                        color: AppColors.primary,
+                        color: OnboardingColors.violet,
                       ),
                     ),
                   ),

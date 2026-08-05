@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -31,7 +32,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
     },
     {
       'icon': Icons.person_add_alt_1_rounded,
-      'iconColor': AppColors.primary,
+      'iconColor': OnboardingColors.violet,
       'title': 'Complétez votre profil',
       'message': 'Ajoutez vos compétences pour augmenter vos chances d\'être recruté.',
       'time': 'Il y a 2h',
@@ -192,7 +193,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                         'Tout marquer comme lu',
                         style: AppTypography.secondaryButton.copyWith(
                           fontSize: 13,
-                          color: AppColors.primary,
+                          color: OnboardingColors.violet,
                         ),
                       ),
                     ),
@@ -229,7 +230,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: isRead ? AppColors.background : AppColors.primaryLightest.withOpacity(0.35),
+          color: isRead ? AppColors.background : OnboardingColors.lavender.withOpacity(0.6),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
@@ -293,7 +294,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                 height: 10,
                 margin: const EdgeInsets.only(top: 4),
                 decoration: const BoxDecoration(
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                   shape: BoxShape.circle,
                 ),
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_typography.dart';
@@ -49,12 +50,12 @@ class JobCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: OnboardingColors.violet.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.business_rounded,
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                   size: 24,
                 ),
               ),
@@ -84,7 +85,7 @@ class JobCard extends StatelessWidget {
                               vertical: AppSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primary,
+                              color: OnboardingColors.violet,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -183,7 +184,7 @@ class JobCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onApply,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: OnboardingColors.violet,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   vertical: AppSpacing.md,

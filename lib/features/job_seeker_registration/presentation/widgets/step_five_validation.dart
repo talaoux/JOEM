@@ -30,7 +30,7 @@ class StepFiveValidation extends StatelessWidget {
   final String nom;
   final String prenom;
   final String telephone;
-  final String? localisation;
+  final String localisation;
   final String titreProfessionnel;
   final String presentation;
   final List<SkillEntry> skills;
@@ -80,7 +80,7 @@ class StepFiveValidation extends StatelessWidget {
             _SummaryRow(
               icon: Icons.location_on_outlined,
               label: 'Localisation',
-              value: localisation ?? 'Non renseigné',
+              value: _orPlaceholder(localisation),
             ),
             _SummaryRow(
               icon: Icons.badge_outlined,

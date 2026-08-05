@@ -7,6 +7,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../features/welcome/presentation/welcome_palette.dart';
 
 class JobProfileScreen extends StatefulWidget {
   const JobProfileScreen({super.key});
@@ -180,7 +181,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
           decoration: BoxDecoration(
             gradient: _coverImageBytes == null
                 ? const LinearGradient(
-                    colors: [AppColors.primaryLighter, AppColors.primary],
+                    colors: [OnboardingColors.violetLight, OnboardingColors.violet],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
@@ -375,7 +376,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
               '128 vues du profil',
               style: AppTypography.interRegular.copyWith(
                 fontSize: 13,
-                color: AppColors.primary,
+                color: OnboardingColors.violet,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -386,7 +387,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
               '45 candidatures envoyées',
               style: AppTypography.interRegular.copyWith(
                 fontSize: 13,
-                color: AppColors.primary,
+                color: OnboardingColors.violet,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -421,7 +422,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                  color: OnboardingColors.violet,
                 ),
               ),
             ],
@@ -433,7 +434,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
               value: _profileCompletion,
               minHeight: 8,
               backgroundColor: const Color(0xFFF3F4F6),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(OnboardingColors.violet),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -477,12 +478,12 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: OnboardingColors.violet.withOpacity(0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(
             Icons.work_outline_rounded,
-            color: AppColors.primary,
+            color: OnboardingColors.violet,
             size: 20,
           ),
         ),
@@ -582,14 +583,14 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.primaryLightest.withOpacity(0.5),
+        color: OnboardingColors.lavender.withOpacity(0.6),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
         style: AppTypography.interRegular.copyWith(
           fontSize: 13,
-          color: AppColors.primaryDark,
+          color: OnboardingColors.violetDeep,
           fontWeight: FontWeight.w600,
         ),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_typography.dart';
@@ -82,12 +83,12 @@ class CategoryCard extends StatelessWidget {
                   width: iconContainerSize,
                   height: iconContainerSize,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: OnboardingColors.violet.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(iconContainerSize * 0.3),
                   ),
                   child: Icon(
                     icon,
-                    color: AppColors.primary,
+                    color: OnboardingColors.violet,
                     size: iconSize,
                   ),
                 ),

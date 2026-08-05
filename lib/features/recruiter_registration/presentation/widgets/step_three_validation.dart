@@ -22,7 +22,7 @@ class StepThreeValidation extends StatelessWidget {
   final String nom;
   final String prenom;
   final String telephone;
-  final String? localisation;
+  final String localisation;
   final String nomEntreprise;
   final String description;
 
@@ -65,7 +65,7 @@ class StepThreeValidation extends StatelessWidget {
             _SummaryRow(
               icon: Icons.location_on_outlined,
               label: 'Localisation',
-              value: localisation ?? 'Non renseigné',
+              value: _orPlaceholder(localisation),
             ),
             _SummaryRow(
               icon: Icons.business_rounded,

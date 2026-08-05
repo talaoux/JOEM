@@ -1,33 +1,33 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
-import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
+import 'package:joem/core/widgets/location_autocomplete_field.dart';
 
 /// Étape 2 — "Info personnelle" : photo de profil, identité et
 /// présentation du candidat.
 class StepTwoPersonalInfo extends StatelessWidget {
   const StepTwoPersonalInfo({
     super.key,
-    required this.photoPicked,
-    required this.onPhotoTap,
+    required this.photoBytes,
+    required this.onPickPhoto,
     required this.nomController,
     required this.prenomController,
     required this.telephoneController,
-    required this.localisation,
-    required this.onLocalisationChanged,
+    required this.localisationController,
     required this.titreProfessionnelController,
     required this.presentationController,
   });
 
-  final bool photoPicked;
-  final VoidCallback onPhotoTap;
+  final Uint8List? photoBytes;
+  final VoidCallback onPickPhoto;
   final TextEditingController nomController;
   final TextEditingController prenomController;
   final TextEditingController telephoneController;
-  final String? localisation;
-  final ValueChanged<String> onLocalisationChanged;
+  final TextEditingController localisationController;
   final TextEditingController titreProfessionnelController;
   final TextEditingController presentationController;
 
@@ -46,7 +46,7 @@ class StepTwoPersonalInfo extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        Center(child: _ProfilePhotoPicker(selected: photoPicked, onTap: onPhotoTap)),
+        Center(child: _ProfilePhotoPicker(photoBytes: photoBytes, onTap: onPickPhoto)),
         const SizedBox(height: 20),
 
         _TwoColumnRow(
@@ -74,13 +74,10 @@ class StepTwoPersonalInfo extends StatelessWidget {
         ),
         const SizedBox(height: 18),
 
-        LightDropdown(
-          label: 'Localisation',
-          hint: 'Sélectionnez votre ville',
-          icon: Icons.location_on_outlined,
+        LocationAutocompleteField(
+          hint: 'Ex : Antananarivo',
+          controller: localisationController,
           options: kMalagasyCities,
-          value: localisation,
-          onChanged: onLocalisationChanged,
         ),
         const SizedBox(height: 18),
 
@@ -139,13 +136,15 @@ class _TwoColumnRow extends StatelessWidget {
 }
 
 class _ProfilePhotoPicker extends StatelessWidget {
-  const _ProfilePhotoPicker({required this.selected, required this.onTap});
+  const _ProfilePhotoPicker({required this.photoBytes, required this.onTap});
 
-  final bool selected;
+  final Uint8List? photoBytes;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = photoBytes != null;
+
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -157,16 +156,19 @@ class _ProfilePhotoPicker extends StatelessWidget {
             Container(
               width: 96,
               height: 96,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFF5F5F8),
                 border: Border.all(color: const Color(0xFFE3E3EC), width: 1.5),
               ),
-              child: Icon(
-                selected ? Icons.check_circle_rounded : Icons.person_outline_rounded,
-                color: OnboardingColors.violet,
-                size: 36,
-              ),
+              child: hasPhoto
+                  ? Image.memory(photoBytes!, fit: BoxFit.cover)
+                  : Icon(
+                      Icons.person_outline_rounded,
+                      color: OnboardingColors.violet,
+                      size: 36,
+                    ),
             ),
             Positioned(
               right: 0,

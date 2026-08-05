@@ -1,33 +1,33 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
-import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
+import 'package:joem/core/widgets/location_autocomplete_field.dart';
 
 /// Étape 2 — "Info personnelle" : logo de l'entreprise, identité du
 /// recruteur et présentation de l'entreprise.
 class StepTwoPersonalInfo extends StatelessWidget {
   const StepTwoPersonalInfo({
     super.key,
-    required this.logoPicked,
-    required this.onLogoTap,
+    required this.logoBytes,
+    required this.onPickLogo,
     required this.nomController,
     required this.prenomController,
     required this.telephoneController,
-    required this.localisation,
-    required this.onLocalisationChanged,
+    required this.localisationController,
     required this.nomEntrepriseController,
     required this.descriptionController,
   });
 
-  final bool logoPicked;
-  final VoidCallback onLogoTap;
+  final Uint8List? logoBytes;
+  final VoidCallback onPickLogo;
   final TextEditingController nomController;
   final TextEditingController prenomController;
   final TextEditingController telephoneController;
-  final String? localisation;
-  final ValueChanged<String> onLocalisationChanged;
+  final TextEditingController localisationController;
   final TextEditingController nomEntrepriseController;
   final TextEditingController descriptionController;
 
@@ -55,7 +55,7 @@ class StepTwoPersonalInfo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _LogoPicker(selected: logoPicked, onTap: onLogoTap),
+        _LogoPicker(logoBytes: logoBytes, onTap: onPickLogo),
         const SizedBox(height: 18),
 
         _TwoColumnRow(
@@ -83,13 +83,10 @@ class StepTwoPersonalInfo extends StatelessWidget {
         ),
         const SizedBox(height: 18),
 
-        LightDropdown(
-          label: 'Localisation',
-          hint: 'Sélectionnez votre ville',
-          icon: Icons.location_on_outlined,
+        LocationAutocompleteField(
+          hint: 'Ex : Antananarivo',
+          controller: localisationController,
           options: kMalagasyCities,
-          value: localisation,
-          onChanged: onLocalisationChanged,
         ),
         const SizedBox(height: 18),
 
@@ -148,13 +145,15 @@ class _TwoColumnRow extends StatelessWidget {
 }
 
 class _LogoPicker extends StatelessWidget {
-  const _LogoPicker({required this.selected, required this.onTap});
+  const _LogoPicker({required this.logoBytes, required this.onTap});
 
-  final bool selected;
+  final Uint8List? logoBytes;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final hasLogo = logoBytes != null;
+
     return GestureDetector(
       onTap: onTap,
       child: CustomPaint(
@@ -162,27 +161,51 @@ class _LogoPicker extends StatelessWidget {
         child: Container(
           width: double.infinity,
           height: 96,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: const Color(0xFFF5F5F8),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  selected ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
-                  color: OnboardingColors.violet,
-                  size: 26,
+          child: hasLogo
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.memory(logoBytes!, fit: BoxFit.cover),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: OnboardingColors.violet,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.cloud_upload_outlined,
+                        color: OnboardingColors.violet,
+                        size: 26,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Ajouter le logo de l\'entreprise',
+                        style: TextStyle(fontSize: 13, color: Color(0xFFA6A6B4)),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  selected ? 'Logo sélectionné' : 'Ajouter le logo de l\'entreprise',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFFA6A6B4)),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

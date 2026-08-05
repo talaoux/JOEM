@@ -15,7 +15,10 @@ class WizardNavigation extends StatelessWidget {
 
   final bool isLastStep;
   final VoidCallback onBack;
-  final VoidCallback onNext;
+
+  /// `null` désactive visuellement et fonctionnellement le bouton (ex. :
+  /// étape 1 du wizard tant que le compte n'est pas valide).
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {

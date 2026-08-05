@@ -37,45 +37,49 @@ class GlassButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = color ?? AppColors.primary;
     final foreground = _isFilled ? Colors.white : (color ?? AppColors.primaryLight);
+    final isDisabled = onTap == null;
 
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: _isFilled ? accent : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: _isFilled
-            ? null
-            : Border.all(color: accent.withValues(alpha: 0.5), width: 1.5),
-        boxShadow: _isFilled ? AppShadows.glowShadow : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
+    return Opacity(
+      opacity: isDisabled ? 0.5 : 1,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: _isFilled ? accent : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (leadingIcon != null) ...[
-                  Icon(leadingIcon, color: foreground, size: 20),
-                  const SizedBox(width: 8),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    style: AppTextStyles.buttonLabel.copyWith(color: foreground),
-                    overflow: TextOverflow.ellipsis,
+          border: _isFilled
+              ? null
+              : Border.all(color: accent.withValues(alpha: 0.5), width: 1.5),
+          boxShadow: _isFilled && !isDisabled ? AppShadows.glowShadow : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (leadingIcon != null) ...[
+                    Icon(leadingIcon, color: foreground, size: 20),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: AppTextStyles.buttonLabel.copyWith(color: foreground),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                if (trailingIcon != null) ...[
-                  const SizedBox(width: 8),
-                  Icon(trailingIcon, color: foreground, size: 20),
+                  if (trailingIcon != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(trailingIcon, color: foreground, size: 20),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

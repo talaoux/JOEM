@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:joem/core/theme/app_durations.dart';
 import 'package:joem/core/widgets/form_surface.dart';
@@ -32,15 +35,29 @@ class _RecruiterRegistrationScreenState
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _googleAccountCreated = false;
 
   // Étape 2 — Info personnelle
-  bool _logoPicked = false;
+  final _imagePicker = ImagePicker();
+  Uint8List? _logoBytes;
   final _nomController = TextEditingController();
   final _prenomController = TextEditingController();
   final _telephoneController = TextEditingController();
-  String? _localisation;
+  final _localisationController = TextEditingController();
   final _nomEntrepriseController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_onFieldChanged);
+    _passwordController.addListener(_onFieldChanged);
+    _confirmPasswordController.addListener(_onFieldChanged);
+    _nomController.addListener(_onFieldChanged);
+    _prenomController.addListener(_onFieldChanged);
+    _localisationController.addListener(_onFieldChanged);
+    _nomEntrepriseController.addListener(_onFieldChanged);
+  }
 
   @override
   void dispose() {
@@ -50,9 +67,55 @@ class _RecruiterRegistrationScreenState
     _nomController.dispose();
     _prenomController.dispose();
     _telephoneController.dispose();
+    _localisationController.dispose();
     _nomEntrepriseController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _onFieldChanged() => setState(() {});
+
+  Future<void> _pickLogo() async {
+    final file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() => _logoBytes = bytes);
+  }
+
+  /// L'étape 1 est valide si le compte a été créé via Google, ou si les 3
+  /// champs (email, mot de passe, confirmation) sont tous remplis, que
+  /// l'email a un format plausible, et que les deux mots de passe
+  /// correspondent.
+  bool get _isStepOneValid =>
+      _googleAccountCreated ||
+      (_emailController.text.trim().isNotEmpty &&
+          isPlausibleEmail(_emailController.text) &&
+          _passwordController.text.trim().isNotEmpty &&
+          _confirmPasswordController.text.trim().isNotEmpty &&
+          _passwordController.text == _confirmPasswordController.text);
+
+  /// L'étape 2 est valide si nom, prénom, localisation et nom de
+  /// l'entreprise sont tous remplis (téléphone et description restent
+  /// optionnels).
+  bool get _isStepTwoValid =>
+      _nomController.text.trim().isNotEmpty &&
+      _prenomController.text.trim().isNotEmpty &&
+      _localisationController.text.trim().isNotEmpty &&
+      _nomEntrepriseController.text.trim().isNotEmpty;
+
+  bool get _canProceedFromCurrentStep {
+    switch (_currentStep) {
+      case 0:
+        return _isStepOneValid;
+      case 1:
+        return _isStepTwoValid;
+      default:
+        return true;
+    }
   }
 
   void _goToPreviousStep() {
@@ -80,17 +143,17 @@ class _RecruiterRegistrationScreenState
           emailController: _emailController,
           passwordController: _passwordController,
           confirmPasswordController: _confirmPasswordController,
+          onGoogleSignIn: () => setState(() => _googleAccountCreated = true),
         );
       case 1:
         return StepTwoPersonalInfo(
           key: const ValueKey('step-2'),
-          logoPicked: _logoPicked,
-          onLogoTap: () => setState(() => _logoPicked = !_logoPicked),
+          logoBytes: _logoBytes,
+          onPickLogo: _pickLogo,
           nomController: _nomController,
           prenomController: _prenomController,
           telephoneController: _telephoneController,
-          localisation: _localisation,
-          onLocalisationChanged: (value) => setState(() => _localisation = value),
+          localisationController: _localisationController,
           nomEntrepriseController: _nomEntrepriseController,
           descriptionController: _descriptionController,
         );
@@ -98,11 +161,11 @@ class _RecruiterRegistrationScreenState
         return StepThreeValidation(
           key: const ValueKey('step-3'),
           email: _emailController.text,
-          logoPicked: _logoPicked,
+          logoPicked: _logoBytes != null,
           nom: _nomController.text,
           prenom: _prenomController.text,
           telephone: _telephoneController.text,
-          localisation: _localisation,
+          localisation: _localisationController.text,
           nomEntreprise: _nomEntrepriseController.text,
           description: _descriptionController.text,
         );
@@ -175,7 +238,7 @@ class _RecruiterRegistrationScreenState
                           WizardNavigation(
                             isLastStep: _currentStep == _totalSteps - 1,
                             onBack: _goToPreviousStep,
-                            onNext: _goToNextStep,
+                            onNext: _canProceedFromCurrentStep ? _goToNextStep : null,
                           ),
                         ],
                       ),
