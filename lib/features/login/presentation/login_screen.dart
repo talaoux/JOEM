@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:joem/core/database/app_database.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/glass_button.dart';
@@ -28,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _isLoading = false;
+  bool _isResettingTestAccounts = false;
   final AuthService _authService = AuthService();
 
   @override
@@ -43,6 +46,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onForgotPassword() {
     debugPrint('Navigation vers mot de passe oublié');
+  }
+
+  /// Debug uniquement : supprime tous les comptes créés localement via
+  /// les wizards d'inscription (base SQLite, voir `AppDatabase`), pour
+  /// pouvoir retester une inscription sans "email déjà utilisé".
+  Future<void> _onResetTestAccounts() async {
+    setState(() => _isResettingTestAccounts = true);
+
+    await AppDatabase.instance.resetDatabase();
+    await _authService.logout();
+
+    if (!mounted) return;
+    setState(() => _isResettingTestAccounts = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Comptes de test réinitialisés.')),
+    );
   }
 
   Future<void> _onSubmit() async {
@@ -224,6 +243,31 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: OnboardingColors.violet,
                             ),
                           ),
+
+                          if (kDebugMode) ...[
+                            const SizedBox(height: 14),
+                            Center(
+                              child: TextButton.icon(
+                                onPressed: _isResettingTestAccounts
+                                    ? null
+                                    : _onResetTestAccounts,
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.error,
+                                ),
+                                label: Text(
+                                  _isResettingTestAccounts
+                                      ? 'Réinitialisation...'
+                                      : 'Réinitialiser les comptes de test (debug)',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

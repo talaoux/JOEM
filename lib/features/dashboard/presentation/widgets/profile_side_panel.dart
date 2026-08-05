@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -9,6 +11,10 @@ class ProfileSidePanel extends StatelessWidget {
   final VoidCallback onClose;
   final String fullName;
   final String avatarAsset;
+
+  /// Photo réellement choisie à l'inscription — prioritaire sur
+  /// [avatarAsset] quand elle est renseignée.
+  final Uint8List? avatarBytes;
   final String skills;
   final String location;
   final List<Map<String, dynamic>> stats;
@@ -21,6 +27,7 @@ class ProfileSidePanel extends StatelessWidget {
     required this.onClose,
     this.fullName = 'Marie Martin',
     this.avatarAsset = 'assets/images/avatar_portfolio1.jpg',
+    this.avatarBytes,
     this.skills = "Développeur Flutter . Chercheur d'emploi",
     this.location = 'Antananarivo, Analamanga',
     this.onSettingsTap,
@@ -112,7 +119,9 @@ class ProfileSidePanel extends StatelessWidget {
                         const SizedBox(height: 8),
                         CircleAvatar(
                           radius: 56,
-                          backgroundImage: AssetImage(avatarAsset),
+                          backgroundImage: avatarBytes != null
+                              ? MemoryImage(avatarBytes!) as ImageProvider
+                              : AssetImage(avatarAsset),
                         ),
                         const SizedBox(height: 16),
                         SizedBox(

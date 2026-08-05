@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_spacing.dart';
@@ -10,12 +12,17 @@ class JobSeekerHeader extends StatelessWidget {
   final VoidCallback? onAvatarTap;
   final VoidCallback? onSearchTap;
 
+  /// Photo réellement choisie à l'inscription — prioritaire sur l'avatar
+  /// par défaut quand elle est renseignée.
+  final Uint8List? avatarBytes;
+
   const JobSeekerHeader({
     super.key,
     required this.controller,
     this.notificationCount = 0,
     this.onAvatarTap,
     this.onSearchTap,
+    this.avatarBytes,
   });
 
   @override
@@ -67,11 +74,11 @@ class JobSeekerHeader extends StatelessWidget {
           // Photo utilisateur
           GestureDetector(
             onTap: onAvatarTap,
-            child: const CircleAvatar(
+            child: CircleAvatar(
               radius: 20,
-              backgroundImage: AssetImage(
-                'assets/images/avatar_portfolio1.jpg',
-              ),
+              backgroundImage: avatarBytes != null
+                  ? MemoryImage(avatarBytes!) as ImageProvider
+                  : const AssetImage('assets/images/avatar_portfolio1.jpg'),
             ),
           ),
         ],

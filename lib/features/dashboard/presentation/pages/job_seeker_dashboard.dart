@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
@@ -31,6 +32,7 @@ class JobSeekerDashboard extends StatefulWidget {
 class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final AuthService _authService = AuthService();
   int _currentNavIndex = 0;
   final int _notificationCount = 5;
 
@@ -200,6 +202,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                     child: JobSeekerHeader(
                       controller: _searchController,
                       notificationCount: _notificationCount,
+                      avatarBytes: _authService.currentUser?.photoBytes,
                       onAvatarTap: _openProfilePanel,
                       onSearchTap: () {
                         Navigator.push(
@@ -300,12 +303,31 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
             ),
           ),
         ),
-        ProfileSidePanel(
-          animation: _profilePanelController,
-          onClose: _closeProfilePanel,
-          onLogoutTap: _logout,
-        ),
+        _buildProfileSidePanel(),
       ],
+    );
+  }
+
+  /// Le panneau reprend la photo, le nom et le titre professionnel
+  /// réellement saisis à l'inscription (session ouverte par
+  /// `AuthService`) ; à défaut (comptes de démo sans photo par ex.), il
+  /// retombe sur les valeurs par défaut de `ProfileSidePanel`.
+  Widget _buildProfileSidePanel() {
+    final user = _authService.currentUser;
+    final fullName = (user != null && (user.firstName.isNotEmpty || user.lastName.isNotEmpty))
+        ? '${user.firstName} ${user.lastName}'.trim()
+        : null;
+    final position = (user?.position != null && user!.position!.trim().isNotEmpty)
+        ? user.position!.trim()
+        : null;
+
+    return ProfileSidePanel(
+      animation: _profilePanelController,
+      onClose: _closeProfilePanel,
+      onLogoutTap: _logout,
+      fullName: fullName ?? 'Marie Martin',
+      avatarBytes: user?.photoBytes,
+      skills: position ?? "Développeur Flutter . Chercheur d'emploi",
     );
   }
 

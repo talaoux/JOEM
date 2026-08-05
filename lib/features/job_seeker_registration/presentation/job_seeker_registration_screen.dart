@@ -3,14 +3,17 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_durations.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/registration_stepper.dart';
 import 'package:joem/core/widgets/step_one_account.dart';
 import 'package:joem/core/widgets/wizard_navigation.dart';
+import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
+import '../data/job_seeker_repository.dart';
 import 'widgets/step_five_validation.dart';
 import 'widgets/step_four_daily_rate.dart';
 import 'widgets/step_three_professional_profile.dart';
@@ -59,6 +62,9 @@ class _JobSeekerRegistrationScreenState
   final _rateController = TextEditingController();
   String? _availability;
   final Set<WorkMode> _workModes = {};
+
+  final _repository = const JobSeekerRepository();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -148,11 +154,97 @@ class _JobSeekerRegistrationScreenState
 
   void _goToNextStep() {
     if (_currentStep == _totalSteps - 1) {
-      // TODO: Soumission finale de l'inscription chercheur d'emploi
-      debugPrint('Création du compte chercheur d\'emploi');
+      _submitRegistration();
       return;
     }
     setState(() => _currentStep += 1);
+  }
+
+  /// Persiste les données saisies dans les 4 étapes précédentes (voir
+  /// `JobSeekerRepository`/`AppDatabase`), puis ouvre directement une
+  /// session pour envoyer l'utilisateur sur son dashboard.
+  Future<void> _submitRegistration() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    // "Continuer avec Google" ne collecte pas de vrai email/mot de passe
+    // (bouton non branché à une vraie auth) : on génère des identifiants
+    // uniques pour que le compte reste créable et reconnectable.
+    final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
+    final email = _emailController.text.trim().isNotEmpty
+        ? _emailController.text.trim()
+        : 'candidat.$uniqueSuffix@google.joem';
+    final password = _passwordController.text.isNotEmpty
+        ? _passwordController.text
+        : 'google-oauth-$uniqueSuffix';
+
+    final nom = _nomController.text.trim();
+    final prenom = _prenomController.text.trim();
+
+    final skills = _skills
+        .where((skill) => skill.nameController.text.trim().isNotEmpty)
+        .map((skill) => (name: skill.nameController.text.trim(), rating: skill.rating))
+        .toList();
+
+    try {
+      final result = await _repository.register(
+        JobSeekerRegistrationData(
+          email: email,
+          password: password,
+          nom: nom,
+          prenom: prenom,
+          telephone: _telephoneController.text.trim(),
+          localisation: _localisationController.text.trim(),
+          titreProfessionnel: _titreProfessionnelController.text.trim(),
+          presentation: _presentationController.text.trim(),
+          photoBytes: _photoBytes,
+          skills: skills,
+          cvPicked: _cvPicked,
+          tarifJournalier: _rateController.text.trim(),
+          disponibilite: _availability,
+          workModes: _workModes.map((mode) => mode.name).toList(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      AuthService().setSession(
+        User(
+          id: result.userId.toString(),
+          email: result.email,
+          firstName: prenom,
+          lastName: nom,
+          role: 'job_seeker',
+          position: _titreProfessionnelController.text.trim(),
+          photoBytes: _photoBytes,
+        ),
+      );
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const JobSeekerDashboard()),
+      );
+    } on EmailAlreadyUsedException {
+      if (!mounted) return;
+      setState(() {
+        _currentStep = 0;
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cet email est déjà utilisé, veuillez en choisir un autre.'),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Une erreur est survenue, veuillez réessayer.'),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+    }
   }
 
   Widget _buildStepContent(int step) {
@@ -291,7 +383,10 @@ class _JobSeekerRegistrationScreenState
                           WizardNavigation(
                             isLastStep: _currentStep == _totalSteps - 1,
                             onBack: _goToPreviousStep,
-                            onNext: _canProceedFromCurrentStep ? _goToNextStep : null,
+                            onNext: (!_isSubmitting && _canProceedFromCurrentStep)
+                                ? _goToNextStep
+                                : null,
+                            nextLabel: _isSubmitting ? 'Création...' : null,
                           ),
                         ],
                       ),
