@@ -20,6 +20,26 @@ class User {
   /// aucune n'a été sélectionnée).
   final Uint8List? photoBytes;
 
+  // Les champs ci-dessous reprennent, un par un, les données optionnelles
+  // saisies dans les étapes "Info"/"Profil"/"Tarif" du wizard d'inscription
+  // chercheur d'emploi (`job_seeker_profiles` + tables liées). Ils servent
+  // uniquement à calculer [profileCompletion] et [missingJobSeekerFieldLabels]
+  // — toujours vides/`false` pour un employeur.
+  final String? telephone;
+  final String? localisation;
+  final String? presentation;
+  final bool cvPicked;
+  final String? tarifJournalier;
+  final String? disponibilite;
+
+  /// Noms des compétences saisies à l'étape "Profil professionnel" de
+  /// l'inscription (`job_seeker_skills`) — liste vide si aucune.
+  final List<String> skills;
+
+  /// Modes de travail sélectionnés à l'étape "Tarif" de l'inscription
+  /// (`job_seeker_work_modes`) — liste vide si aucun.
+  final List<String> workModes;
+
   User({
     required this.id,
     required this.email,
@@ -29,7 +49,58 @@ class User {
     this.companyName,
     this.position,
     this.photoBytes,
+    this.telephone,
+    this.localisation,
+    this.presentation,
+    this.cvPicked = false,
+    this.tarifJournalier,
+    this.disponibilite,
+    this.skills = const [],
+    this.workModes = const [],
   });
+
+  /// Part des champs du profil chercheur d'emploi qui sont renseignés (les
+  /// 5 étapes du wizard d'inscription réunies), pour la barre "Profil
+  /// complété" de `ProfileSidePanel`/`JobProfileScreen`. Toujours 0.0 pour
+  /// un employeur.
+  double get profileCompletion {
+    final fieldsFilled = <bool>[
+      firstName.trim().isNotEmpty,
+      lastName.trim().isNotEmpty,
+      (position ?? '').trim().isNotEmpty,
+      (telephone ?? '').trim().isNotEmpty,
+      (localisation ?? '').trim().isNotEmpty,
+      (presentation ?? '').trim().isNotEmpty,
+      photoBytes != null,
+      cvPicked,
+      (tarifJournalier ?? '').trim().isNotEmpty,
+      (disponibilite ?? '').trim().isNotEmpty,
+      skills.isNotEmpty,
+      workModes.isNotEmpty,
+    ];
+    final filledCount = fieldsFilled.where((filled) => filled).length;
+    return filledCount / fieldsFilled.length;
+  }
+
+  /// Libellés (français) des champs du profil chercheur d'emploi encore
+  /// vides, dans l'ordre du wizard d'inscription — utilisés comme
+  /// suggestions dans la carte "Profil complété" de `JobProfileScreen`.
+  List<String> get missingJobSeekerFieldLabels {
+    return [
+      if (firstName.trim().isEmpty || lastName.trim().isEmpty)
+        'Complétez votre nom et prénom',
+      if ((position ?? '').trim().isEmpty) 'Ajoutez votre titre professionnel',
+      if ((telephone ?? '').trim().isEmpty) 'Ajoutez votre numéro de téléphone',
+      if ((localisation ?? '').trim().isEmpty) 'Indiquez votre localisation',
+      if ((presentation ?? '').trim().isEmpty) 'Rédigez la section "À propos"',
+      if (photoBytes == null) 'Ajoutez une photo de profil',
+      if (!cvPicked) 'Ajoutez votre CV',
+      if ((tarifJournalier ?? '').trim().isEmpty) 'Renseignez votre tarif journalier',
+      if ((disponibilite ?? '').trim().isEmpty) 'Indiquez votre disponibilité',
+      if (skills.isEmpty) 'Ajoutez au moins une compétence',
+      if (workModes.isEmpty) 'Précisez vos modes de travail préférés',
+    ];
+  }
 }
 
 /// Service d'authentification. Singleton : toutes les instances
@@ -123,6 +194,18 @@ class AuthService extends ChangeNotifier {
         limit: 1,
       );
       final profile = profileRows.isNotEmpty ? profileRows.first : null;
+
+      final skillRows = await db.query(
+        'job_seeker_skills',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+      final workModeRows = await db.query(
+        'job_seeker_work_modes',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+
       return User(
         id: userId.toString(),
         email: email,
@@ -131,6 +214,14 @@ class AuthService extends ChangeNotifier {
         role: role,
         position: profile?['titre_professionnel'] as String?,
         photoBytes: profile?['photo'] as Uint8List?,
+        telephone: profile?['telephone'] as String?,
+        localisation: profile?['localisation'] as String?,
+        presentation: profile?['presentation'] as String?,
+        cvPicked: (profile?['cv_picked'] as int? ?? 0) == 1,
+        tarifJournalier: profile?['tarif_journalier'] as String?,
+        disponibilite: profile?['disponibilite'] as String?,
+        skills: skillRows.map((row) => row['name'] as String).toList(),
+        workModes: workModeRows.map((row) => row['work_mode'] as String).toList(),
       );
     }
 

@@ -21,43 +21,28 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   final ImagePicker _picker = ImagePicker();
 
   Uint8List? _coverImageBytes;
+
+  /// Photo choisie pendant cette session d'écran ; retombe sur la photo de
+  /// profil réellement enregistrée à l'inscription (`AuthService`) tant
+  /// qu'aucune nouvelle photo n'a été prise ici.
   Uint8List? _avatarImageBytes;
 
-  // Données mockées
-  final double _profileCompletion = 0.75;
+  /// Photo à afficher : celle re-choisie dans cette session prime, sinon
+  /// la vraie photo de profil de l'utilisateur connecté (`AuthService`).
+  Uint8List? get _currentAvatarBytes =>
+      _avatarImageBytes ?? _authService.currentUser?.photoBytes;
 
-  final String _about =
-      'Développeur Flutter passionné, à la recherche de nouvelles opportunités pour mettre mes compétences au service de projets innovants à Madagascar.';
+  /// Présentation réellement saisie à l'inscription (étape "Info") — `null`
+  /// si le candidat ne l'a pas renseignée, pour rester cohérent avec la
+  /// suggestion "Rédigez la section 'À propos'" de la carte "Profil complété".
+  String? get _about {
+    final presentation = _authService.currentUser?.presentation?.trim();
+    return (presentation == null || presentation.isEmpty) ? null : presentation;
+  }
 
-  final List<Map<String, String>> _experiences = [
-    {
-      'title': 'Développeur Flutter Junior',
-      'company': 'StartUp Mada',
-      'period': 'Jan 2024 - Présent',
-    },
-    {
-      'title': 'Stagiaire Développeur Mobile',
-      'company': 'Tech Solutions',
-      'period': 'Juin 2023 - Déc 2023',
-    },
-  ];
-
-  final List<Map<String, String>> _education = [
-    {
-      'school': 'Institut Supérieur Polytechnique de Madagascar',
-      'degree': 'Licence en Informatique',
-      'period': '2021 - 2024',
-    },
-  ];
-
-  final List<String> _skills = [
-    'Flutter',
-    'Dart',
-    'Firebase',
-    'Git',
-    'UI/UX',
-    'REST API',
-  ];
+  /// Compétences réellement saisies à l'étape "Profil professionnel" de
+  /// l'inscription.
+  List<String> get _skills => _authService.currentUser?.skills ?? const [];
 
   Future<void> _pickCoverImage() async {
     final XFile? file = await _picker.pickImage(
@@ -116,9 +101,10 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                     _buildSectionCard(
                       title: 'À propos',
                       child: Text(
-                        _about,
+                        _about ?? "Vous n'avez pas encore ajouté de présentation.",
                         style: AppTypography.interRegular.copyWith(
                           fontSize: 14,
+                          fontStyle: _about == null ? FontStyle.italic : FontStyle.normal,
                           color: const Color(0xFF6B7280),
                           height: 1.5,
                         ),
@@ -127,38 +113,35 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
                       title: 'Expérience',
-                      child: Column(
-                        children: [
-                          for (int i = 0; i < _experiences.length; i++) ...[
-                            _buildExperienceItem(_experiences[i]),
-                            if (i != _experiences.length - 1)
-                              const SizedBox(height: AppSpacing.md),
-                          ],
-                        ],
+                      // L'inscription ne collecte aucune expérience
+                      // professionnelle : rien à afficher tant que la
+                      // fonctionnalité n'existe pas ailleurs dans l'app.
+                      child: _buildEmptySectionPlaceholder(
+                        "Aucune expérience renseignée pour le moment.",
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
                       title: 'Formation',
-                      child: Column(
-                        children: [
-                          for (int i = 0; i < _education.length; i++) ...[
-                            _buildEducationItem(_education[i]),
-                            if (i != _education.length - 1)
-                              const SizedBox(height: AppSpacing.md),
-                          ],
-                        ],
+                      // Idem : aucune formation collectée à l'inscription.
+                      child: _buildEmptySectionPlaceholder(
+                        "Aucune formation renseignée pour le moment.",
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
                       title: 'Compétences',
-                      child: Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
-                        children:
-                            _skills.map((skill) => _buildSkillChip(skill)).toList(),
-                      ),
+                      child: _skills.isEmpty
+                          ? _buildEmptySectionPlaceholder(
+                              "Vous n'avez pas encore ajouté de compétence.",
+                            )
+                          : Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: _skills
+                                  .map((skill) => _buildSkillChip(skill))
+                                  .toList(),
+                            ),
                     ),
                     const SizedBox(height: AppSpacing.sectionSpacing),
                   ],
@@ -178,14 +161,10 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
         Container(
           height: 130,
           width: double.infinity,
+          // Pas de photo de couverture choisie : fond gris uni façon
+          // Facebook plutôt que le dégradé violet de la marque.
           decoration: BoxDecoration(
-            gradient: _coverImageBytes == null
-                ? const LinearGradient(
-                    colors: [OnboardingColors.violetLight, OnboardingColors.violet],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
+            color: _coverImageBytes == null ? const Color(0xFFE4E6EB) : null,
             image: _coverImageBytes != null
                 ? DecorationImage(
                     image: MemoryImage(_coverImageBytes!),
@@ -245,8 +224,8 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
               ),
               child: CircleAvatar(
                 radius: 45,
-                backgroundImage: _avatarImageBytes != null
-                    ? MemoryImage(_avatarImageBytes!) as ImageProvider
+                backgroundImage: _currentAvatarBytes != null
+                    ? MemoryImage(_currentAvatarBytes!) as ImageProvider
                     : const AssetImage('assets/images/avatar_portfolio1.jpg'),
               ),
             ),
@@ -320,6 +299,11 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   Widget _buildIdentitySection() {
     final user = _authService.currentUser;
     final fullName = user != null ? '${user.firstName} ${user.lastName}' : 'Marie Martin';
+    final position = user?.position?.trim();
+    final subtitle = (position != null && position.isNotEmpty)
+        ? '$position · Chercheur d\'emploi'
+        : 'Chercheur d\'emploi';
+    final location = user?.localisation?.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,31 +329,35 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Développeuse Flutter · Chercheuse d\'emploi',
+          subtitle,
           style: AppTypography.interRegular.copyWith(
             fontSize: 14,
             color: const Color(0xFF6B7280),
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            const Icon(
-              Icons.location_on_outlined,
-              size: 16,
-              color: Color(0xFF9CA3AF),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Antananarivo, Madagascar',
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: const Color(0xFF9CA3AF),
+        if (location != null && location.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: Color(0xFF9CA3AF),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                location,
+                style: AppTypography.interRegular.copyWith(
+                  fontSize: 13,
+                  color: const Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
+        // Simulation en attendant un vrai suivi des vues de profil et des
+        // candidatures envoyées (aucun compteur persistant n'existe encore).
         Row(
           children: [
             Text(
@@ -397,8 +385,22 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     );
   }
 
+  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75% — même
+  /// seuils que la carte "Profil complété" du panneau latéral du dashboard.
+  Color _completionColor(double ratio) {
+    if (ratio < 0.4) return AppColors.error;
+    if (ratio < 0.75) return AppColors.warning;
+    return AppColors.success;
+  }
+
   Widget _buildCompletionCard() {
-    final percent = (_profileCompletion * 100).round();
+    final user = _authService.currentUser;
+    final ratio = (user?.profileCompletion ?? 0.0).clamp(0.0, 1.0);
+    final percent = (ratio * 100).round();
+    final color = _completionColor(ratio);
+    final missingFields = user?.missingJobSeekerFieldLabels ?? const <String>[];
+    final suggestions = missingFields.take(3).toList();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -414,7 +416,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Complétion du profil',
+                'Profil complété',
                 style: AppTypography.sectionTitle,
               ),
               Text(
@@ -422,7 +424,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: OnboardingColors.violet,
+                  color: color,
                 ),
               ),
             ],
@@ -431,20 +433,38 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: _profileCompletion,
+              value: ratio,
               minHeight: 8,
-              backgroundColor: const Color(0xFFF3F4F6),
-              valueColor: const AlwaysStoppedAnimation<Color>(OnboardingColors.violet),
+              backgroundColor: color.withOpacity(0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Ajoutez un CV pour compléter votre profil.',
-            style: AppTypography.interRegular.copyWith(
-              fontSize: 12,
-              color: const Color(0xFF9CA3AF),
+          if (suggestions.isEmpty)
+            Text(
+              'Votre profil est complet, bravo !',
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 12,
+                color: const Color(0xFF9CA3AF),
+              ),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final suggestion in suggestions)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• $suggestion',
+                      style: AppTypography.interRegular.copyWith(
+                        fontSize: 12,
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
         ],
       ),
     );
@@ -470,109 +490,17 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     );
   }
 
-  Widget _buildExperienceItem(Map<String, String> experience) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: OnboardingColors.violet.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.work_outline_rounded,
-            color: OnboardingColors.violet,
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                experience['title']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                experience['company']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 13,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                experience['period']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 12,
-                  color: const Color(0xFF9CA3AF),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEducationItem(Map<String, String> education) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFF3B82F6).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.school_rounded,
-            color: Color(0xFF3B82F6),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                education['school']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                education['degree']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 13,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                education['period']!,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 12,
-                  color: const Color(0xFF9CA3AF),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+  /// Texte d'état vide (italique, gris) utilisé pour "Expérience"/
+  /// "Formation"/"Compétences" quand l'inscription n'a fourni aucune
+  /// donnée réelle pour la section.
+  Widget _buildEmptySectionPlaceholder(String message) {
+    return Text(
+      message,
+      style: AppTypography.interRegular.copyWith(
+        fontSize: 13,
+        fontStyle: FontStyle.italic,
+        color: const Color(0xFF9CA3AF),
+      ),
     );
   }
 

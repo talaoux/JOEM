@@ -328,6 +328,14 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
       fullName: fullName ?? 'Marie Martin',
       avatarBytes: user?.photoBytes,
       skills: position ?? "Développeur Flutter . Chercheur d'emploi",
+      profileCompletion: user?.profileCompletion ?? 0.0,
+      onProfileCompletionTap: () {
+        _closeProfilePanel();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const JobProfileScreen()),
+        );
+      },
     );
   }
 

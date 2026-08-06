@@ -21,6 +21,14 @@ class ProfileSidePanel extends StatelessWidget {
   final VoidCallback? onSettingsTap;
   final VoidCallback? onLogoutTap;
 
+  /// Part du profil renseignée à l'inscription (0.0 à 1.0) — affichée
+  /// comme une barre de progression sous les statistiques.
+  final double profileCompletion;
+
+  /// Tap sur la carte "Profil complété" — envoie vers `JobProfileScreen`
+  /// pour compléter les champs manquants.
+  final VoidCallback? onProfileCompletionTap;
+
   const ProfileSidePanel({
     super.key,
     required this.animation,
@@ -32,6 +40,8 @@ class ProfileSidePanel extends StatelessWidget {
     this.location = 'Antananarivo, Analamanga',
     this.onSettingsTap,
     this.onLogoutTap,
+    this.profileCompletion = 0.0,
+    this.onProfileCompletionTap,
     this.stats = const [
       {
         'title': 'Candidatures envoyées',
@@ -187,6 +197,8 @@ class ProfileSidePanel extends StatelessWidget {
                             );
                           }).toList(),
                         ),
+                        const SizedBox(height: 16),
+                        _buildProfileCompletionCard(),
                       ],
                     ),
                   ),
@@ -236,6 +248,60 @@ class ProfileSidePanel extends StatelessWidget {
       ),
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+    );
+  }
+
+  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75%.
+  Color _progressColor(double ratio) {
+    if (ratio < 0.4) return AppColors.error;
+    if (ratio < 0.75) return AppColors.warning;
+    return AppColors.success;
+  }
+
+  Widget _buildProfileCompletionCard() {
+    final ratio = profileCompletion.clamp(0.0, 1.0);
+    final percentage = (ratio * 100).round();
+    final color = _progressColor(ratio);
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onProfileCompletionTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Profil complété',
+                    style: AppTypography.cardTitle.copyWith(fontSize: 14),
+                  ),
+                  Text(
+                    '$percentage%',
+                    style: AppTypography.cardTitle.copyWith(fontSize: 14, color: color),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 8,
+                  backgroundColor: color.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

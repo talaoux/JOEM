@@ -1,15 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/core/theme/app_text_styles.dart';
+import 'package:joem/core/widgets/joem_gradient_logo.dart';
+import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 
-/// Écran de démarrage : reproduit le logo JOEM en texte animé (lettres
-/// qui apparaissent une à une, puis le slogan complet), sans dépendre de
-/// l'image `joem_logo.png`. Redirige automatiquement vers [WelcomeScreen]
-/// une fois l'animation terminée.
+/// Écran de démarrage : reprend exactement le bloc marque du
+/// [WelcomeScreen] — wordmark "JOEM" en dégradé ([JoemGradientLogo]),
+/// grilles de points de part et d'autre, baseline "Job • Offres • Emploi
+/// Madagascar" — dans une simple animation d'apparition (fondu + zoom).
+/// Redirige automatiquement vers [WelcomeScreen] une fois affiché.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,20 +21,22 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const _letters = ['J', 'O', 'E', 'M'];
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  )..forward();
 
-  late final AnimationController _controller;
+  late final Animation<double> _scale = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
   Timer? _redirectTimer;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..forward();
-
-    _redirectTimer = Timer(const Duration(milliseconds: 2900), _goToWelcome);
+    _redirectTimer = Timer(const Duration(milliseconds: 1800), _goToWelcome);
   }
 
   @override
@@ -53,173 +57,126 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Animation<double> _letterProgress(int index) {
-    final start = 0.05 * index;
-    return CurvedAnimation(
-      parent: _controller,
-      curve: Interval(start, start + 0.4, curve: Curves.easeOutBack),
-    );
-  }
-
-  late final Animation<double> _glowProgress = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-  );
-
-  late final Animation<double> _lineProgress = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.35, 0.65, curve: Curves.easeOutCubic),
-  );
-
-  late final Animation<double> _taglineProgress = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.55, 0.9, curve: Curves.easeOutCubic),
-  );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildGlowingLetters(),
-            const SizedBox(height: 16),
-            _buildGrowingLine(),
-            const SizedBox(height: 22),
-            _buildTagline(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlowingLetters() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        FadeTransition(
-          opacity: _glowProgress,
+        child: FadeTransition(
+          opacity: _controller,
           child: ScaleTransition(
-            scale: Tween(begin: 0.6, end: 1.0).animate(_glowProgress),
-            child: Container(
-              width: 240,
-              height: 150,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [AppColors.primaryLightest, Colors.white.withValues(alpha: 0)],
-                ),
-              ),
-            ),
+            scale: Tween<double>(begin: 0.85, end: 1.0).animate(_scale),
+            child: const _SplashBrand(),
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(_letters.length, (index) {
-            final progress = _letterProgress(index);
-            return FadeTransition(
-              opacity: progress,
-              child: ScaleTransition(
-                scale: Tween(begin: 0.4, end: 1.0).animate(progress),
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.5),
-                    end: Offset.zero,
-                  ).animate(progress),
-                  child: _buildLetterGlyph(index),
-                ),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  /// Reproduit le style "moitié pleine, moitié contour" du logo : les deux
-  /// premières lettres en mauve plein, les deux dernières en contour mauve
-  /// (intérieur transparent, la page blanche fait office de remplissage).
-  Widget _buildLetterGlyph(int index) {
-    final baseStyle = AppTextStyles.poppinsExtraBold.copyWith(
-      fontSize: 72,
-      height: 1,
-      letterSpacing: 2,
-    );
-    final isFilled = index < _letters.length / 2;
-
-    return Text(
-      _letters[index],
-      style: isFilled
-          ? baseStyle.copyWith(color: AppColors.primary)
-          : baseStyle.copyWith(
-              foreground: Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 2.2
-                ..color = AppColors.primary,
-            ),
-    );
-  }
-
-  Widget _buildGrowingLine() {
-    return AnimatedBuilder(
-      animation: _lineProgress,
-      builder: (context, _) {
-        return Container(
-          height: 3,
-          width: 150 * _lineProgress.value,
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTagline() {
-    return FadeTransition(
-      opacity: _taglineProgress,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.4),
-          end: Offset.zero,
-        ).animate(_taglineProgress),
-        child: const _TaglineText(),
       ),
     );
   }
 }
 
-/// Reproduit "Job Offer & Employment Madagascar" avec les initiales
-/// J-O-E-M mises en avant, comme sur le logo image.
-class _TaglineText extends StatelessWidget {
-  const _TaglineText();
+/// Reproduit le bloc marque du welcome screen : deux grilles de points
+/// encadrant le wordmark "JOEM", puis la baseline en dessous.
+class _SplashBrand extends StatelessWidget {
+  const _SplashBrand();
 
   @override
   Widget build(BuildContext context) {
-    final muted = AppTextStyles.interRegular.copyWith(
-      fontSize: 13,
-      color: AppColors.textSecondary,
-      letterSpacing: 0.4,
-    );
-    final accent = AppTextStyles.poppinsSemiBold.copyWith(
-      fontSize: 13,
-      color: AppColors.primary,
-      letterSpacing: 0.4,
-    );
-    return RichText(
-      text: TextSpan(
+    final showDots =
+        MediaQuery.of(context).size.width >= OnboardingLayout.dotGridMinWidth;
+
+    return ClipRect(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          TextSpan(text: 'J', style: accent),
-          TextSpan(text: 'ob ', style: muted),
-          TextSpan(text: 'O', style: accent),
-          TextSpan(text: 'ffer & ', style: muted),
-          TextSpan(text: 'E', style: accent),
-          TextSpan(text: 'mployment ', style: muted),
-          TextSpan(text: 'M', style: accent),
-          TextSpan(text: 'adagascar', style: muted),
+          if (showDots) const Positioned(left: 8, child: _SplashDotGrid()),
+          if (showDots) const Positioned(right: 8, child: _SplashDotGrid()),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              JoemGradientLogo(fontSize: 56),
+              SizedBox(height: 10),
+              _SplashBaselineText(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Grille décorative de points violets (6 colonnes x 8 lignes) — même
+/// forme que celle du welcome screen, de part et d'autre du wordmark.
+class _SplashDotGrid extends StatelessWidget {
+  const _SplashDotGrid();
+
+  static const int _columns = 6;
+  static const int _rows = 8;
+  static const double _spacing = 12;
+  static const double _dotDiameter = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: (_columns - 1) * _spacing + _dotDiameter,
+      height: (_rows - 1) * _spacing + _dotDiameter,
+      child: const CustomPaint(painter: _SplashDotGridPainter()),
+    );
+  }
+}
+
+class _SplashDotGridPainter extends CustomPainter {
+  const _SplashDotGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = OnboardingColors.violetLight.withValues(alpha: 0.15);
+
+    for (var col = 0; col < _SplashDotGrid._columns; col++) {
+      for (var row = 0; row < _SplashDotGrid._rows; row++) {
+        canvas.drawCircle(
+          Offset(
+            _SplashDotGrid._dotDiameter / 2 + col * _SplashDotGrid._spacing,
+            _SplashDotGrid._dotDiameter / 2 + row * _SplashDotGrid._spacing,
+          ),
+          _SplashDotGrid._dotDiameter / 2,
+          paint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// « Job • Offres • Emploi Madagascar », avec les puces colorées — même
+/// texte que la baseline du welcome screen.
+class _SplashBaselineText extends StatelessWidget {
+  const _SplashBaselineText();
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = GoogleFonts.poppins(
+      fontSize: 15,
+      fontWeight: FontWeight.w400,
+      color: OnboardingColors.baseline,
+    );
+    final bulletStyle = textStyle.copyWith(
+      color: OnboardingColors.violetLight,
+      fontWeight: FontWeight.w600,
+    );
+
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(
+        style: textStyle,
+        children: [
+          const TextSpan(text: 'Job '),
+          TextSpan(text: '•', style: bulletStyle),
+          const TextSpan(text: ' Offres '),
+          TextSpan(text: '•', style: bulletStyle),
+          const TextSpan(text: ' Emploi Madagascar'),
         ],
       ),
     );

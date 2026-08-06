@@ -217,6 +217,14 @@ class _JobSeekerRegistrationScreenState
           role: 'job_seeker',
           position: _titreProfessionnelController.text.trim(),
           photoBytes: _photoBytes,
+          telephone: _telephoneController.text.trim(),
+          localisation: _localisationController.text.trim(),
+          presentation: _presentationController.text.trim(),
+          cvPicked: _cvPicked,
+          tarifJournalier: _rateController.text.trim(),
+          disponibilite: _availability,
+          skills: skills.map((skill) => skill.name).toList(),
+          workModes: _workModes.map((mode) => mode.name).toList(),
         ),
       );
 
