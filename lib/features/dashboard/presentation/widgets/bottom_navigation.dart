@@ -16,12 +16,20 @@ class BottomNavigation extends StatelessWidget {
   /// l'onboarding, le dashboard employeur ne passe rien et garde le mauve.
   final Color? accentColor;
 
+  /// Surcharge l'icône/le libellé de l'item en position 1 (par défaut
+  /// "Catégorie", pertinent côté candidat) — le dashboard recruteur y
+  /// passe une icône de recherche et "Recherche" (recherche de candidats).
+  final IconData secondItemIcon;
+  final String secondItemLabel;
+
   const BottomNavigation({
     super.key,
     required this.currentIndex,
     required this.onTap,
     this.notificationCount = 0,
     this.accentColor,
+    this.secondItemIcon = Icons.category_rounded,
+    this.secondItemLabel = 'Catégorie',
   });
 
 
@@ -99,8 +107,8 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
-                    icon: Icons.category_rounded,
-                    label: 'Catégorie',
+                    icon: secondItemIcon,
+                    label: secondItemLabel,
                     index: 1,
                     isActive: currentIndex == 1,
                     iconSize: iconSize,

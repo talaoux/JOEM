@@ -5,21 +5,24 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_shadows.dart';
+import '../../data/job_offer_repository.dart';
 import '../widgets/job_seeker_header.dart';
+import 'category_offers_screen.dart';
 import 'job_categories_screen.dart';
 import 'job_search_screen.dart';
 import 'job_publish_screen.dart';
 import 'job_notifications_screen.dart';
 import 'job_profile_screen.dart';
+import 'job_offer_detail_screen.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/category_card.dart';
-import '../widgets/job_card.dart';
+import '../widgets/job_offer_post_card.dart';
 import '../widgets/interview_card.dart';
 import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/profile_side_panel.dart';
-import '../../../../features/welcome/presentation/welcome_screen.dart';
+import '../../../../features/login/presentation/login_screen.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 
 class JobSeekerDashboard extends StatefulWidget {
@@ -34,7 +37,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   final TextEditingController _searchController = TextEditingController();
   final AuthService _authService = AuthService();
   int _currentNavIndex = 0;
-  final int _notificationCount = 5;
+  int _notificationCount = 0;
 
   // Données mockées
   final List<Map<String, dynamic>> _categories = [
@@ -48,35 +51,23 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     {'title': 'Industrie', 'icon': Icons.precision_manufacturing_rounded},
   ];
 
-  final List<Map<String, dynamic>> _jobs = [
-    {
-      'title': 'Développeur Flutter',
-      'company': 'Tech Solutions',
-      'location': 'Antananarivo',
-      'salary': '2 500 000 Ar',
-      'contractType': 'CDI',
-      'isNew': true,
-      'isFavorite': false,
-    },
-    {
-      'title': 'Designer UI/UX',
-      'company': 'Creative Agency',
-      'location': 'Toamasina',
-      'salary': '1 800 000 Ar',
-      'contractType': 'CDD',
-      'isNew': true,
-      'isFavorite': true,
-    },
-    {
-      'title': 'Chef de Projet',
-      'company': 'Digital Corp',
-      'location': 'Antananarivo',
-      'salary': '3 200 000 Ar',
-      'contractType': 'CDI',
-      'isNew': false,
-      'isFavorite': false,
-    },
-  ];
+  final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+
+  /// Toutes les offres réellement publiées par les recruteurs
+  /// (`job_offers`), tous métiers confondus — un chercheur d'emploi voit
+  /// toute offre publiée, peu importe le type d'emploi qu'il recherche.
+  List<JobOffer> _offers = [];
+  bool _loadingOffers = true;
+
+  /// Ids des offres auxquelles le candidat connecté a déjà postulé
+  /// (`job_applications`) — bascule chaque carte sur "Candidature envoyée"
+  /// sans re-fetch de toute la liste.
+  Set<int> _appliedOfferIds = {};
+
+  /// Ids des offres que le candidat connecté a enregistrées
+  /// (`job_offer_saves`) — bascule le libellé du menu "..." de chaque
+  /// carte entre "Enregistrer publication" et "Retirer des enregistrements".
+  Set<int> _savedOfferIds = {};
 
   final List<Map<String, dynamic>> _interviews = [
     {
@@ -159,6 +150,143 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _loadOffers();
+    _loadNotificationCount();
+  }
+
+  /// Id du chercheur d'emploi connecté — `null` si personne n'est
+  /// connecté (aucun compte de démo/wizard n'atterrit jamais ici sans
+  /// session, mais on reste défensif).
+  String? get _jobSeekerUserId => _authService.currentUser?.id;
+
+  Future<void> _loadOffers() async {
+    final userId = _jobSeekerUserId;
+    final offers = userId != null
+        ? await _jobOfferRepository.fetchAllForJobSeeker(userId)
+        : await _jobOfferRepository.fetchAll();
+    final appliedIds = userId != null
+        ? await _jobOfferRepository.fetchAppliedOfferIds(userId)
+        : <int>{};
+    final savedIds = userId != null
+        ? await _jobOfferRepository.fetchSavedOfferIds(userId)
+        : <int>{};
+    if (!mounted) return;
+    setState(() {
+      _offers = offers;
+      _appliedOfferIds = appliedIds;
+      _savedOfferIds = savedIds;
+      _loadingOffers = false;
+    });
+  }
+
+  /// Rafraîchit uniquement l'état des candidatures — utilisé au retour de
+  /// `JobOfferDetailScreen` (où le candidat peut avoir postulé) sans
+  /// recharger toute la liste d'offres.
+  Future<void> _refreshAppliedOfferIds() async {
+    final userId = _jobSeekerUserId;
+    if (userId == null) return;
+    final appliedIds = await _jobOfferRepository.fetchAppliedOfferIds(userId);
+    if (!mounted) return;
+    setState(() => _appliedOfferIds = appliedIds);
+  }
+
+  /// Enregistre la candidature du candidat connecté pour [offer]
+  /// (`JobOfferRepository.apply`) — appelé par le bouton "Postuler" d'une
+  /// `JobCard` de la liste "Recommandées pour vous".
+  Future<void> _applyToOffer(JobOffer offer) async {
+    final userId = _jobSeekerUserId;
+    if (userId == null || _appliedOfferIds.contains(offer.id)) return;
+
+    final currentUser = _authService.currentUser;
+    final candidateName = currentUser != null
+        ? '${currentUser.firstName} ${currentUser.lastName}'.trim()
+        : '';
+
+    await _jobOfferRepository.apply(
+      jobOfferId: offer.id,
+      jobSeekerUserId: userId,
+      candidateName: candidateName.isNotEmpty ? candidateName : 'Un candidat',
+      candidatePosition: currentUser?.position,
+    );
+    if (!mounted) return;
+    setState(() => _appliedOfferIds = {..._appliedOfferIds, offer.id});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Candidature envoyée pour "${offer.title}" !')),
+    );
+  }
+
+  /// Annule la candidature du candidat connecté pour [offer]
+  /// (`JobOfferRepository.withdrawApplication`) — appelé après confirmation
+  /// depuis le bouton "Candidature envoyée" d'une `JobOfferPostCard`, pour
+  /// rattraper un "Postuler" envoyé par erreur.
+  Future<void> _withdrawApplication(JobOffer offer) async {
+    final userId = _jobSeekerUserId;
+    if (userId == null || !_appliedOfferIds.contains(offer.id)) return;
+
+    await _jobOfferRepository.withdrawApplication(
+      jobOfferId: offer.id,
+      jobSeekerUserId: userId,
+    );
+    if (!mounted) return;
+    setState(() => _appliedOfferIds = {..._appliedOfferIds}..remove(offer.id));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Candidature annulée pour "${offer.title}".')),
+    );
+  }
+
+  /// Enregistre/retire [offer] des publications enregistrées du candidat
+  /// connecté (`JobOfferRepository.saveOffer`/`unsaveOffer`) — appelé par le
+  /// menu "..." d'une `JobOfferPostCard`.
+  Future<void> _toggleSaveOffer(JobOffer offer) async {
+    final userId = _jobSeekerUserId;
+    if (userId == null) return;
+
+    final isSaved = _savedOfferIds.contains(offer.id);
+    if (isSaved) {
+      await _jobOfferRepository.unsaveOffer(offer.id, userId);
+    } else {
+      await _jobOfferRepository.saveOffer(offer.id, userId);
+    }
+    if (!mounted) return;
+    setState(() {
+      _savedOfferIds = isSaved
+          ? ({..._savedOfferIds}..remove(offer.id))
+          : {..._savedOfferIds, offer.id};
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isSaved ? 'Publication retirée des enregistrements.' : 'Publication enregistrée.'),
+      ),
+    );
+  }
+
+  /// Masque [offer] du fil du candidat connecté ("X" sur la carte) —
+  /// réutilise le même masquage propre au candidat que "Supprimer" dans
+  /// `JobNotificationsScreen` (`job_offer_notification_reads.is_deleted`) :
+  /// l'offre reste visible par les autres candidats et dans "Mes offres"
+  /// côté recruteur.
+  Future<void> _dismissOffer(JobOffer offer) async {
+    final userId = _jobSeekerUserId;
+    if (userId == null) return;
+
+    await _jobOfferRepository.deleteNotification(offer.id, userId);
+    if (!mounted) return;
+    setState(() {
+      _offers = _offers.where((o) => o.id != offer.id).toList();
+    });
+    _loadNotificationCount();
+  }
+
+  /// Nombre réel d'offres publiées que ce candidat n'a pas encore lues
+  /// (ni supprimées) — alimente la pastille du header et de la nav basse.
+  Future<void> _loadNotificationCount() async {
+    final userId = _jobSeekerUserId;
+    if (userId == null) return;
+    final count = await _jobOfferRepository.countUnreadNotificationsForJobSeeker(userId);
+    if (!mounted) return;
+    setState(() {
+      _notificationCount = count;
+    });
   }
 
   @override
@@ -177,9 +305,11 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     _profilePanelController.reverse();
   }
 
-  void _logout() {
+  Future<void> _logout() async {
+    await _authService.logout();
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -211,6 +341,15 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                             builder: (_) => const JobSearchScreen(),
                           ),
                         );
+                      },
+                      onNotificationTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const JobNotificationsScreen(),
+                          ),
+                        );
+                        _loadNotificationCount();
                       },
                     ),
                   ),
@@ -292,6 +431,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                       _currentNavIndex = 0;
                     });
                   }
+                  _loadNotificationCount();
                   return;
                 }
                 setState(() {
@@ -419,7 +559,12 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                     style: AppTypography.sectionTitle,
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const JobCategoriesScreen()),
+                      );
+                    },
                     child: Text(
                       'Voir tout',
                       style: AppTypography.secondaryButton.copyWith(
@@ -447,7 +592,14 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                   return CategoryCard(
                     title: category['title'],
                     icon: category['icon'],
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CategoryOffersScreen(category: category['title'] as String),
+                        ),
+                      );
+                    },
                   );
                 }).toList(),
               ),
@@ -472,32 +624,62 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _jobs.length,
-          itemBuilder: (context, index) {
-            final job = _jobs[index];
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: AppSpacing.md,
-                left: AppSpacing.safeAreaHorizontal,
-                right: AppSpacing.safeAreaHorizontal,
+        if (!_loadingOffers && _offers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.safeAreaHorizontal,
+            ),
+            child: Text(
+              "Aucune offre publiée pour le moment. Revenez bientôt !",
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textTertiary,
               ),
-              child: JobCard(
-                jobTitle: job['title'],
-                company: job['company'],
-                location: job['location'],
-                salary: job['salary'],
-                contractType: job['contractType'],
-                isNew: job['isNew'],
-                isFavorite: job['isFavorite'],
-                onApply: () {},
-                onFavoriteTap: () {},
-              ),
-            );
-          },
-        ),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _offers.length,
+            itemBuilder: (context, index) {
+              final offer = _offers[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: AppSpacing.md,
+                  left: AppSpacing.safeAreaHorizontal,
+                  right: AppSpacing.safeAreaHorizontal,
+                ),
+                child: JobOfferPostCard(
+                  companyName: offer.companyName,
+                  companyLogo: offer.companyLogo,
+                  publishedLabel: offer.publishedLabel,
+                  jobTitle: offer.title,
+                  location: offer.location,
+                  salary: offer.salary,
+                  contractType: offer.contractType,
+                  description: offer.description,
+                  posterImage: offer.posterImage,
+                  isSaved: _savedOfferIds.contains(offer.id),
+                  hasApplied: _appliedOfferIds.contains(offer.id),
+                  onToggleSave: () => _toggleSaveOffer(offer),
+                  onDismiss: () => _dismissOffer(offer),
+                  onApply: () => _applyToOffer(offer),
+                  onWithdraw: () => _withdrawApplication(offer),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => JobOfferDetailScreen(offer: offer),
+                      ),
+                    );
+                    _refreshAppliedOfferIds();
+                  },
+                ),
+              );
+            },
+          ),
         Center(
           child: TextButton(
             onPressed: () {},

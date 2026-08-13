@@ -6,25 +6,28 @@ import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/widgets/notification_badge.dart';
 import 'search_bar_widget.dart';
 
-class JobSeekerHeader extends StatelessWidget {
+/// En-tête du dashboard recruteur : barre de recherche de candidats +
+/// notification + logo entreprise — équivalent recruteur de
+/// `JobSeekerHeader`, mais qui cherche des profils, pas des offres.
+class EmployerHeader extends StatelessWidget {
   final TextEditingController controller;
   final int notificationCount;
-  final VoidCallback? onAvatarTap;
+  final VoidCallback? onLogoTap;
   final VoidCallback? onSearchTap;
   final VoidCallback? onNotificationTap;
 
-  /// Photo réellement choisie à l'inscription — prioritaire sur l'avatar
-  /// par défaut quand elle est renseignée.
-  final Uint8List? avatarBytes;
+  /// Logo réellement choisi à l'inscription — prioritaire sur l'icône par
+  /// défaut quand il est renseigné.
+  final Uint8List? logoBytes;
 
-  const JobSeekerHeader({
+  const EmployerHeader({
     super.key,
     required this.controller,
     this.notificationCount = 0,
-    this.onAvatarTap,
+    this.onLogoTap,
     this.onSearchTap,
     this.onNotificationTap,
-    this.avatarBytes,
+    this.logoBytes,
   });
 
   @override
@@ -36,13 +39,14 @@ class JobSeekerHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Barre de recherche
+          // Barre de recherche de candidats
           Expanded(
             child: SearchBarWidget(
               controller: controller,
               showFilterButton: false,
               readOnly: onSearchTap != null,
               onTap: onSearchTap,
+              hintText: 'Rechercher un candidat...',
             ),
           ),
 
@@ -73,14 +77,22 @@ class JobSeekerHeader extends StatelessWidget {
 
           const SizedBox(width: AppSpacing.sm),
 
-          // Photo utilisateur
+          // Logo entreprise
           GestureDetector(
-            onTap: onAvatarTap,
+            onTap: onLogoTap,
             child: CircleAvatar(
               radius: 20,
-              backgroundImage: avatarBytes != null
-                  ? MemoryImage(avatarBytes!) as ImageProvider
-                  : const AssetImage('assets/images/avatar_portfolio1.jpg'),
+              backgroundColor: AppColors.primaryLightest,
+              backgroundImage: logoBytes != null
+                  ? MemoryImage(logoBytes!) as ImageProvider
+                  : null,
+              child: logoBytes == null
+                  ? const Icon(
+                      Icons.business_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    )
+                  : null,
             ),
           ),
         ],

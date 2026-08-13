@@ -14,6 +14,7 @@ import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
 import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 
 /// Écran "Connexion" : pas de wizard, un simple formulaire email + mot
 /// de passe (ou Google) sur fond dégradé façon onboarding, même identité visuelle que les
@@ -79,30 +80,50 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final success = await _authService.login(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-    );
+    bool success = false;
+    Object? error;
+    try {
+      success = await _authService.login(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+    } catch (e) {
+      error = e;
+    }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
     });
 
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Une erreur est survenue lors de la connexion, veuillez réessayer.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (success && mounted) {
-      // Rediriger vers le dashboard approprié
+      // Rediriger vers le dashboard approprié et vider la pile de
+      // navigation (Welcome + Login) : le dashboard devient la racine, un
+      // retour depuis "Accueil" doit quitter l'application, pas revenir
+      // à Welcome/Login.
       if (_authService.isEmployer()) {
-        Navigator.pushReplacement(
-          context,
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (context) => const EmployerDashboard(),
           ),
+          (route) => false,
         );
       } else if (_authService.isJobSeeker()) {
-        Navigator.pushReplacement(
-          context,
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (context) => const JobSeekerDashboard(),
           ),
+          (route) => false,
         );
       }
     } else if (mounted) {
@@ -122,7 +143,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final isLargeScreen = size.width > 600;
     final horizontalPadding = isTablet ? 48.0 : (isLargeScreen ? 40.0 : 24.0);
 
-    return Scaffold(
+    return PopScope(
+      // Après une déconnexion, Login est la racine de la pile (Welcome en
+      // a été retiré) : `canPop` est alors false et le retour matériel
+      // doit renvoyer vers Welcome plutôt que quitter l'application.
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        );
+      },
+      child: Scaffold(
       backgroundColor: OnboardingColors.bgTop,
       body: DecoratedBox(
         decoration: const BoxDecoration(
@@ -279,6 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         ),
+      ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -17,7 +18,19 @@ class JobPublishScreen extends StatefulWidget {
 class _JobPublishScreenState extends State<JobPublishScreen> {
   final TextEditingController _textController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
-  final String _authorName = 'Marie Martin';
+  final AuthService _authService = AuthService();
+
+  /// Nom réel de l'utilisateur connecté — retombe sur un nom générique si
+  /// aucun compte n'est chargé (ne devrait pas arriver en pratique, cet
+  /// écran n'étant atteignable qu'après connexion).
+  String get _authorName {
+    final user = _authService.currentUser;
+    if (user == null) return 'Vous';
+    final fullName = '${user.firstName} ${user.lastName}'.trim();
+    return fullName.isEmpty ? 'Vous' : fullName;
+  }
+
+  Uint8List? get _authorPhotoBytes => _authService.currentUser?.photoBytes;
 
   Uint8List? _imageBytes;
 
@@ -100,10 +113,11 @@ class _JobPublishScreenState extends State<JobPublishScreen> {
               ),
               child: Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 22,
-                    backgroundImage:
-                        AssetImage('assets/images/avatar_portfolio1.jpg'),
+                    backgroundImage: _authorPhotoBytes != null
+                        ? MemoryImage(_authorPhotoBytes!) as ImageProvider
+                        : const AssetImage('assets/images/avatar_portfolio1.jpg'),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Column(

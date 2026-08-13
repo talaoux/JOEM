@@ -5,26 +5,29 @@ import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/job_offer_repository.dart';
-import 'job_offer_detail_screen.dart';
+import 'candidate_application_detail_screen.dart';
 
-class JobNotificationsScreen extends StatefulWidget {
-  const JobNotificationsScreen({super.key});
+/// Notifications recruteur — équivalent recruteur de
+/// `JobNotificationsScreen` : chaque candidature reçue sur une offre de ce
+/// recruteur (`job_applications`) EST une notification, pas de données
+/// mockées ici, voir `JobOfferRepository.fetchApplicationNotificationsForEmployer`.
+class EmployerNotificationsScreen extends StatefulWidget {
+  const EmployerNotificationsScreen({super.key});
 
   @override
-  State<JobNotificationsScreen> createState() => _JobNotificationsScreenState();
+  State<EmployerNotificationsScreen> createState() =>
+      _EmployerNotificationsScreenState();
 }
 
-class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
+class _EmployerNotificationsScreenState
+    extends State<EmployerNotificationsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
 
-  /// Chaque offre réellement publiée par un recruteur (`job_offers`) EST
-  /// une notification pour ce candidat — pas de données mockées ici, voir
-  /// `JobOfferRepository.fetchNotificationsForJobSeeker`.
-  List<JobOfferNotification> _notifications = [];
+  List<JobApplicationNotification> _notifications = [];
   bool _loading = true;
 
-  String? get _jobSeekerUserId => _authService.currentUser?.id;
+  int? get _employerUserId => int.tryParse(_authService.currentUser?.id ?? '');
 
   @override
   void initState() {
@@ -33,12 +36,13 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
   }
 
   Future<void> _loadNotifications() async {
-    final userId = _jobSeekerUserId;
-    if (userId == null) {
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) {
       setState(() => _loading = false);
       return;
     }
-    final notifications = await _repository.fetchNotificationsForJobSeeker(userId);
+    final notifications =
+        await _repository.fetchApplicationNotificationsForEmployer(employerUserId);
     if (!mounted) return;
     setState(() {
       _notifications = notifications;
@@ -49,59 +53,80 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
   bool get _hasUnread => _notifications.any((n) => !n.isRead);
 
   Future<void> _markAllAsRead() async {
-    final userId = _jobSeekerUserId;
-    if (userId == null) return;
-    await _repository.markAllNotificationsRead(userId);
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) return;
+    await _repository.markAllApplicationNotificationsRead(employerUserId);
     if (!mounted) return;
     setState(() {
       _notifications = _notifications
-          .map((n) => JobOfferNotification(offer: n.offer, isRead: true))
+          .map((n) => JobApplicationNotification(
+                applicationId: n.applicationId,
+                jobSeekerUserId: n.jobSeekerUserId,
+                offer: n.offer,
+                candidateName: n.candidateName,
+                candidatePosition: n.candidatePosition,
+                appliedAt: n.appliedAt,
+                isRead: true,
+              ))
           .toList();
     });
   }
 
   Future<void> _markAsRead(int index) async {
-    final userId = _jobSeekerUserId;
-    if (userId == null || _notifications[index].isRead) return;
+    if (_notifications[index].isRead) return;
     final notification = _notifications[index];
-    await _repository.markNotificationRead(notification.offer.id, userId);
+    await _repository.markApplicationNotificationRead(notification.applicationId);
     if (!mounted) return;
     setState(() {
-      _notifications[index] = JobOfferNotification(offer: notification.offer, isRead: true);
+      _notifications[index] = JobApplicationNotification(
+        applicationId: notification.applicationId,
+        jobSeekerUserId: notification.jobSeekerUserId,
+        offer: notification.offer,
+        candidateName: notification.candidateName,
+        candidatePosition: notification.candidatePosition,
+        appliedAt: notification.appliedAt,
+        isRead: true,
+      );
     });
   }
 
   Future<void> _markAsUnread(int index) async {
-    final userId = _jobSeekerUserId;
-    if (userId == null) return;
     final notification = _notifications[index];
-    await _repository.markNotificationUnread(notification.offer.id, userId);
+    await _repository.markApplicationNotificationUnread(notification.applicationId);
     if (!mounted) return;
     setState(() {
-      _notifications[index] = JobOfferNotification(offer: notification.offer, isRead: false);
+      _notifications[index] = JobApplicationNotification(
+        applicationId: notification.applicationId,
+        jobSeekerUserId: notification.jobSeekerUserId,
+        offer: notification.offer,
+        candidateName: notification.candidateName,
+        candidatePosition: notification.candidatePosition,
+        appliedAt: notification.appliedAt,
+        isRead: false,
+      );
     });
   }
 
   Future<void> _deleteNotification(int index) async {
-    final userId = _jobSeekerUserId;
-    if (userId == null) return;
     final notification = _notifications[index];
-    await _repository.deleteNotification(notification.offer.id, userId);
+    await _repository.deleteApplicationNotification(notification.applicationId);
     if (!mounted) return;
     setState(() {
       _notifications.removeAt(index);
     });
   }
 
-  /// Marque la notification comme lue puis ouvre le détail de l'offre
-  /// publiée correspondante.
-  Future<void> _openOfferDetail(int index) async {
+  /// Marque la candidature comme lue puis ouvre son détail (profil du
+  /// candidat + offre concernée).
+  Future<void> _openApplicationDetail(int index) async {
     await _markAsRead(index);
     if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => JobOfferDetailScreen(offer: _notifications[index].offer),
+        builder: (_) => CandidateApplicationDetailScreen(
+          notification: _notifications[index],
+        ),
       ),
     );
   }
@@ -224,7 +249,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                               horizontal: AppSpacing.safeAreaHorizontal,
                             ),
                             child: Text(
-                              'Aucune notification pour le moment. Vous serez prévenu dès qu\'une entreprise publie une offre.',
+                              "Aucune candidature reçue pour le moment. Vous serez prévenu dès qu'un candidat postule à l'une de vos offres.",
                               textAlign: TextAlign.center,
                               style: AppTypography.interRegular.copyWith(
                                 fontSize: 13,
@@ -256,7 +281,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
     final isRead = notification.isRead;
 
     return InkWell(
-      onTap: () => _openOfferDetail(index),
+      onTap: () => _openApplicationDetail(index),
       onLongPress: () => _showOptionsMenu(index),
       borderRadius: BorderRadius.circular(14),
       child: Container(
@@ -273,12 +298,12 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: OnboardingColors.violet.withOpacity(0.1),
+                color: const Color(0xFF3B82F6).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.campaign_rounded,
-                color: OnboardingColors.violet,
+                Icons.person_add_alt_1_rounded,
+                color: Color(0xFF3B82F6),
                 size: 20,
               ),
             ),
@@ -308,7 +333,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    notification.offer.publishedLabel,
+                    notification.timeLabel,
                     style: AppTypography.interRegular.copyWith(
                       fontSize: 12,
                       color: const Color(0xFF9CA3AF),

@@ -3,6 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../widgets/category_card.dart';
+import 'category_offers_screen.dart';
 
 class JobCategoriesScreen extends StatelessWidget {
   const JobCategoriesScreen({super.key});
@@ -71,7 +72,14 @@ class JobCategoriesScreen extends StatelessWidget {
                   return CategoryCard(
                     title: category['title'],
                     icon: category['icon'],
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CategoryOffersScreen(category: category['title'] as String),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

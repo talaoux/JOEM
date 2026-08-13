@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
@@ -17,6 +19,23 @@ class JobCard extends StatelessWidget {
   final VoidCallback onApply;
   final VoidCallback onFavoriteTap;
 
+  /// `true` si le chercheur d'emploi connecté a déjà postulé à cette
+  /// offre (`JobOfferRepository.hasApplied`) — le bouton devient
+  /// "Candidature envoyée", désactivé.
+  final bool hasApplied;
+
+  /// Ouvre le détail de l'offre — tap sur la carte en dehors des boutons
+  /// "Postuler"/favori. `null` désactive l'interaction (carte statique).
+  final VoidCallback? onTap;
+
+  /// Logo de l'entreprise (pris au moment de la publication de l'offre) —
+  /// remplace l'icône générique quand renseigné.
+  final Uint8List? companyLogo;
+
+  /// Heure/date de publication réelle (ex. "Aujourd'hui à 14:32"),
+  /// affichée sous le nom de l'entreprise — `null` masque la ligne.
+  final String? publishedLabel;
+
   const JobCard({
     super.key,
     required this.jobTitle,
@@ -26,13 +45,20 @@ class JobCard extends StatelessWidget {
     required this.contractType,
     this.isNew = false,
     this.isFavorite = false,
+    this.hasApplied = false,
     required this.onApply,
     required this.onFavoriteTap,
+    this.companyLogo,
+    this.publishedLabel,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.cardRadius,
+      child: Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -52,12 +78,20 @@ class JobCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: OnboardingColors.violet.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
+                  image: companyLogo != null
+                      ? DecorationImage(
+                          image: MemoryImage(companyLogo!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                child: Icon(
-                  Icons.business_rounded,
-                  color: OnboardingColors.violet,
-                  size: 24,
-                ),
+                child: companyLogo == null
+                    ? Icon(
+                        Icons.business_rounded,
+                        color: OnboardingColors.violet,
+                        size: 24,
+                      )
+                    : null,
               ),
 
               const SizedBox(width: AppSpacing.md),
@@ -101,6 +135,23 @@ class JobCard extends StatelessWidget {
                       company,
                       style: AppTypography.companyName,
                     ),
+                    if (publishedLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 12,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            publishedLabel!,
+                            style: AppTypography.jobInfo.copyWith(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -178,14 +229,18 @@ class JobCard extends StatelessWidget {
 
           const SizedBox(height: AppSpacing.lg),
 
-          // Bouton Postuler
+          // Bouton Postuler / Candidature envoyée
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onApply,
+              onPressed: hasApplied ? null : onApply,
               style: ElevatedButton.styleFrom(
-                backgroundColor: OnboardingColors.violet,
-                foregroundColor: Colors.white,
+                backgroundColor:
+                    hasApplied ? const Color(0xFFE5E7EB) : OnboardingColors.violet,
+                foregroundColor:
+                    hasApplied ? const Color(0xFF6B7280) : Colors.white,
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
+                disabledForegroundColor: const Color(0xFF6B7280),
                 padding: const EdgeInsets.symmetric(
                   vertical: AppSpacing.md,
                 ),
@@ -194,15 +249,26 @@ class JobCard extends StatelessWidget {
                 ),
                 elevation: 0,
               ),
-              child: Text(
-                'Postuler',
-                style: AppTypography.primaryButton.copyWith(
-                  fontSize: 14,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (hasApplied) ...[
+                    const Icon(Icons.check_circle_rounded, size: 18),
+                    const SizedBox(width: AppSpacing.xs),
+                  ],
+                  Text(
+                    hasApplied ? 'Candidature envoyée' : 'Postuler',
+                    style: AppTypography.primaryButton.copyWith(
+                      fontSize: 14,
+                      color: hasApplied ? const Color(0xFF6B7280) : Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
+      ),
       ),
     );
   }

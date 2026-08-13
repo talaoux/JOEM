@@ -2,8 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'package:joem/core/constants/job_categories.dart';
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/location_autocomplete_field.dart';
 
@@ -20,6 +22,8 @@ class StepTwoPersonalInfo extends StatelessWidget {
     required this.localisationController,
     required this.nomEntrepriseController,
     required this.descriptionController,
+    required this.categorieEntreprise,
+    required this.onCategorieChanged,
   });
 
   final Uint8List? logoBytes;
@@ -30,6 +34,12 @@ class StepTwoPersonalInfo extends StatelessWidget {
   final TextEditingController localisationController;
   final TextEditingController nomEntrepriseController;
   final TextEditingController descriptionController;
+
+  /// Catégorie d'entreprise choisie (parmi `kJobCategories`) — champ
+  /// obligatoire, réutilisé côté candidat pour filtrer les offres par
+  /// secteur (voir `JobCategoriesScreen`).
+  final String? categorieEntreprise;
+  final ValueChanged<String> onCategorieChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +105,16 @@ class StepTwoPersonalInfo extends StatelessWidget {
           hint: 'Ex: Tech Mada SARL',
           icon: Icons.business_rounded,
           controller: nomEntrepriseController,
+        ),
+        const SizedBox(height: 18),
+
+        LightDropdown(
+          label: 'Catégorie d\'entreprise',
+          hint: 'Sélectionnez un secteur d\'activité',
+          icon: Icons.category_outlined,
+          options: kJobCategories,
+          value: categorieEntreprise,
+          onChanged: onCategorieChanged,
         ),
         const SizedBox(height: 18),
 

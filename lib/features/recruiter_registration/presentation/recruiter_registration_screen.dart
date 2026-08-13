@@ -3,14 +3,19 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_durations.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/registration_stepper.dart';
 import 'package:joem/core/widgets/step_one_account.dart';
 import 'package:joem/core/widgets/wizard_navigation.dart';
+import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
+import 'package:joem/features/job_seeker_registration/data/job_seeker_repository.dart'
+    show EmailAlreadyUsedException;
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
+import '../data/recruiter_repository.dart';
 import 'widgets/step_three_validation.dart';
 import 'widgets/step_two_personal_info.dart';
 
@@ -46,6 +51,10 @@ class _RecruiterRegistrationScreenState
   final _localisationController = TextEditingController();
   final _nomEntrepriseController = TextEditingController();
   final _descriptionController = TextEditingController();
+  String? _categorieEntreprise;
+
+  final _repository = const RecruiterRepository();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -98,14 +107,15 @@ class _RecruiterRegistrationScreenState
           _confirmPasswordController.text.trim().isNotEmpty &&
           _passwordController.text == _confirmPasswordController.text);
 
-  /// L'étape 2 est valide si nom, prénom, localisation et nom de
-  /// l'entreprise sont tous remplis (téléphone et description restent
-  /// optionnels).
+  /// L'étape 2 est valide si nom, prénom, localisation, nom de
+  /// l'entreprise et catégorie d'entreprise sont tous remplis (téléphone
+  /// et description restent optionnels).
   bool get _isStepTwoValid =>
       _nomController.text.trim().isNotEmpty &&
       _prenomController.text.trim().isNotEmpty &&
       _localisationController.text.trim().isNotEmpty &&
-      _nomEntrepriseController.text.trim().isNotEmpty;
+      _nomEntrepriseController.text.trim().isNotEmpty &&
+      _categorieEntreprise != null;
 
   bool get _canProceedFromCurrentStep {
     switch (_currentStep) {
@@ -128,11 +138,95 @@ class _RecruiterRegistrationScreenState
 
   void _goToNextStep() {
     if (_currentStep == _totalSteps - 1) {
-      // TODO: Soumission finale de l'inscription recruteur
-      debugPrint('Création du compte recruteur');
+      _submitRegistration();
       return;
     }
     setState(() => _currentStep += 1);
+  }
+
+  /// Persiste les données saisies dans les 2 étapes précédentes (voir
+  /// `RecruiterRepository`/`AppDatabase`), puis ouvre directement une
+  /// session pour envoyer l'utilisateur sur son dashboard.
+  Future<void> _submitRegistration() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    // "Continuer avec Google" ne collecte pas de vrai email/mot de passe
+    // (bouton non branché à une vraie auth) : on génère des identifiants
+    // uniques pour que le compte reste créable et reconnectable.
+    final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
+    final email = _emailController.text.trim().isNotEmpty
+        ? _emailController.text.trim()
+        : 'recruteur.$uniqueSuffix@google.joem';
+    final password = _passwordController.text.isNotEmpty
+        ? _passwordController.text
+        : 'google-oauth-$uniqueSuffix';
+
+    final nom = _nomController.text.trim();
+    final prenom = _prenomController.text.trim();
+    final nomEntreprise = _nomEntrepriseController.text.trim();
+
+    try {
+      final result = await _repository.register(
+        RecruiterRegistrationData(
+          email: email,
+          password: password,
+          nom: nom,
+          prenom: prenom,
+          telephone: _telephoneController.text.trim(),
+          localisation: _localisationController.text.trim(),
+          nomEntreprise: nomEntreprise,
+          description: _descriptionController.text.trim(),
+          logoBytes: _logoBytes,
+          categorieEntreprise: _categorieEntreprise!,
+        ),
+      );
+
+      if (!mounted) return;
+
+      await AuthService().setSession(
+        User(
+          id: result.userId.toString(),
+          email: result.email,
+          firstName: prenom,
+          lastName: nom,
+          role: 'employer',
+          companyName: nomEntreprise,
+          categorieEntreprise: _categorieEntreprise,
+          photoBytes: _logoBytes,
+          telephone: _telephoneController.text.trim(),
+          localisation: _localisationController.text.trim(),
+          presentation: _descriptionController.text.trim(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const EmployerDashboard()),
+      );
+    } on EmailAlreadyUsedException {
+      if (!mounted) return;
+      setState(() {
+        _currentStep = 0;
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cet email est déjà utilisé, veuillez en choisir un autre.'),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Une erreur est survenue, veuillez réessayer.'),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+    }
   }
 
   Widget _buildStepContent(int step) {
@@ -156,6 +250,8 @@ class _RecruiterRegistrationScreenState
           localisationController: _localisationController,
           nomEntrepriseController: _nomEntrepriseController,
           descriptionController: _descriptionController,
+          categorieEntreprise: _categorieEntreprise,
+          onCategorieChanged: (value) => setState(() => _categorieEntreprise = value),
         );
       default:
         return StepThreeValidation(
@@ -167,6 +263,7 @@ class _RecruiterRegistrationScreenState
           telephone: _telephoneController.text,
           localisation: _localisationController.text,
           nomEntreprise: _nomEntrepriseController.text,
+          categorieEntreprise: _categorieEntreprise,
           description: _descriptionController.text,
         );
     }
@@ -238,7 +335,10 @@ class _RecruiterRegistrationScreenState
                           WizardNavigation(
                             isLastStep: _currentStep == _totalSteps - 1,
                             onBack: _goToPreviousStep,
-                            onNext: _canProceedFromCurrentStep ? _goToNextStep : null,
+                            onNext: (!_isSubmitting && _canProceedFromCurrentStep)
+                                ? _goToNextStep
+                                : null,
+                            nextLabel: _isSubmitting ? 'Création...' : null,
                           ),
                         ],
                       ),

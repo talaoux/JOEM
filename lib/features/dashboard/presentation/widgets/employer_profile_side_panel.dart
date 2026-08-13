@@ -3,20 +3,21 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 
-/// Panneau latéral affichant la photo de profil et le nom complet,
-/// glissant depuis la droite vers le centre du dashboard.
-class ProfileSidePanel extends StatelessWidget {
+/// Panneau latéral affichant le logo et le nom de l'entreprise, glissant
+/// depuis la droite vers le centre du dashboard — équivalent recruteur de
+/// `ProfileSidePanel` (côté candidat), avec un contenu pensé pour un
+/// recruteur : logo entreprise plutôt qu'avatar personnel, stats de
+/// recrutement plutôt que de candidature.
+class EmployerProfileSidePanel extends StatelessWidget {
   final Animation<double> animation;
   final VoidCallback onClose;
-  final String fullName;
-  final String avatarAsset;
+  final String companyName;
+  final String recruiterName;
 
-  /// Photo réellement choisie à l'inscription — prioritaire sur
-  /// [avatarAsset] quand elle est renseignée.
-  final Uint8List? avatarBytes;
-  final String skills;
+  /// Logo réellement choisi à l'inscription — prioritaire sur l'icône par
+  /// défaut quand il est renseigné.
+  final Uint8List? logoBytes;
   final String location;
   final List<Map<String, dynamic>> stats;
   final VoidCallback? onSettingsTap;
@@ -26,18 +27,17 @@ class ProfileSidePanel extends StatelessWidget {
   /// comme une barre de progression sous les statistiques.
   final double profileCompletion;
 
-  /// Tap sur la carte "Profil complété" — envoie vers `JobProfileScreen`
+  /// Tap sur la carte "Profil complété" — envoie vers `EmployerProfileScreen`
   /// pour compléter les champs manquants.
   final VoidCallback? onProfileCompletionTap;
 
-  const ProfileSidePanel({
+  const EmployerProfileSidePanel({
     super.key,
     required this.animation,
     required this.onClose,
-    this.fullName = 'Marie Martin',
-    this.avatarAsset = 'assets/images/avatar_portfolio1.jpg',
-    this.avatarBytes,
-    this.skills = "Développeur Flutter . Chercheur d'emploi",
+    this.companyName = 'Tech Solutions',
+    this.recruiterName = 'Jean Dupont',
+    this.logoBytes,
     this.location = 'Antananarivo, Analamanga',
     this.onSettingsTap,
     this.onLogoutTap,
@@ -45,28 +45,28 @@ class ProfileSidePanel extends StatelessWidget {
     this.onProfileCompletionTap,
     this.stats = const [
       {
-        'title': 'Candidatures envoyées',
-        'value': '12',
-        'icon': Icons.send_rounded,
+        'title': 'Offres publiées',
+        'value': '5',
+        'icon': Icons.work_outline_rounded,
         'iconColor': Color(0xFF3B82F6),
       },
       {
-        'title': 'Entretiens',
-        'value': '3',
-        'icon': Icons.calendar_today_rounded,
+        'title': 'Candidatures reçues',
+        'value': '25',
+        'icon': Icons.people_outline_rounded,
         'iconColor': Color(0xFF10B981),
       },
       {
-        'title': 'Favoris',
-        'value': '8',
-        'icon': Icons.favorite_rounded,
-        'iconColor': Color(0xFFEF4444),
+        'title': 'Entretiens programmés',
+        'value': '4',
+        'icon': Icons.calendar_today_rounded,
+        'iconColor': Color(0xFFF59E0B),
       },
       {
-        'title': 'Réponses reçues',
-        'value': '5',
-        'icon': Icons.mark_chat_read_rounded,
-        'iconColor': Color(0xFFF59E0B),
+        'title': 'Recrutements',
+        'value': '2',
+        'icon': Icons.how_to_reg_rounded,
+        'iconColor': Color(0xFF8B5CF6),
       },
     ],
   });
@@ -128,31 +128,25 @@ class ProfileSidePanel extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProfilePhotoViewerScreen(
-                                  imageBytes: avatarBytes,
-                                  fallbackAsset: avatarAsset,
-                                ),
-                                fullscreenDialog: true,
-                              ),
-                            );
-                          },
-                          child: CircleAvatar(
-                            radius: 56,
-                            backgroundImage: avatarBytes != null
-                                ? MemoryImage(avatarBytes!) as ImageProvider
-                                : AssetImage(avatarAsset),
-                          ),
+                        CircleAvatar(
+                          radius: 56,
+                          backgroundColor: AppColors.primaryLightest,
+                          backgroundImage: logoBytes != null
+                              ? MemoryImage(logoBytes!) as ImageProvider
+                              : null,
+                          child: logoBytes == null
+                              ? const Icon(
+                                  Icons.business_rounded,
+                                  color: AppColors.primary,
+                                  size: 44,
+                                )
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: Text(
-                            fullName,
+                            companyName,
                             style: AppTypography.sectionTitle,
                             textAlign: TextAlign.center,
                           ),
@@ -161,7 +155,7 @@ class ProfileSidePanel extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: Text(
-                            skills,
+                            'Géré par $recruiterName',
                             style: AppTypography.cardDescription,
                             textAlign: TextAlign.center,
                           ),
@@ -266,7 +260,52 @@ class ProfileSidePanel extends StatelessWidget {
     );
   }
 
-  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75%.
+  Widget _buildStatItem({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color iconColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: iconColor, size: 14),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: AppTypography.statNumber.copyWith(fontSize: 16, height: 1.0),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: AppTypography.statLabel.copyWith(fontSize: 9, height: 1.1),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75% — même
+  /// seuils que la carte "Profil complété" côté candidat.
   Color _progressColor(double ratio) {
     if (ratio < 0.4) return AppColors.error;
     if (ratio < 0.75) return AppColors.warning;
@@ -316,50 +355,6 @@ class ProfileSidePanel extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: iconColor, size: 14),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTypography.statNumber.copyWith(fontSize: 16, height: 1.0),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: AppTypography.statLabel.copyWith(fontSize: 9, height: 1.1),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }

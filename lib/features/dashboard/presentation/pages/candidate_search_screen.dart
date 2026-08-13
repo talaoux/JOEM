@@ -11,28 +11,28 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/account_search_repository.dart';
 import '../widgets/search_bar_widget.dart';
-import 'company_profile_view_screen.dart';
+import 'candidate_profile_view_screen.dart';
 
-/// Recherche d'entreprises — équivalent candidat de `CandidateSearchScreen`.
-/// Recherche réelle parmi les comptes recruteur inscrits
-/// (`AccountSearchRepository.searchEmployers`) : aucun résultat mocké,
-/// "Aucun résultat" si aucune entreprise ne correspond. L'historique est
-/// également réel (`search_history`), propre au candidat connecté.
-class JobSearchScreen extends StatefulWidget {
-  const JobSearchScreen({super.key});
+/// Recherche de candidats — équivalent recruteur de `JobSearchScreen`.
+/// Recherche réelle parmi les comptes chercheur d'emploi inscrits
+/// (`AccountSearchRepository.searchJobSeekers`) : aucun résultat mocké,
+/// "Aucun résultat" si aucun compte ne correspond. L'historique est
+/// également réel (`search_history`), propre au recruteur connecté.
+class CandidateSearchScreen extends StatefulWidget {
+  const CandidateSearchScreen({super.key});
 
   @override
-  State<JobSearchScreen> createState() => _JobSearchScreenState();
+  State<CandidateSearchScreen> createState() => _CandidateSearchScreenState();
 }
 
-class _JobSearchScreenState extends State<JobSearchScreen> {
+class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final AccountSearchRepository _repository = const AccountSearchRepository();
 
   String get _userId => AuthService().currentUser?.id ?? '';
 
   List<String> _history = [];
-  List<CompanySearchResult> _results = [];
+  List<CandidateSearchResult> _results = [];
   bool _isSearching = false;
   bool _hasQuery = false;
   Timer? _debounce;
@@ -46,7 +46,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   Future<void> _loadHistory() async {
     final history = await _repository.fetchHistory(
       userId: _userId,
-      searchType: SearchAccountType.company,
+      searchType: SearchAccountType.candidate,
     );
     if (!mounted) return;
     setState(() => _history = history);
@@ -66,7 +66,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     }
 
     setState(() => _isSearching = true);
-    final results = await _repository.searchEmployers(term);
+    final results = await _repository.searchJobSeekers(term);
     if (!mounted) return;
     setState(() {
       _results = results;
@@ -76,7 +76,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     if (saveHistory) {
       await _repository.recordSearch(
         userId: _userId,
-        searchType: SearchAccountType.company,
+        searchType: SearchAccountType.candidate,
         query: term,
       );
       await _loadHistory();
@@ -102,21 +102,21 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     setState(() => _history.removeAt(index));
     await _repository.removeHistoryEntry(
       userId: _userId,
-      searchType: SearchAccountType.company,
+      searchType: SearchAccountType.candidate,
       query: query,
     );
   }
 
-  /// Ouvrir un profil vaut validation de la recherche : sans ça, une
-  /// entreprise cherchée puis ouverte directement (sans appuyer sur
+  /// Ouvrir un profil vaut validation de la recherche : sans ça, un
+  /// candidat cherché puis ouvert directement (sans appuyer sur
   /// "Rechercher" au clavier) ne laissait jamais de trace dans
   /// l'historique.
-  Future<void> _openCompanyDetail(CompanySearchResult company) async {
+  Future<void> _openCandidateDetail(CandidateSearchResult candidate) async {
     final term = _searchController.text.trim();
     if (term.isNotEmpty) {
       await _repository.recordSearch(
         userId: _userId,
-        searchType: SearchAccountType.company,
+        searchType: SearchAccountType.candidate,
         query: term,
       );
       await _loadHistory();
@@ -124,7 +124,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     if (!mounted) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => CompanyProfileViewScreen(company: company)),
+      MaterialPageRoute(builder: (_) => CandidateProfileViewScreen(candidate: candidate)),
     );
   }
 
@@ -163,7 +163,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                       controller: _searchController,
                       showFilterButton: false,
                       autofocus: true,
-                      hintText: 'Rechercher une entreprise...',
+                      hintText: 'Rechercher un candidat...',
                       onChanged: _onQueryChanged,
                       onSubmitted: _onSubmitted,
                     ),
@@ -187,9 +187,9 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     }
     if (_results.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.business_outlined,
+        icon: Icons.person_search_rounded,
         title: 'Aucun résultat',
-        message: 'Aucune entreprise inscrite ne correspond à cette recherche.',
+        message: 'Aucun candidat inscrit ne correspond à cette recherche.',
       );
     }
     return ListView.separated(
@@ -199,9 +199,9 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
       ),
       itemCount: _results.length,
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) => _CompanyResultCard(
-        company: _results[index],
-        onTap: () => _openCompanyDetail(_results[index]),
+      itemBuilder: (context, index) => _CandidateResultCard(
+        candidate: _results[index],
+        onTap: () => _openCandidateDetail(_results[index]),
       ),
     );
   }
@@ -234,7 +234,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
               ? _buildEmptyState(
                   icon: Icons.history_rounded,
                   title: 'Aucun historique',
-                  message: 'Vos recherches récentes apparaîtront ici.',
+                  message: 'Vos recherches de candidats récentes apparaîtront ici.',
                 )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(
@@ -319,16 +319,17 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   }
 }
 
-class _CompanyResultCard extends StatelessWidget {
-  const _CompanyResultCard({required this.company, required this.onTap});
+class _CandidateResultCard extends StatelessWidget {
+  const _CandidateResultCard({required this.candidate, required this.onTap});
 
-  final CompanySearchResult company;
+  final CandidateSearchResult candidate;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final location = company.localisation?.trim() ?? '';
-    final contact = company.contactName?.trim() ?? '';
+    final position = candidate.position?.trim() ?? '';
+    final location = candidate.localisation?.trim() ?? '';
+    final skills = candidate.skills.take(3).toList();
 
     return InkWell(
       onTap: onTap,
@@ -343,21 +344,21 @@ class _CompanyResultCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Logo(logo: company.logo),
+            _Avatar(photo: candidate.photo, icon: Icons.person_rounded),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    company.companyName.isEmpty ? 'Entreprise' : company.companyName,
+                    candidate.fullName.isEmpty ? 'Candidat' : candidate.fullName,
                     style: AppTypography.jobTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (contact.isNotEmpty) ...[
+                  if (position.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(contact, style: AppTypography.companyName),
+                    Text(position, style: AppTypography.companyName),
                   ],
                   if (location.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -376,6 +377,14 @@ class _CompanyResultCard extends StatelessWidget {
                       ],
                     ),
                   ],
+                  if (skills.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: skills.map((s) => _SkillChip(label: s)).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -386,10 +395,11 @@ class _CompanyResultCard extends StatelessWidget {
   }
 }
 
-class _Logo extends StatelessWidget {
-  const _Logo({required this.logo});
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.photo, required this.icon});
 
-  final Uint8List? logo;
+  final Uint8List? photo;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -398,10 +408,34 @@ class _Logo extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         color: OnboardingColors.violet.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        image: logo != null ? DecorationImage(image: MemoryImage(logo!), fit: BoxFit.cover) : null,
+        shape: BoxShape.circle,
+        image: photo != null ? DecorationImage(image: MemoryImage(photo!), fit: BoxFit.cover) : null,
       ),
-      child: logo == null ? Icon(Icons.business_rounded, color: OnboardingColors.violet, size: 24) : null,
+      child: photo == null ? Icon(icon, color: OnboardingColors.violet, size: 24) : null,
+    );
+  }
+}
+
+class _SkillChip extends StatelessWidget {
+  const _SkillChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      decoration: BoxDecoration(
+        color: OnboardingColors.violet.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.jobInfo.copyWith(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

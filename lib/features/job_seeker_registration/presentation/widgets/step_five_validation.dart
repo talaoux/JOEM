@@ -19,7 +19,7 @@ class StepFiveValidation extends StatelessWidget {
     required this.titreProfessionnel,
     required this.presentation,
     required this.skills,
-    required this.cvPicked,
+    required this.cvFileName,
     required this.rate,
     required this.availability,
     required this.workModes,
@@ -34,7 +34,7 @@ class StepFiveValidation extends StatelessWidget {
   final String titreProfessionnel;
   final String presentation;
   final List<SkillEntry> skills;
-  final bool cvPicked;
+  final String? cvFileName;
   final String rate;
   final String? availability;
   final Set<WorkMode> workModes;
@@ -107,7 +107,7 @@ class StepFiveValidation extends StatelessWidget {
             _SummaryRow(
               icon: Icons.picture_as_pdf_outlined,
               label: 'CV',
-              value: cvPicked ? 'Ajouté' : 'Non ajouté',
+              value: cvFileName ?? 'Non ajouté',
             ),
           ],
         ),

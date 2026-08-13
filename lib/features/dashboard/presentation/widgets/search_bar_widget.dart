@@ -9,9 +9,20 @@ class SearchBarWidget extends StatelessWidget {
   final VoidCallback? onFilterTap;
   final bool showFilterButton;
   final ValueChanged<String>? onChanged;
+
+  /// Appelé quand l'utilisateur valide la recherche (touche "Rechercher"
+  /// du clavier) — distinct de [onChanged] (déclenché à chaque frappe) :
+  /// utilisé pour enregistrer un historique de recherche réel sans le
+  /// polluer d'entrées partielles à chaque lettre tapée.
+  final ValueChanged<String>? onSubmitted;
   final bool autofocus;
   final VoidCallback? onTap;
   final bool readOnly;
+
+  /// Texte d'indication affiché quand le champ est vide — par défaut
+  /// orienté "offres" (candidat) ; le dashboard recruteur passe
+  /// "Rechercher un candidat..." pour rester cohérent avec son contenu.
+  final String hintText;
 
   const SearchBarWidget({
     super.key,
@@ -19,9 +30,11 @@ class SearchBarWidget extends StatelessWidget {
     this.onFilterTap,
     this.showFilterButton = true,
     this.onChanged,
+    this.onSubmitted,
     this.autofocus = false,
     this.onTap,
     this.readOnly = false,
+    this.hintText = 'Rechercher un emploi...',
   });
 
   @override
@@ -53,6 +66,8 @@ class SearchBarWidget extends StatelessWidget {
             child: TextField(
               controller: controller,
               onChanged: onChanged,
+              onSubmitted: onSubmitted,
+              textInputAction: TextInputAction.search,
               autofocus: autofocus,
               readOnly: readOnly,
               onTap: onTap,
@@ -61,7 +76,7 @@ class SearchBarWidget extends StatelessWidget {
                 color: const Color(0xFF1A1A2E),
               ),
               decoration: InputDecoration(
-                hintText: 'Rechercher un emploi...',
+                hintText: hintText,
                 hintStyle: AppTypography.interRegular.copyWith(
                   fontSize: 15,
                   color: const Color(0xFF9CA3AF),

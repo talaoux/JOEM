@@ -26,7 +26,8 @@ class JobSeekerRegistrationData {
     required this.presentation,
     required this.photoBytes,
     required this.skills,
-    required this.cvPicked,
+    this.cvPath,
+    this.cvFileName,
     required this.tarifJournalier,
     required this.disponibilite,
     required this.workModes,
@@ -42,7 +43,8 @@ class JobSeekerRegistrationData {
   final String presentation;
   final Uint8List? photoBytes;
   final List<SkillInput> skills;
-  final bool cvPicked;
+  final String? cvPath;
+  final String? cvFileName;
   final String tarifJournalier;
   final String? disponibilite;
   final List<String> workModes;
@@ -90,7 +92,9 @@ class JobSeekerRepository {
         'titre_professionnel': data.titreProfessionnel,
         'presentation': data.presentation,
         'photo': data.photoBytes,
-        'cv_picked': data.cvPicked ? 1 : 0,
+        'cv_picked': data.cvPath != null ? 1 : 0,
+        'cv_path': data.cvPath,
+        'cv_file_name': data.cvFileName,
         'tarif_journalier': data.tarifJournalier,
         'disponibilite': data.disponibilite,
       });

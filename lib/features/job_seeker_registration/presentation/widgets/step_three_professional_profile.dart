@@ -23,7 +23,7 @@ class StepThreeProfessionalProfile extends StatelessWidget {
     required this.onAddSkill,
     required this.onRemoveSkill,
     required this.onRatingChanged,
-    required this.cvPicked,
+    required this.cvFileName,
     required this.onCvTap,
   });
 
@@ -31,7 +31,9 @@ class StepThreeProfessionalProfile extends StatelessWidget {
   final VoidCallback onAddSkill;
   final ValueChanged<int> onRemoveSkill;
   final void Function(int index, int rating) onRatingChanged;
-  final bool cvPicked;
+
+  /// Nom du fichier CV choisi (PDF ou image), `null` si aucun.
+  final String? cvFileName;
   final VoidCallback onCvTap;
 
   @override
@@ -85,7 +87,7 @@ class StepThreeProfessionalProfile extends StatelessWidget {
         const SizedBox(height: 18),
 
         const Text(
-          'CV',
+          'CV (PDF ou image)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -93,7 +95,7 @@ class StepThreeProfessionalProfile extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _CvDropZone(selected: cvPicked, onTap: onCvTap),
+        _CvDropZone(fileName: cvFileName, onTap: onCvTap),
       ],
     );
   }
@@ -167,20 +169,22 @@ class _StarRating extends StatelessWidget {
 }
 
 class _CvDropZone extends StatelessWidget {
-  const _CvDropZone({required this.selected, required this.onTap});
+  const _CvDropZone({required this.fileName, required this.onTap});
 
-  final bool selected;
+  final String? fileName;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final selected = fileName != null;
     return GestureDetector(
       onTap: onTap,
       child: CustomPaint(
         painter: const _DashedBorderPainter(color: Color(0xFFD8D8E2)),
         child: Container(
           width: double.infinity,
-          height: 96,
+          constraints: const BoxConstraints(minHeight: 96),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           decoration: BoxDecoration(
             color: const Color(0xFFF5F5F8),
             borderRadius: BorderRadius.circular(14),
@@ -190,15 +194,24 @@ class _CvDropZone extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  selected ? Icons.check_circle_rounded : Icons.picture_as_pdf_outlined,
+                  selected ? Icons.check_circle_rounded : Icons.upload_file_rounded,
                   color: OnboardingColors.violet,
                   size: 26,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  selected ? 'CV ajouté' : 'Télécharger votre CV (PDF)',
+                  selected ? fileName! : 'Choisir votre CV (PDF ou image)',
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, color: Color(0xFFA6A6B4)),
                 ),
+                if (selected) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Toucher pour remplacer',
+                    style: TextStyle(fontSize: 11, color: Color(0xFFC2C2CE)),
+                  ),
+                ],
               ],
             ),
           ),

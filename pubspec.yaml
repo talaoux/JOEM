@@ -41,6 +41,13 @@ dependencies:
   # Sélection de photo (galerie / appareil photo)
   image_picker: ^1.1.2
 
+  # Sélection de fichier (CV en PDF ou en image)
+  file_picker: ^11.0.3
+
+  # Ouvre un fichier (CV en PDF) avec le sélecteur d'application natif du
+  # téléphone ("Ouvrir avec...")
+  open_file: ^4.0.0
+
   # Persistance locale (inscription chercheur d'emploi) : base SQLite
   sqflite: ^2.4.1
   sqflite_common_ffi: ^2.3.4
@@ -48,6 +55,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   crypto: ^3.0.6
+  sqflite_common_ffi_web: ^1.1.2
 
 dev_dependencies:
   flutter_test:

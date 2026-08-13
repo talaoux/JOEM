@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/widgets/joem_gradient_logo.dart';
+import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
+import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 
@@ -11,7 +14,10 @@ import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 /// [WelcomeScreen] — wordmark "JOEM" en dégradé ([JoemGradientLogo]),
 /// grilles de points de part et d'autre, baseline "Job • Offres • Emploi
 /// Madagascar" — dans une simple animation d'apparition (fondu + zoom).
-/// Redirige automatiquement vers [WelcomeScreen] une fois affiché.
+/// Redirige automatiquement, une fois affiché, vers le dashboard d'une
+/// session déjà ouverte (retour matériel accidentel ayant quitté l'app,
+/// par ex.) — voir `AuthService.restoreSession` — ou vers [WelcomeScreen]
+/// à défaut.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -32,11 +38,12 @@ class _SplashScreenState extends State<SplashScreen>
   );
 
   Timer? _redirectTimer;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
-    _redirectTimer = Timer(const Duration(milliseconds: 1800), _goToWelcome);
+    _redirectTimer = Timer(const Duration(milliseconds: 1800), _redirect);
   }
 
   @override
@@ -46,13 +53,33 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _goToWelcome() {
+  Future<void> _redirect() async {
+    // Défensif : si la restauration échoue (première ouverture, base
+    // indisponible, etc.), on retombe simplement sur Welcome plutôt que
+    // de bloquer l'app sur l'écran de démarrage.
+    bool hasSession = false;
+    try {
+      hasSession = await _authService.restoreSession();
+    } catch (_) {
+      hasSession = false;
+    }
     if (!mounted) return;
+
+    if (hasSession && _authService.isEmployer()) {
+      _goTo(const EmployerDashboard());
+    } else if (hasSession && _authService.isJobSeeker()) {
+      _goTo(const JobSeekerDashboard());
+    } else {
+      _goTo(const WelcomeScreen());
+    }
+  }
+
+  void _goTo(Widget screen) {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 500),
         pageBuilder: (context, animation, secondaryAnimation) =>
-            FadeTransition(opacity: animation, child: const WelcomeScreen()),
+            FadeTransition(opacity: animation, child: screen),
       ),
     );
   }

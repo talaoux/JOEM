@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_durations.dart';
+import 'package:joem/core/utils/cv_storage.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/registration_stepper.dart';
@@ -56,7 +58,8 @@ class _JobSeekerRegistrationScreenState
 
   // Étape 3 — Profil professionnel
   final List<SkillEntry> _skills = [SkillEntry()];
-  bool _cvPicked = false;
+  String? _cvPath;
+  String? _cvFileName;
 
   // Étape 4 — Tarif journalier
   final _rateController = TextEditingController();
@@ -106,6 +109,24 @@ class _JobSeekerRegistrationScreenState
     final bytes = await file.readAsBytes();
     if (!mounted) return;
     setState(() => _photoBytes = bytes);
+  }
+
+  Future<void> _pickCv() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.bytes == null) return;
+
+    final path = await saveCvFile(file.bytes!, file.name);
+    if (!mounted) return;
+    setState(() {
+      _cvPath = path;
+      _cvFileName = file.name;
+    });
   }
 
   /// L'étape 1 est valide si le compte a été créé via Google, ou si les 3
@@ -199,7 +220,8 @@ class _JobSeekerRegistrationScreenState
           presentation: _presentationController.text.trim(),
           photoBytes: _photoBytes,
           skills: skills,
-          cvPicked: _cvPicked,
+          cvPath: _cvPath,
+          cvFileName: _cvFileName,
           tarifJournalier: _rateController.text.trim(),
           disponibilite: _availability,
           workModes: _workModes.map((mode) => mode.name).toList(),
@@ -208,7 +230,7 @@ class _JobSeekerRegistrationScreenState
 
       if (!mounted) return;
 
-      AuthService().setSession(
+      await AuthService().setSession(
         User(
           id: result.userId.toString(),
           email: result.email,
@@ -220,13 +242,16 @@ class _JobSeekerRegistrationScreenState
           telephone: _telephoneController.text.trim(),
           localisation: _localisationController.text.trim(),
           presentation: _presentationController.text.trim(),
-          cvPicked: _cvPicked,
+          cvPath: _cvPath,
+          cvFileName: _cvFileName,
           tarifJournalier: _rateController.text.trim(),
           disponibilite: _availability,
           skills: skills.map((skill) => skill.name).toList(),
           workModes: _workModes.map((mode) => mode.name).toList(),
         ),
       );
+
+      if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const JobSeekerDashboard()),
@@ -243,7 +268,11 @@ class _JobSeekerRegistrationScreenState
           backgroundColor: Color(0xFFE53935),
         ),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // La cause réelle était avalée silencieusement (`catch (_)`), ce qui
+      // rendait ce message générique impossible à diagnostiquer — voir
+      // stdout/les logs de l'appareil en cas de nouvelle occurrence.
+      debugPrint('JobSeekerRegistrationScreen._submitRegistration failed: $error\n$stackTrace');
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -287,8 +316,8 @@ class _JobSeekerRegistrationScreenState
             _skills.removeAt(index);
           }),
           onRatingChanged: (index, rating) => setState(() => _skills[index].rating = rating),
-          cvPicked: _cvPicked,
-          onCvTap: () => setState(() => _cvPicked = !_cvPicked),
+          cvFileName: _cvFileName,
+          onCvTap: _pickCv,
         );
       case 3:
         return StepFourDailyRate(
@@ -317,7 +346,7 @@ class _JobSeekerRegistrationScreenState
           titreProfessionnel: _titreProfessionnelController.text,
           presentation: _presentationController.text,
           skills: _skills,
-          cvPicked: _cvPicked,
+          cvFileName: _cvFileName,
           rate: _rateController.text,
           availability: _availability,
           workModes: _workModes,
