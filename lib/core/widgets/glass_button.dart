@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
-import '../theme/app_text_styles.dart';
+import '../theme/app_typography.dart';
 
 enum GlassButtonVariant { filled, outline }
 
@@ -70,7 +70,7 @@ class GlassButton extends StatelessWidget {
                   Flexible(
                     child: Text(
                       label,
-                      style: AppTextStyles.buttonLabel.copyWith(color: foreground),
+                      style: AppTypography.buttonLabel.copyWith(color: foreground),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),

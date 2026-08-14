@@ -9,6 +9,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../features/login/presentation/login_screen.dart';
+import '../../data/account_search_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/employer_header.dart';
 import '../widgets/employer_profile_side_panel.dart';
@@ -69,7 +70,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       vsync: this,
     );
 
-    _loadPostedOffers();
+    _loadPostedOffers().then((_) => _loadSuggestedCandidates());
     _loadNotificationCount();
   }
 
@@ -102,30 +103,88 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   // Candidats dont le profil correspond aux offres publiées par le
   // recruteur (`_postedOffers`) — pas un simple historique d'activité :
   // c'est ce qu'un recruteur veut voir en premier, des profils pertinents
-  // pour SES besoins, avec un taux de correspondance.
-  final List<Map<String, dynamic>> _suggestedCandidates = [
-    {
-      'name': 'Hery Andrianina',
-      'matchedJob': 'Développeur Flutter',
-      'matchPercent': 95,
-      'experience': '4 ans',
-      'location': 'Antananarivo',
-    },
-    {
-      'name': 'Voahangy Rasoa',
-      'matchedJob': 'Designer UI/UX',
-      'matchPercent': 88,
-      'experience': '3 ans',
-      'location': 'Toamasina',
-    },
-    {
-      'name': 'Fanomezantsoa Rakoto',
-      'matchedJob': 'Développeur Flutter',
-      'matchPercent': 74,
-      'experience': '1 an',
-      'location': 'Antananarivo',
-    },
-  ];
+  // pour SES besoins, avec un taux de correspondance. Calculé pour de vrai
+  // à partir des candidats inscrits (voir `_loadSuggestedCandidates`),
+  // rien n'est simulé ici.
+  List<Map<String, dynamic>> _suggestedCandidates = [];
+  bool _loadingSuggestedCandidates = true;
+
+  static const _matchStopWords = {
+    'de', 'du', 'la', 'le', 'et', 'un', 'une', 'les', 'des', 'pour',
+    'avec', 'dans', 'en', 'sur', 'aux', 'au', 'à', 'ou', 'the', 'and',
+  };
+
+  /// Cherche, parmi les candidats réellement inscrits, ceux dont le titre
+  /// professionnel/les compétences/la localisation recoupent les mots
+  /// significatifs des offres publiées par ce recruteur (`_postedOffers`).
+  /// Le taux affiché est la proportion de mots de l'offre retrouvés chez
+  /// le candidat — une heuristique simple, mais calculée sur de vraies
+  /// données plutôt qu'inventée.
+  Future<void> _loadSuggestedCandidates() async {
+    if (_postedOffers.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _suggestedCandidates = [];
+        _loadingSuggestedCandidates = false;
+      });
+      return;
+    }
+
+    const accountSearchRepository = AccountSearchRepository();
+    final resultByUserId = <String, CandidateSearchResult>{};
+    final bestPercentByUserId = <String, int>{};
+    final bestJobByUserId = <String, String>{};
+
+    for (final offer in _postedOffers) {
+      final words = offer.title
+          .toLowerCase()
+          .split(RegExp(r'[^a-zà-ÿ0-9]+'))
+          .where((w) => w.length >= 3 && !_matchStopWords.contains(w))
+          .toSet();
+      if (words.isEmpty) continue;
+
+      final hitsByUserId = <String, int>{};
+      for (final word in words) {
+        final matches = await accountSearchRepository.searchJobSeekers(word);
+        for (final candidate in matches) {
+          hitsByUserId[candidate.userId] = (hitsByUserId[candidate.userId] ?? 0) + 1;
+          resultByUserId[candidate.userId] = candidate;
+        }
+      }
+
+      for (final entry in hitsByUserId.entries) {
+        final percent = ((entry.value / words.length) * 100).round().clamp(1, 100);
+        if (percent > (bestPercentByUserId[entry.key] ?? 0)) {
+          bestPercentByUserId[entry.key] = percent;
+          bestJobByUserId[entry.key] = offer.title;
+        }
+      }
+    }
+
+    final ranked = bestPercentByUserId.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final suggestions = ranked.take(5).map((entry) {
+      final candidate = resultByUserId[entry.key]!;
+      return <String, dynamic>{
+        'name': candidate.fullName.isNotEmpty ? candidate.fullName : 'Candidat',
+        'matchedJob': bestJobByUserId[entry.key] ?? '',
+        'matchPercent': entry.value,
+        'experience': candidate.experiences.isNotEmpty
+            ? '${candidate.experiences.length} expérience(s)'
+            : 'Junior',
+        'location': candidate.localisation?.trim().isNotEmpty == true
+            ? candidate.localisation!
+            : 'Non renseigné',
+      };
+    }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _suggestedCandidates = suggestions;
+      _loadingSuggestedCandidates = false;
+    });
+  }
 
   final List<Map<String, dynamic>> _interviews = [
     {
@@ -792,7 +851,14 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                     style: AppTypography.sectionTitle,
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CandidateSearchScreen(),
+                        ),
+                      );
+                    },
                     child: Text(
                       'Voir tout',
                       style: AppTypography.secondaryButton.copyWith(
@@ -816,6 +882,21 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               ),
             ),
             const SizedBox(height: AppSpacing.md),
+            if (!_loadingSuggestedCandidates && _suggestedCandidates.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.safeAreaHorizontal,
+                ),
+                child: Text(
+                  _postedOffers.isEmpty
+                      ? 'Publiez une offre pour voir apparaître des candidats suggérés.'
+                      : 'Aucun candidat inscrit ne correspond encore à vos offres.',
+                  style: AppTypography.interRegular.copyWith(
+                    fontSize: 13,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ),
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),

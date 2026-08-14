@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/services/google_auth_service.dart';
 import 'package:joem/core/utils/cv_storage.dart';
 import 'package:joem/core/utils/password_hasher.dart';
 
@@ -54,6 +55,11 @@ class User {
   /// aucune n'a été sélectionnée).
   final Uint8List? photoBytes;
 
+  /// Photo de couverture (bannière) de `JobProfileScreen`/
+  /// `EmployerProfileScreen`, choisie via l'icône caméra (`null` si aucune
+  /// n'a été sélectionnée).
+  final Uint8List? coverPhotoBytes;
+
   // Les champs ci-dessous reprennent, un par un, les données optionnelles
   // saisies à l'inscription — wizard chercheur d'emploi (`job_seeker_profiles`
   // + tables liées) ou wizard recruteur (`employer_profiles`) selon [role].
@@ -103,6 +109,7 @@ class User {
     this.categorieEntreprise,
     this.position,
     this.photoBytes,
+    this.coverPhotoBytes,
     this.telephone,
     this.localisation,
     this.presentation,
@@ -130,6 +137,34 @@ class User {
       categorieEntreprise: categorieEntreprise,
       position: position,
       photoBytes: photoBytes,
+      coverPhotoBytes: coverPhotoBytes,
+      telephone: telephone,
+      localisation: localisation,
+      presentation: presentation,
+      cvPath: cvPath,
+      cvFileName: cvFileName,
+      tarifJournalier: tarifJournalier,
+      disponibilite: disponibilite,
+      skills: skills,
+      workModes: workModes,
+      experiences: experiences,
+    );
+  }
+
+  /// Copie l'utilisateur avec une nouvelle photo de couverture — utilisé
+  /// par `AuthService.updateCoverPhoto`.
+  User copyWithCoverPhoto(Uint8List coverPhotoBytes) {
+    return User(
+      id: id,
+      email: email,
+      firstName: firstName,
+      lastName: lastName,
+      role: role,
+      companyName: companyName,
+      categorieEntreprise: categorieEntreprise,
+      position: position,
+      photoBytes: photoBytes,
+      coverPhotoBytes: coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
@@ -156,6 +191,7 @@ class User {
       categorieEntreprise: categorieEntreprise,
       position: position,
       photoBytes: photoBytes,
+      coverPhotoBytes: coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
@@ -182,6 +218,7 @@ class User {
       categorieEntreprise: categorieEntreprise,
       position: position,
       photoBytes: photoBytes,
+      coverPhotoBytes: coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
@@ -437,7 +474,8 @@ class AuthService extends ChangeNotifier {
         'job_seeker_profiles',
         columns: [
           'prenom', 'nom', 'telephone', 'localisation', 'titre_professionnel',
-          'presentation', 'photo', 'cv_path', 'cv_file_name', 'tarif_journalier', 'disponibilite',
+          'presentation', 'photo', 'cover_photo', 'cv_path', 'cv_file_name',
+          'tarif_journalier', 'disponibilite',
         ],
         where: 'user_id = ?',
         whereArgs: [userId],
@@ -469,6 +507,7 @@ class AuthService extends ChangeNotifier {
         role: role,
         position: profile?['titre_professionnel'] as String?,
         photoBytes: profile?['photo'] as Uint8List?,
+        coverPhotoBytes: profile?['cover_photo'] as Uint8List?,
         telephone: profile?['telephone'] as String?,
         localisation: profile?['localisation'] as String?,
         presentation: profile?['presentation'] as String?,
@@ -510,6 +549,7 @@ class AuthService extends ChangeNotifier {
         companyName: profile?['nom_entreprise'] as String?,
         categorieEntreprise: profile?['categorie'] as String?,
         photoBytes: profile?['logo'] as Uint8List?,
+        coverPhotoBytes: profile?['cover_photo'] as Uint8List?,
         telephone: profile?['telephone'] as String?,
         localisation: profile?['localisation'] as String?,
         presentation: profile?['description'] as String?,
@@ -528,6 +568,30 @@ class AuthService extends ChangeNotifier {
     await _persistSession(user.email);
   }
 
+  /// Connexion via un compte Google déjà lié à un compte JOEM (même email
+  /// — un compte créé via "Continuer avec Google" à l'inscription utilise
+  /// justement l'email du compte Google réel, voir `StepOneAccount`). Ne
+  /// crée jamais de compte ici : si aucun compte JOEM n'a cet email,
+  /// l'utilisateur doit d'abord s'inscrire.
+  ///
+  /// Renvoie `null` si l'utilisateur annule la sélection de compte Google
+  /// (pas une erreur, rien à afficher), `false` si aucun compte JOEM ne
+  /// correspond à l'email obtenu, `true` si la connexion a réussi. Laisse
+  /// remonter [GoogleSignInException] pour toute autre erreur
+  /// (configuration Google Cloud incomplète, pas de réseau, etc.).
+  Future<bool?> loginWithGoogle() async {
+    final account = await GoogleAuthService.instance.signIn();
+    if (account == null) return null;
+
+    final user = await _loadUserByEmail(account.email);
+    if (user == null) return false;
+
+    _currentUser = user;
+    notifyListeners();
+    await _persistSession(user.email);
+    return true;
+  }
+
   /// Déconnexion
   Future<void> logout() async {
     _isLoading = true;
@@ -539,6 +603,36 @@ class AuthService extends ChangeNotifier {
     await _clearPersistedSession();
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Réinitialise le mot de passe du compte [email] (`ForgotPasswordScreen`)
+  /// — appli 100% locale, sans serveur mail : pas d'envoi de lien, on
+  /// vérifie juste qu'un compte existe avec cet email puis on écrase son
+  /// `password_hash` directement. Renvoie `false` si aucun compte inscrit
+  /// (via un wizard) ne correspond — les comptes de démo codés en dur
+  /// (`_demoAccounts`, aucune ligne dans `users`) ne sont volontairement
+  /// pas concernés, leur mot de passe reste celui du code.
+  Future<bool> resetPassword({
+    required String email,
+    required String newPassword,
+  }) async {
+    final db = await AppDatabase.instance.database;
+    final trimmedEmail = email.trim();
+    final rows = await db.query(
+      'users',
+      where: 'email = ?',
+      whereArgs: [trimmedEmail],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+
+    await db.update(
+      'users',
+      {'password_hash': hashPassword(newPassword)},
+      where: 'email = ?',
+      whereArgs: [trimmedEmail],
+    );
+    return true;
   }
 
   /// Change la photo de profil de l'utilisateur connecté et la persiste
@@ -570,6 +664,39 @@ class AuthService extends ChangeNotifier {
       await db.update(
         'employer_profiles',
         {'logo': photoBytes},
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+    }
+  }
+
+  /// Change la photo de couverture (bannière) de l'utilisateur connecté et
+  /// la persiste, même logique que [updateProfilePhoto] : `job_seeker_profiles.cover_photo`
+  /// ou `employer_profiles.cover_photo` pour un compte inscrit ; comptes de
+  /// démo (id négatif), la nouvelle bannière ne vit que pour la session en
+  /// cours.
+  Future<void> updateCoverPhoto(Uint8List coverPhotoBytes) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWithCoverPhoto(coverPhotoBytes);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    if (user.role == 'job_seeker') {
+      await db.update(
+        'job_seeker_profiles',
+        {'cover_photo': coverPhotoBytes},
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+    } else if (user.role == 'employer') {
+      await db.update(
+        'employer_profiles',
+        {'cover_photo': coverPhotoBytes},
         where: 'user_id = ?',
         whereArgs: [userId],
       );
@@ -630,6 +757,7 @@ class AuthService extends ChangeNotifier {
       companyName: user.companyName,
       position: position,
       photoBytes: user.photoBytes,
+      coverPhotoBytes: user.coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
@@ -702,6 +830,7 @@ class AuthService extends ChangeNotifier {
       categorieEntreprise: categorieEntreprise,
       position: user.position,
       photoBytes: user.photoBytes,
+      coverPhotoBytes: user.coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,

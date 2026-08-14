@@ -507,10 +507,9 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                 children: [
                   StatCard(
                     title: 'Candidatures envoyées',
-                    value: '12',
+                    value: '${_appliedOfferIds.length}',
                     icon: Icons.send_rounded,
                     iconColor: const Color(0xFF3B82F6),
-                    miniChart: '+3 cette semaine',
                   ),
                   StatCard(
                     title: 'Entretiens',
@@ -521,7 +520,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                   ),
                   StatCard(
                     title: 'Favoris',
-                    value: '8',
+                    value: '${_savedOfferIds.length}',
                     icon: Icons.favorite_rounded,
                     iconColor: const Color(0xFFEF4444),
                   ),
@@ -682,7 +681,14 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           ),
         Center(
           child: TextButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const JobCategoriesScreen(),
+                ),
+              );
+            },
             child: Text(
               'Voir plus',
               style: AppTypography.secondaryButton.copyWith(fontSize: 13),

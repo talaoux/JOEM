@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
+import 'package:joem/core/services/google_auth_service.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 import 'google_sign_in_button.dart';
@@ -16,7 +18,7 @@ bool isPlausibleEmail(String value) =>
 
 /// Étape 1 — "Compte" : connexion rapide via Google, ou création d'un
 /// compte par email + mot de passe.
-class StepOneAccount extends StatelessWidget {
+class StepOneAccount extends StatefulWidget {
   const StepOneAccount({
     super.key,
     required this.emailController,
@@ -29,22 +31,52 @@ class StepOneAccount extends StatelessWidget {
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
 
-  /// Appelé quand l'utilisateur choisit "Continuer avec Google" — permet à
-  /// l'écran parent de considérer le compte comme créé sans exiger les
-  /// champs email/mot de passe/confirmation.
-  final VoidCallback? onGoogleSignIn;
+  /// Appelé avec le compte Google réellement authentifié — permet à
+  /// l'écran parent de préremplir nom/prénom et de considérer le compte
+  /// comme créé sans exiger les champs email/mot de passe/confirmation.
+  final ValueChanged<GoogleSignInAccount>? onGoogleSignIn;
 
-  void _handleGoogleSignIn() {
-    debugPrint('Connexion via Google');
-    onGoogleSignIn?.call();
+  @override
+  State<StepOneAccount> createState() => _StepOneAccountState();
+}
+
+class _StepOneAccountState extends State<StepOneAccount> {
+  bool _isSigningIn = false;
+  String? _googleError;
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isSigningIn) return;
+    setState(() {
+      _isSigningIn = true;
+      _googleError = null;
+    });
+
+    try {
+      final account = await GoogleAuthService.instance.signIn();
+      if (!mounted) return;
+      if (account == null) {
+        // Annulé par l'utilisateur — pas une erreur à afficher.
+        setState(() => _isSigningIn = false);
+        return;
+      }
+      widget.emailController.text = account.email;
+      setState(() => _isSigningIn = false);
+      widget.onGoogleSignIn?.call(account);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSigningIn = false;
+        _googleError = 'Connexion Google impossible. Vérifiez votre connexion et réessayez.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final passwordsMismatch = confirmPasswordController.text.isNotEmpty &&
-        confirmPasswordController.text != passwordController.text;
-    final emailInvalid = emailController.text.isNotEmpty &&
-        !isPlausibleEmail(emailController.text);
+    final passwordsMismatch = widget.confirmPasswordController.text.isNotEmpty &&
+        widget.confirmPasswordController.text != widget.passwordController.text;
+    final emailInvalid = widget.emailController.text.isNotEmpty &&
+        !isPlausibleEmail(widget.emailController.text);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,7 +91,17 @@ class StepOneAccount extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        GoogleSignInButton(onTap: _handleGoogleSignIn),
+        GoogleSignInButton(
+          onTap: _handleGoogleSignIn,
+          label: _isSigningIn ? 'Connexion...' : 'Continuer avec Google',
+        ),
+        if (_googleError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _googleError!,
+            style: const TextStyle(fontSize: 12, color: Color(0xFFE53935)),
+          ),
+        ],
         const SizedBox(height: 20),
 
         const OrDivider(),
@@ -69,7 +111,7 @@ class StepOneAccount extends StatelessWidget {
           label: 'Email',
           hint: 'votre@email.com',
           icon: Icons.mail_outline_rounded,
-          controller: emailController,
+          controller: widget.emailController,
           keyboardType: TextInputType.emailAddress,
           errorText: emailInvalid ? 'Adresse email invalide' : null,
         ),
@@ -79,7 +121,7 @@ class StepOneAccount extends StatelessWidget {
           label: 'Mot de passe',
           hint: '••••••••',
           icon: Icons.lock_outline_rounded,
-          controller: passwordController,
+          controller: widget.passwordController,
           obscurable: true,
         ),
         const SizedBox(height: 18),
@@ -88,7 +130,7 @@ class StepOneAccount extends StatelessWidget {
           label: 'Confirmer le mot de passe',
           hint: '••••••••',
           icon: Icons.lock_outline_rounded,
-          controller: confirmPasswordController,
+          controller: widget.confirmPasswordController,
           obscurable: true,
           errorText: passwordsMismatch
               ? 'Les mots de passe ne correspondent pas'

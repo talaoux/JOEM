@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 import '../theme/app_durations.dart';
-import '../theme/app_text_styles.dart';
+import '../theme/app_typography.dart';
 
 /// Custom horizontal stepper for multi-step registration wizards: one
 /// 44px circle per step, linked by a line that fills violet as steps
@@ -91,7 +91,7 @@ class _StepNode extends StatelessWidget {
                 ? const Icon(Icons.check_rounded, color: Colors.white, size: 22)
                 : Text(
                     '${index + 1}',
-                    style: AppTextStyles.stepperNumber.copyWith(
+                    style: AppTypography.stepperNumber.copyWith(
                       color: isActive ? Colors.white : const Color(0xFF9A9AAE),
                     ),
                   ),
@@ -101,8 +101,8 @@ class _StepNode extends StatelessWidget {
         Text(
           label,
           style: isActive
-              ? AppTextStyles.stepperLabelActive
-              : AppTextStyles.stepperLabel.copyWith(color: const Color(0xFF9A9AAE)),
+              ? AppTypography.stepperLabelActive
+              : AppTypography.stepperLabel.copyWith(color: const Color(0xFF9A9AAE)),
         ),
       ],
     );

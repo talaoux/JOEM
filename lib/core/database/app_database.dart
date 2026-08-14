@@ -55,7 +55,7 @@ class AppDatabase {
 
     return openDatabase(
       dbPath,
-      version: 13,
+      version: 14,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -286,6 +286,23 @@ class AppDatabase {
             await db.execute('ALTER TABLE employer_profiles ADD COLUMN categorie TEXT');
           }
         }
+        // v13 -> v14 : ajout de `cover_photo` sur `job_seeker_profiles` et
+        // `employer_profiles` — la bannière de `JobProfileScreen`/
+        // `EmployerProfileScreen` ne vivait qu'en mémoire (`Uint8List` local
+        // à l'écran, perdue à sa fermeture) ; elle est désormais persistée
+        // comme la photo/le logo (voir `AuthService.updateCoverPhoto`).
+        if (oldVersion < 14) {
+          final jobSeekerColumns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final jobSeekerColumnNames = jobSeekerColumns.map((c) => c['name'] as String).toSet();
+          if (!jobSeekerColumnNames.contains('cover_photo')) {
+            await db.execute('ALTER TABLE job_seeker_profiles ADD COLUMN cover_photo BLOB');
+          }
+          final employerColumns = await db.rawQuery('PRAGMA table_info(employer_profiles)');
+          final employerColumnNames = employerColumns.map((c) => c['name'] as String).toSet();
+          if (!employerColumnNames.contains('cover_photo')) {
+            await db.execute('ALTER TABLE employer_profiles ADD COLUMN cover_photo BLOB');
+          }
+        }
       },
       onDowngrade: onDatabaseDowngradeDelete,
       onCreate: (db, version) async {
@@ -315,7 +332,8 @@ class AppDatabase {
             cv_file_name TEXT,
             cv_path TEXT,
             tarif_journalier TEXT,
-            disponibilite TEXT
+            disponibilite TEXT,
+            cover_photo BLOB
           )
         ''');
 
@@ -347,7 +365,8 @@ class AppDatabase {
             nom_entreprise TEXT NOT NULL,
             description TEXT,
             logo BLOB,
-            categorie TEXT
+            categorie TEXT,
+            cover_photo BLOB
           )
         ''');
 

@@ -11,6 +11,7 @@ import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/or_divider.dart';
 import 'package:joem/core/services/auth_service.dart';
+import 'package:joem/features/login/presentation/forgot_password_screen.dart';
 import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.dart';
 import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
@@ -41,12 +42,59 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _onGoogleSignIn() {
-    debugPrint('Connexion via Google');
+  Future<void> _onGoogleSignIn() async {
+    setState(() => _isLoading = true);
+
+    bool? result;
+    String? errorMessage;
+    try {
+      result = await _authService.loginWithGoogle();
+    } catch (_) {
+      errorMessage = 'Connexion Google impossible, veuillez réessayer.';
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    if (result == null) {
+      // L'utilisateur a annulé la sélection de compte Google — pas une
+      // erreur, on ne montre rien.
+      return;
+    }
+    if (result == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucun compte JOEM lié à ce compte Google. Inscrivez-vous d\'abord.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_authService.isEmployer()) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const EmployerDashboard()),
+        (route) => false,
+      );
+    } else if (_authService.isJobSeeker()) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const JobSeekerDashboard()),
+        (route) => false,
+      );
+    }
   }
 
   void _onForgotPassword() {
-    debugPrint('Navigation vers mot de passe oublié');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+    );
   }
 
   /// Debug uniquement : supprime tous les comptes créés localement via

@@ -31,8 +31,6 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final ImagePicker _picker = ImagePicker();
 
-  Uint8List? _coverImageBytes;
-
   /// Nombre réel de candidatures envoyées (`job_applications`) — `null`
   /// tant que non chargé, pour ne pas afficher un "0" trompeur pendant la
   /// requête.
@@ -74,6 +72,8 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   /// (voir "Expérience" plus bas) — l'inscription n'en collecte aucune.
   List<JobExperience> get _experiences => _authService.currentUser?.experiences ?? const [];
 
+  Uint8List? get _coverImageBytes => _authService.currentUser?.coverPhotoBytes;
+
   Future<void> _pickCoverImage() async {
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -82,9 +82,9 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     if (file == null) return;
     final bytes = await file.readAsBytes();
     if (!mounted) return;
-    setState(() {
-      _coverImageBytes = bytes;
-    });
+    await _authService.updateCoverPhoto(bytes);
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _pickAvatarImage(ImageSource source) async {

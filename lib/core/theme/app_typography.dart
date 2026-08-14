@@ -199,4 +199,29 @@ class AppTypography {
     color: const Color(0xFFA855F7),
     height: 1.3,
   );
+
+  // ===== FORMULAIRES / WIZARD D'INSCRIPTION =====
+
+  // Libellé sous un cercle du stepper
+  static TextStyle get stepperLabel => interMedium.copyWith(
+    fontSize: 13,
+    color: AppColors.textTertiary,
+  );
+
+  static TextStyle get stepperLabelActive => interSemiBold.copyWith(
+    fontSize: 13,
+    color: AppColors.primaryLight,
+  );
+
+  // Numéro à l'intérieur d'un cercle du stepper
+  static TextStyle get stepperNumber => poppinsSemiBold.copyWith(
+    fontSize: 16,
+    color: Colors.white,
+  );
+
+  // Texte des boutons (Retour / Suivant / Créer mon compte)
+  static TextStyle get buttonLabel => interSemiBold.copyWith(
+    fontSize: 16,
+    color: Colors.white,
+  );
 }

@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Requis pour la connexion Google (AuthService.loginWithGoogle) —
+         seule fonctionnalité de l'app qui contacte un serveur distant,
+         tout le reste reste 100% local (SQLite). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="joem"
         android:name="${applicationName}"

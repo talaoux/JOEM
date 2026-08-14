@@ -24,7 +24,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
 
-  Uint8List? _coverImageBytes;
+  Uint8List? get _coverImageBytes => _authService.currentUser?.coverPhotoBytes;
 
   /// Logo affiché : toujours celui de l'utilisateur connecté (`AuthService`),
   /// pour qu'un changement ici se reflète partout ailleurs dans l'app
@@ -47,9 +47,9 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
     if (file == null) return;
     final bytes = await file.readAsBytes();
     if (!mounted) return;
-    setState(() {
-      _coverImageBytes = bytes;
-    });
+    await _authService.updateCoverPhoto(bytes);
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _openEditProfile() async {

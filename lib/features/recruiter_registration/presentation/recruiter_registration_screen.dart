@@ -151,9 +151,11 @@ class _RecruiterRegistrationScreenState
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
-    // "Continuer avec Google" ne collecte pas de vrai email/mot de passe
-    // (bouton non branché à une vraie auth) : on génère des identifiants
-    // uniques pour que le compte reste créable et reconnectable.
+    // "Continuer avec Google" remplit `_emailController` avec le vrai
+    // email du compte Google authentifié (voir `StepOneAccount`) mais ne
+    // collecte jamais de mot de passe — ce compte JOEM ne se reconnecte
+    // qu'via Google (`AuthService.loginWithGoogle`) ou "Mot de passe
+    // oublié" (`AuthService.resetPassword`) s'il veut un accès classique.
     final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
     final email = _emailController.text.trim().isNotEmpty
         ? _emailController.text.trim()
@@ -237,7 +239,14 @@ class _RecruiterRegistrationScreenState
           emailController: _emailController,
           passwordController: _passwordController,
           confirmPasswordController: _confirmPasswordController,
-          onGoogleSignIn: () => setState(() => _googleAccountCreated = true),
+          onGoogleSignIn: (account) => setState(() {
+            _googleAccountCreated = true;
+            final nameParts = (account.displayName ?? '').trim().split(RegExp(r'\s+'));
+            if (nameParts.isNotEmpty && nameParts.first.isNotEmpty) {
+              _prenomController.text = nameParts.first;
+              _nomController.text = nameParts.skip(1).join(' ');
+            }
+          }),
         );
       case 1:
         return StepTwoPersonalInfo(
