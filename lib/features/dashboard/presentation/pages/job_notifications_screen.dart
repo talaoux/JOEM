@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
+import 'candidate_interview_detail_screen.dart';
 import 'job_offer_detail_screen.dart';
 
+/// Notifications du chercheur d'emploi. Deux sources réelles, fusionnées et
+/// triées par date décroissante :
+/// - chaque offre publiée par un recruteur (`job_offers`, via
+///   `JobOfferRepository.fetchNotificationsForJobSeeker`) ;
+/// - chaque entretien planifié pour ce candidat (`interviews`, via
+///   `InterviewRepository.fetchNotificationsForJobSeeker`) — "L'entreprise
+///   souhaite vous rencontrer", avec la date/heure/lieu.
 class JobNotificationsScreen extends StatefulWidget {
   const JobNotificationsScreen({super.key});
 
@@ -17,11 +26,9 @@ class JobNotificationsScreen extends StatefulWidget {
 class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
+  final InterviewRepository _interviewRepository = const InterviewRepository();
 
-  /// Chaque offre réellement publiée par un recruteur (`job_offers`) EST
-  /// une notification pour ce candidat — pas de données mockées ici, voir
-  /// `JobOfferRepository.fetchNotificationsForJobSeeker`.
-  List<JobOfferNotification> _notifications = [];
+  List<_NotifItem> _items = [];
   bool _loading = true;
 
   String? get _jobSeekerUserId => _authService.currentUser?.id;
@@ -38,78 +45,82 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
       setState(() => _loading = false);
       return;
     }
-    final notifications = await _repository.fetchNotificationsForJobSeeker(userId);
+    final offers = await _repository.fetchNotificationsForJobSeeker(userId);
+    final interviews = await _interviewRepository.fetchNotificationsForJobSeeker(userId);
+
+    final items = <_NotifItem>[
+      ...offers.map(_NotifItem.offer),
+      ...interviews.map(_NotifItem.interview),
+    ]..sort((a, b) => b.sortKey.compareTo(a.sortKey));
+
     if (!mounted) return;
     setState(() {
-      _notifications = notifications;
+      _items = items;
       _loading = false;
     });
   }
 
-  bool get _hasUnread => _notifications.any((n) => !n.isRead);
+  bool get _hasUnread => _items.any((n) => !n.isRead);
 
   Future<void> _markAllAsRead() async {
     final userId = _jobSeekerUserId;
     if (userId == null) return;
     await _repository.markAllNotificationsRead(userId);
-    if (!mounted) return;
-    setState(() {
-      _notifications = _notifications
-          .map((n) => JobOfferNotification(offer: n.offer, isRead: true))
-          .toList();
-    });
+    await _interviewRepository.markAllSeekerNotificationsRead(userId);
+    await _loadNotifications();
   }
 
-  Future<void> _markAsRead(int index) async {
+  Future<void> _markAsRead(_NotifItem item) async {
     final userId = _jobSeekerUserId;
-    if (userId == null || _notifications[index].isRead) return;
-    final notification = _notifications[index];
-    await _repository.markNotificationRead(notification.offer.id, userId);
-    if (!mounted) return;
-    setState(() {
-      _notifications[index] = JobOfferNotification(offer: notification.offer, isRead: true);
-    });
+    if (userId == null || item.isRead) return;
+    if (item.isInterview) {
+      await _interviewRepository.markSeekerNotificationRead(item.interview!.id);
+    } else {
+      await _repository.markNotificationRead(item.offerNotif!.offer.id, userId);
+    }
   }
 
-  Future<void> _markAsUnread(int index) async {
+  Future<void> _markAsUnread(_NotifItem item) async {
     final userId = _jobSeekerUserId;
     if (userId == null) return;
-    final notification = _notifications[index];
-    await _repository.markNotificationUnread(notification.offer.id, userId);
-    if (!mounted) return;
-    setState(() {
-      _notifications[index] = JobOfferNotification(offer: notification.offer, isRead: false);
-    });
+    if (item.isInterview) {
+      await _interviewRepository.markSeekerNotificationRead(item.interview!.id, read: false);
+    } else {
+      await _repository.markNotificationUnread(item.offerNotif!.offer.id, userId);
+    }
+    await _loadNotifications();
   }
 
-  Future<void> _deleteNotification(int index) async {
+  Future<void> _deleteNotification(_NotifItem item) async {
     final userId = _jobSeekerUserId;
     if (userId == null) return;
-    final notification = _notifications[index];
-    await _repository.deleteNotification(notification.offer.id, userId);
-    if (!mounted) return;
-    setState(() {
-      _notifications.removeAt(index);
-    });
+    if (item.isInterview) {
+      await _interviewRepository.deleteSeekerNotification(item.interview!.id);
+    } else {
+      await _repository.deleteNotification(item.offerNotif!.offer.id, userId);
+    }
+    await _loadNotifications();
   }
 
-  /// Marque la notification comme lue puis ouvre le détail de l'offre
-  /// publiée correspondante.
-  Future<void> _openOfferDetail(int index) async {
-    await _markAsRead(index);
+  Future<void> _openNotification(_NotifItem item) async {
+    await _markAsRead(item);
     if (!mounted) return;
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => JobOfferDetailScreen(offer: _notifications[index].offer),
+        builder: (_) => item.isInterview
+            ? CandidateInterviewDetailScreen(interview: item.interview!)
+            : JobOfferDetailScreen(offer: item.offerNotif!.offer),
       ),
     );
+    await _loadNotifications();
   }
 
-  void _showOptionsMenu(int index) {
+  void _showOptionsMenu(_NotifItem item) {
+    final colors = AppSurfaceColors.of(context);
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -123,33 +134,27 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: colors.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               ListTile(
-                leading: const Icon(
-                  Icons.mark_email_unread_outlined,
-                  color: AppColors.textPrimary,
-                ),
+                leading: Icon(Icons.mark_email_unread_outlined, color: colors.textPrimary),
                 title: Text(
                   'Marquer comme non lue',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: colors.textPrimary,
                   ),
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _markAsUnread(index);
+                  _markAsUnread(item);
                 },
               ),
               ListTile(
-                leading: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: Color(0xFFEF4444),
-                ),
+                leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
                 title: Text(
                   'Supprimer',
                   style: AppTypography.interRegular.copyWith(
@@ -159,7 +164,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _deleteNotification(index);
+                  _deleteNotification(item);
                 },
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -172,13 +177,13 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // En-tête
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.safeAreaHorizontal,
@@ -188,17 +193,9 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
-                    ),
+                    icon: Icon(Icons.arrow_back_rounded, color: colors.textPrimary),
                   ),
-                  Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: AppTypography.sectionTitle,
-                    ),
-                  ),
+                  Expanded(child: Text('Notifications', style: colors.sectionTitle)),
                   if (_hasUnread)
                     TextButton(
                       onPressed: _markAllAsRead,
@@ -213,23 +210,22 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                 ],
               ),
             ),
-
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : _notifications.isEmpty
+                  : _items.isEmpty
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.safeAreaHorizontal,
                             ),
                             child: Text(
-                              'Aucune notification pour le moment. Vous serez prévenu dès qu\'une entreprise publie une offre.',
+                              'Aucune notification pour le moment. Vous serez prévenu dès qu\'une entreprise publie une offre ou vous propose un entretien.',
                               textAlign: TextAlign.center,
                               style: AppTypography.interRegular.copyWith(
                                 fontSize: 13,
                                 fontStyle: FontStyle.italic,
-                                color: AppColors.textTertiary,
+                                color: colors.textTertiary,
                               ),
                             ),
                           ),
@@ -238,11 +234,9 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.safeAreaHorizontal,
                           ),
-                          itemCount: _notifications.length,
+                          itemCount: _items.length,
                           separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.xs),
-                          itemBuilder: (context, index) {
-                            return _buildNotificationItem(index);
-                          },
+                          itemBuilder: (context, index) => _buildNotificationItem(colors, _items[index]),
                         ),
             ),
           ],
@@ -251,74 +245,93 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationItem(int index) {
-    final notification = _notifications[index];
-    final isRead = notification.isRead;
+  Widget _buildNotificationItem(AppSurfaceColors colors, _NotifItem item) {
+    final isRead = item.isRead;
 
     return InkWell(
-      onTap: () => _openOfferDetail(index),
-      onLongPress: () => _showOptionsMenu(index),
+      onTap: () => _openNotification(item),
+      onLongPress: () => _showOptionsMenu(item),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: isRead ? AppColors.background : OnboardingColors.lavender.withOpacity(0.6),
+          color: isRead ? colors.background : OnboardingColors.lavender.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icône
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: OnboardingColors.violet.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.campaign_rounded,
-                color: OnboardingColors.violet,
-                size: 20,
-              ),
-            ),
-
+            Builder(builder: (_) {
+              final accent = !item.isInterview
+                  ? OnboardingColors.violet
+                  : (item.interview!.isModified
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF10B981));
+              final icon = !item.isInterview
+                  ? Icons.campaign_rounded
+                  : (item.interview!.isModified
+                      ? Icons.edit_calendar_rounded
+                      : Icons.event_available_rounded);
+              return Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: accent, size: 20),
+              );
+            }),
             const SizedBox(width: AppSpacing.md),
-
-            // Texte
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    notification.title,
+                    item.title,
                     style: AppTypography.interRegular.copyWith(
                       fontSize: 14,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                       fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    notification.message,
+                    item.message,
                     style: AppTypography.interRegular.copyWith(
                       fontSize: 13,
-                      color: const Color(0xFF6B7280),
+                      color: colors.textSecondary,
                     ),
                   ),
+                  if (item.isInterview) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: 4,
+                      children: [
+                        _chip(colors, Icons.calendar_today_rounded, item.interview!.dateLabel),
+                        _chip(colors, Icons.access_time_rounded, item.interview!.time),
+                        _chip(
+                          colors,
+                          item.interview!.isVisio
+                              ? Icons.videocam_outlined
+                              : Icons.location_on_outlined,
+                          item.interview!.locationLabel,
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    notification.offer.publishedLabel,
+                    item.timeLabel,
                     style: AppTypography.interRegular.copyWith(
                       fontSize: 12,
-                      color: const Color(0xFF9CA3AF),
+                      color: colors.textTertiary,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Pastille non lue
             if (!isRead) ...[
               const SizedBox(width: AppSpacing.sm),
               Container(
@@ -335,5 +348,83 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
         ),
       ),
     );
+  }
+
+  Widget _chip(AppSurfaceColors colors, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: colors.textSecondary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppTypography.interRegular.copyWith(fontSize: 11, color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Une entrée de la liste de notifications du candidat — soit une offre
+/// publiée ([offerNotif]), soit un entretien planifié ([interview]).
+class _NotifItem {
+  _NotifItem.offer(this.offerNotif) : interview = null;
+  _NotifItem.interview(this.interview) : offerNotif = null;
+
+  final JobOfferNotification? offerNotif;
+  final Interview? interview;
+
+  bool get isInterview => interview != null;
+
+  bool get isRead => isInterview ? interview!.seekerRead : offerNotif!.isRead;
+
+  DateTime get sortKey =>
+      isInterview ? interview!.notifiedAt : offerNotif!.offer.createdAt;
+
+  String get title {
+    if (!isInterview) return offerNotif!.title;
+    return interview!.isModified ? 'Entretien modifié' : 'Proposition d\'entretien';
+  }
+
+  String get message {
+    if (!isInterview) return offerNotif!.message;
+    final offer = interview!.offerTitle.trim();
+    final forPost = offer.isNotEmpty ? ' pour le poste "$offer"' : '';
+    return interview!.isModified
+        ? 'Une entreprise a modifié les informations de votre entretien$forPost — vérifiez la nouvelle date, l\'heure et le lieu.'
+        : (offer.isNotEmpty
+            ? 'Une entreprise souhaite vous rencontrer$forPost.'
+            : 'Une entreprise souhaite vous rencontrer en entretien.');
+  }
+
+  String get timeLabel => isInterview
+      ? _relativeLabel(interview!.notifiedAt)
+      : offerNotif!.offer.publishedLabel;
+
+  static String _relativeLabel(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+    final time =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    if (diff.inMinutes < 1) return "À l'instant";
+    if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes} min';
+    final sameDay = now.year == dateTime.year &&
+        now.month == dateTime.month &&
+        now.day == dateTime.day;
+    if (sameDay) return "Aujourd'hui à $time";
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (yesterday.year == dateTime.year &&
+        yesterday.month == dateTime.month &&
+        yesterday.day == dateTime.day) {
+      return 'Hier à $time';
+    }
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} à $time';
   }
 }

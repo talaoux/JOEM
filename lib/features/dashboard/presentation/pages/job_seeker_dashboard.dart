@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/theme/app_surface_colors.dart';
+import '../../data/account_search_repository.dart';
+import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/job_seeker_header.dart';
+import 'profile_stats_screens.dart';
 import 'category_offers_screen.dart';
 import 'job_categories_screen.dart';
 import 'job_search_screen.dart';
@@ -14,11 +16,10 @@ import 'job_publish_screen.dart';
 import 'job_notifications_screen.dart';
 import 'job_profile_screen.dart';
 import 'job_offer_detail_screen.dart';
+import 'job_seeker_settings_screen.dart';
 import '../widgets/hero_card.dart';
-import '../widgets/stat_card.dart';
 import '../widgets/category_card.dart';
 import '../widgets/job_offer_post_card.dart';
-import '../widgets/interview_card.dart';
 import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/profile_side_panel.dart';
@@ -52,6 +53,15 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   ];
 
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+  final InterviewRepository _interviewRepository = const InterviewRepository();
+  final AccountSearchRepository _accountSearchRepository = const AccountSearchRepository();
+
+  /// Compteurs réels des 4 cartes "Les Statistiques" du panneau latéral
+  /// (`ProfileSidePanel`) — `null` tant que non chargés. "Favoris" n'a pas
+  /// de champ dédié : c'est `_savedOfferIds.length`.
+  int? _applicationsCount;
+  int? _interviewsCount;
+  int? _profileViewsCount;
 
   /// Toutes les offres réellement publiées par les recruteurs
   /// (`job_offers`), tous métiers confondus — un chercheur d'emploi voit
@@ -68,21 +78,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   /// (`job_offer_saves`) — bascule le libellé du menu "..." de chaque
   /// carte entre "Enregistrer publication" et "Retirer des enregistrements".
   Set<int> _savedOfferIds = {};
-
-  final List<Map<String, dynamic>> _interviews = [
-    {
-      'company': 'Tech Solutions',
-      'date': '15 Jan 2026',
-      'time': '09:00',
-      'location': 'Antananarivo, Bureau 3',
-    },
-    {
-      'company': 'Creative Agency',
-      'date': '18 Jan 2026',
-      'time': '14:30',
-      'location': 'Toamasina, Centre ville',
-    },
-  ];
 
   late AnimationController _animationController;
   late AnimationController _profilePanelController;
@@ -105,18 +100,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   /// Retourne true si l'écran est large (>= 390px)
   bool _isLargeScreen(BuildContext context) {
     return MediaQuery.of(context).size.width >= 390;
-  }
-
-  /// Calcule le childAspectRatio optimal pour le GridView des Stat Cards
-  double _getStatCardAspectRatio(BuildContext context) {
-    // Ratio = width / height, donc un ratio plus grand = carte moins haute
-    if (_isSmallScreen(context)) {
-      return 1.0;
-    } else if (_isMediumScreen(context)) {
-      return 1.1;
-    } else {
-      return 1.2;
-    }
   }
 
   /// Calcule le childAspectRatio optimal pour le GridView des Catégories
@@ -142,16 +125,36 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   @override
   void initState() {
     super.initState();
+    final reducedAnimations = _authService.currentUser?.reducedAnimationsEnabled ?? false;
     _animationController = AnimationController(
-      duration: AppDurations.verySlow,
+      duration: reducedAnimations ? Duration.zero : AppDurations.verySlow,
       vsync: this,
     )..forward();
     _profilePanelController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: reducedAnimations ? Duration.zero : const Duration(milliseconds: 300),
       vsync: this,
     );
     _loadOffers();
     _loadNotificationCount();
+    _loadStats();
+  }
+
+  /// Charge les compteurs des 4 cartes "Les Statistiques" du panneau
+  /// latéral. "Favoris" vient de `_loadOffers` (`_savedOfferIds`).
+  Future<void> _loadStats() async {
+    final userId = _jobSeekerUserId;
+    if (userId == null) return;
+    final results = await Future.wait([
+      _jobOfferRepository.countApplicationsForJobSeeker(userId),
+      _interviewRepository.countForJobSeeker(userId),
+      _accountSearchRepository.countProfileViews(userId),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _applicationsCount = results[0];
+      _interviewsCount = results[1];
+      _profileViewsCount = results[2];
+    });
   }
 
   /// Id du chercheur d'emploi connecté — `null` si personne n'est
@@ -277,15 +280,26 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     _loadNotificationCount();
   }
 
-  /// Nombre réel d'offres publiées que ce candidat n'a pas encore lues
-  /// (ni supprimées) — alimente la pastille du header et de la nav basse.
+  /// Pastille du header et de la nav basse : offres publiées non lues +
+  /// entretiens planifiés non lus. Les propositions d'entretien sont
+  /// toujours comptées (invitation personnelle) ; seules les notifications
+  /// de nouvelles offres sont mises en sourdine si "Recevoir des
+  /// notifications de nouvelles offres" est désactivé (`JobSeekerSettingsScreen`)
+  /// — dans tous les cas les notifications restent consultables depuis
+  /// `JobNotificationsScreen`.
   Future<void> _loadNotificationCount() async {
     final userId = _jobSeekerUserId;
     if (userId == null) return;
-    final count = await _jobOfferRepository.countUnreadNotificationsForJobSeeker(userId);
+
+    final offersMuted = _authService.currentUser?.notificationsEnabled == false;
+    final offerCount = offersMuted
+        ? 0
+        : await _jobOfferRepository.countUnreadNotificationsForJobSeeker(userId);
+    final interviewCount =
+        await _interviewRepository.countUnreadNotificationsForJobSeeker(userId);
     if (!mounted) return;
     setState(() {
-      _notificationCount = count;
+      _notificationCount = offerCount + interviewCount;
     });
   }
 
@@ -297,11 +311,22 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     super.dispose();
   }
 
+  /// Durée d'ouverture/fermeture du panneau de profil, relue à chaque
+  /// interaction pour que "Réduire les animations"
+  /// (`JobSeekerSettingsScreen`) s'applique dès le retour sur le dashboard,
+  /// sans attendre sa reconstruction.
+  Duration get _profilePanelDuration =>
+      (_authService.currentUser?.reducedAnimationsEnabled ?? false)
+          ? Duration.zero
+          : const Duration(milliseconds: 300);
+
   void _openProfilePanel() {
+    _profilePanelController.duration = _profilePanelDuration;
     _profilePanelController.forward();
   }
 
   void _closeProfilePanel() {
+    _profilePanelController.duration = _profilePanelDuration;
     _profilePanelController.reverse();
   }
 
@@ -316,10 +341,11 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: colors.background,
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -382,18 +408,8 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
 
                   const SizedBox(height: AppSpacing.sectionSpacing),
 
-                  // Statistiques
-                  _buildStatisticsSection(),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing),
-
                   // Catégories
                   _buildCategoriesSection(),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing),
-
-                  // Entretiens
-                  _buildInterviewsSection(),
 
                   const SizedBox(height: AppSpacing.sectionSpacing),
 
@@ -461,10 +477,20 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
         ? user.position!.trim()
         : null;
 
+    String statValue(int? n) => n?.toString() ?? '…';
+
     return ProfileSidePanel(
       animation: _profilePanelController,
       onClose: _closeProfilePanel,
       onLogoutTap: _logout,
+      onSettingsTap: () async {
+        _closeProfilePanel();
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const JobSeekerSettingsScreen()),
+        );
+        _loadNotificationCount();
+      },
       fullName: fullName ?? 'Marie Martin',
       avatarBytes: user?.photoBytes,
       skills: position ?? "Développeur Flutter . Chercheur d'emploi",
@@ -476,73 +502,55 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           MaterialPageRoute(builder: (_) => const JobProfileScreen()),
         );
       },
+      stats: [
+        {
+          'title': 'Candidatures envoyées',
+          'value': statValue(_applicationsCount),
+          'icon': Icons.send_rounded,
+          'iconColor': const Color(0xFF3B82F6),
+          'onTap': () { _openStatScreen(const MyApplicationsScreen()); },
+        },
+        {
+          'title': 'Entretiens',
+          'value': statValue(_interviewsCount),
+          'icon': Icons.calendar_today_rounded,
+          'iconColor': const Color(0xFF10B981),
+          'onTap': () { _openStatScreen(const MyInterviewsScreen()); },
+        },
+        {
+          'title': 'Favoris',
+          'value': _loadingOffers ? '…' : '${_savedOfferIds.length}',
+          'icon': Icons.favorite_rounded,
+          'iconColor': const Color(0xFFEF4444),
+          'onTap': () { _openStatScreen(const MySavedOffersScreen()); },
+        },
+        {
+          'title': 'Vues du profil',
+          'value': statValue(_profileViewsCount),
+          'icon': Icons.visibility_rounded,
+          'iconColor': const Color(0xFFF59E0B),
+          'onTap': () { _openStatScreen(const ProfileViewersScreen()); },
+        },
+      ],
     );
   }
 
-  Widget _buildStatisticsSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: Text('Statistiques', style: AppTypography.sectionTitle),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                // childAspectRatio dynamique selon la taille d'écran
-                childAspectRatio: _getStatCardAspectRatio(context),
-                crossAxisSpacing: AppSpacing.md,
-                mainAxisSpacing: AppSpacing.md,
-                children: [
-                  StatCard(
-                    title: 'Candidatures envoyées',
-                    value: '${_appliedOfferIds.length}',
-                    icon: Icons.send_rounded,
-                    iconColor: const Color(0xFF3B82F6),
-                  ),
-                  StatCard(
-                    title: 'Entretiens',
-                    value: '3',
-                    icon: Icons.calendar_today_rounded,
-                    iconColor: const Color(0xFF10B981),
-                    miniChart: '2 à venir',
-                  ),
-                  StatCard(
-                    title: 'Favoris',
-                    value: '${_savedOfferIds.length}',
-                    icon: Icons.favorite_rounded,
-                    iconColor: const Color(0xFFEF4444),
-                  ),
-                  StatCard(
-                    title: 'Réponses reçues',
-                    value: '5',
-                    icon: Icons.mark_chat_read_rounded,
-                    iconColor: const Color(0xFFF59E0B),
-                    miniChart: '+2 nouvelles',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
+  /// Ouvre l'un des 4 écrans de détail des "Statistiques" du panneau
+  /// latéral, puis rafraîchit compteurs et liste d'offres au retour (une
+  /// candidature retirée ou un favori enlevé depuis le détail se reflète
+  /// immédiatement sur le dashboard).
+  Future<void> _openStatScreen(Widget screen) async {
+    _closeProfilePanel();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (!mounted) return;
+    _loadOffers();
+    _loadStats();
   }
 
   Widget _buildCategoriesSection() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final colors = AppSurfaceColors.of(context);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -555,7 +563,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                 children: [
                   Text(
                     'Catégories populaires',
-                    style: AppTypography.sectionTitle,
+                    style: colors.sectionTitle,
                   ),
                   TextButton(
                     onPressed: () {
@@ -610,6 +618,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   }
 
   Widget _buildRecommendedJobsSection() {
+    final colors = AppSurfaceColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -619,7 +628,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           ),
           child: Text(
             'Recommandées pour vous',
-            style: AppTypography.sectionTitle,
+            style: colors.sectionTitle,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -633,7 +642,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
               style: AppTypography.interRegular.copyWith(
                 fontSize: 13,
                 fontStyle: FontStyle.italic,
-                color: AppColors.textTertiary,
+                color: colors.textTertiary,
               ),
             ),
           )
@@ -694,46 +703,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
               style: AppTypography.secondaryButton.copyWith(fontSize: 13),
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInterviewsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.safeAreaHorizontal,
-          ),
-          child: Text(
-            'Mes prochains entretiens',
-            style: AppTypography.sectionTitle,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _interviews.length,
-          itemBuilder: (context, index) {
-            final interview = _interviews[index];
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: AppSpacing.md,
-                left: AppSpacing.safeAreaHorizontal,
-                right: AppSpacing.safeAreaHorizontal,
-              ),
-              child: InterviewCard(
-                company: interview['company'],
-                date: interview['date'],
-                time: interview['time'],
-                location: interview['location'],
-                onViewDetails: () {},
-              ),
-            );
-          },
         ),
       ],
     );

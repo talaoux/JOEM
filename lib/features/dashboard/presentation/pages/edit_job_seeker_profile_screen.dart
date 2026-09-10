@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/core/services/auth_service.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
@@ -149,13 +149,14 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: colors.surface,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-        title: Text('Modifier le profil', style: AppTypography.dashboardTitle.copyWith(fontSize: 18)),
+        foregroundColor: colors.textPrimary,
+        title: Text('Modifier le profil', style: colors.dashboardTitle.copyWith(fontSize: 18)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -379,7 +380,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
             style: AppTypography.interRegular.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppSurfaceColors.of(context).textPrimary,
             ),
           ),
         ),
@@ -399,18 +400,19 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
+    final colors = AppSurfaceColors.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTypography.sectionTitle),
+          Text(title, style: colors.sectionTitle),
           const SizedBox(height: AppSpacing.md),
           ...children,
         ],

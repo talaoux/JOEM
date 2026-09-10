@@ -21,3 +21,13 @@ Future<String> saveCvFile(Uint8List bytes, String fileName) async {
   await File(path).writeAsBytes(bytes, flush: true);
   return path;
 }
+
+/// Supprime le fichier CV à [path] du disque — utilisé par
+/// `AuthService.deleteCv` ("Supprimer mon CV" de `JobSeekerSettingsScreen`).
+/// Ne fait rien si le fichier n'existe déjà plus.
+Future<void> deleteCvFile(String path) async {
+  final file = File(path);
+  if (await file.exists()) {
+    await file.delete();
+  }
+}

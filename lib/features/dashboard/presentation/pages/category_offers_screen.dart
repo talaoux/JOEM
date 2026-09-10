@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/job_offer_post_card.dart';
@@ -134,8 +134,9 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,29 +150,29 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   Expanded(
                     child: Text(
                       widget.category,
-                      style: AppTypography.sectionTitle,
+                      style: colors.sectionTitle,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
-            Expanded(child: _buildBody()),
+            Expanded(child: _buildBody(colors)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppSurfaceColors colors) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -182,15 +183,15 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.work_off_outlined, size: 48, color: Color(0xFF9CA3AF)),
+              Icon(Icons.work_off_outlined, size: 48, color: colors.textTertiary),
               const SizedBox(height: AppSpacing.md),
-              Text('Aucune offre', style: AppTypography.sectionTitle),
+              Text('Aucune offre', style: colors.sectionTitle),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 "Aucun recruteur de la catégorie \"${widget.category}\" n'a encore publié d'offre.",
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 13,
-                  color: const Color(0xFF6B7280),
+                  color: colors.textSecondary,
                 ),
                 textAlign: TextAlign.center,
               ),

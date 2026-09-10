@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_spacing.dart';
-import 'package:joem/core/theme/app_typography.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 
 class CategoryCard extends StatelessWidget {
@@ -61,17 +59,18 @@ class CategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final colors = AppSurfaceColors.of(context);
         final iconSize = _getIconSize(context);
         final iconContainerSize = _getIconContainerSize(context);
         final titleFontSize = _getTitleFontSize(context);
         final cardPadding = _getCardPadding(context);
-        
+
         return GestureDetector(
           onTap: onTap,
           child: Container(
             padding: EdgeInsets.all(cardPadding),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: colors.background,
               borderRadius: AppRadius.categoryCardRadius,
               boxShadow: AppShadows.cardShadow,
             ),
@@ -98,7 +97,7 @@ class CategoryCard extends StatelessWidget {
                 // Titre
                 Text(
                   title,
-                  style: AppTypography.categoryTitle.copyWith(
+                  style: colors.categoryTitle.copyWith(
                     fontSize: titleFontSize,
                     height: 1.0,
                   ),

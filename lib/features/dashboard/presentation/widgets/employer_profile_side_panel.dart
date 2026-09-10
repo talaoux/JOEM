@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
 /// Panneau latéral affichant le logo et le nom de l'entreprise, glissant
@@ -46,26 +47,26 @@ class EmployerProfileSidePanel extends StatelessWidget {
     this.stats = const [
       {
         'title': 'Offres publiées',
-        'value': '5',
+        'value': '0',
         'icon': Icons.work_outline_rounded,
         'iconColor': Color(0xFF3B82F6),
       },
       {
         'title': 'Candidatures reçues',
-        'value': '25',
+        'value': '0',
         'icon': Icons.people_outline_rounded,
         'iconColor': Color(0xFF10B981),
       },
       {
         'title': 'Entretiens programmés',
-        'value': '4',
+        'value': '0',
         'icon': Icons.calendar_today_rounded,
         'iconColor': Color(0xFFF59E0B),
       },
       {
-        'title': 'Recrutements',
-        'value': '2',
-        'icon': Icons.how_to_reg_rounded,
+        'title': 'Vues totales',
+        'value': '0',
+        'icon': Icons.visibility_rounded,
         'iconColor': Color(0xFF8B5CF6),
       },
     ],
@@ -73,6 +74,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
@@ -103,7 +105,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
         widthFactor: 0.7,
         heightFactor: 1,
         child: Material(
-          color: AppColors.background,
+          color: colors.background,
           elevation: 12,
           child: SafeArea(
             child: Column(
@@ -121,9 +123,9 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           alignment: Alignment.centerRight,
                           child: IconButton(
                             onPressed: onClose,
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.close,
-                              color: AppColors.textPrimary,
+                              color: colors.textPrimary,
                             ),
                           ),
                         ),
@@ -147,7 +149,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             companyName,
-                            style: AppTypography.sectionTitle,
+                            style: colors.sectionTitle,
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -156,7 +158,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             'Géré par $recruiterName',
-                            style: AppTypography.cardDescription,
+                            style: colors.cardDescription,
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -165,10 +167,10 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.max,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.location_on_outlined,
                               size: 16,
-                              color: AppColors.textSecondary,
+                              color: colors.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
@@ -185,7 +187,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             'Les Statistiques',
-                            style: AppTypography.cardTitle,
+                            style: colors.cardTitle,
                             textAlign: TextAlign.left,
                           ),
                         ),
@@ -199,30 +201,34 @@ class EmployerProfileSidePanel extends StatelessWidget {
                           mainAxisSpacing: 10,
                           children: stats.map((stat) {
                             return _buildStatItem(
+                              colors: colors,
                               title: stat['title'] as String,
                               value: stat['value'] as String,
                               icon: stat['icon'] as IconData,
                               iconColor: stat['iconColor'] as Color,
+                              onTap: stat['onTap'] as VoidCallback?,
                             );
                           }).toList(),
                         ),
                         const SizedBox(height: 16),
-                        _buildProfileCompletionCard(),
+                        _buildProfileCompletionCard(colors),
                       ],
                     ),
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: colors.divider),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
                     children: [
                       _buildActionItem(
+                        colors: colors,
                         icon: Icons.settings_outlined,
                         label: 'Paramètres',
                         onTap: onSettingsTap,
                       ),
                       _buildActionItem(
+                        colors: colors,
                         icon: Icons.logout_rounded,
                         label: 'Déconnexion',
                         onTap: onLogoutTap,
@@ -240,6 +246,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
   }
 
   Widget _buildActionItem({
+    required AppSurfaceColors colors,
     required IconData icon,
     required String label,
     required VoidCallback? onTap,
@@ -247,12 +254,12 @@ class EmployerProfileSidePanel extends StatelessWidget {
   }) {
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: color ?? AppColors.textPrimary),
+      leading: Icon(icon, color: color ?? colors.textPrimary),
       title: Text(
         label,
         style: AppTypography.cardTitle.copyWith(
           fontSize: 14,
-          color: color ?? AppColors.textPrimary,
+          color: color ?? colors.textPrimary,
         ),
       ),
       dense: true,
@@ -261,46 +268,58 @@ class EmployerProfileSidePanel extends StatelessWidget {
   }
 
   Widget _buildStatItem({
+    required AppSurfaceColors colors,
     required String title,
     required String value,
     required IconData icon,
     required Color iconColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final content = Padding(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: iconColor, size: 14),
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 14),
+              ),
+              const Spacer(),
+              if (onTap != null)
+                Icon(Icons.chevron_right_rounded, size: 16, color: colors.textTertiary),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: AppTypography.statNumber.copyWith(fontSize: 16, height: 1.0),
+            style: colors.statNumber.copyWith(fontSize: 16, height: 1.0),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
           Text(
             title,
-            style: AppTypography.statLabel.copyWith(fontSize: 9, height: 1.1),
+            style: colors.statLabel.copyWith(fontSize: 9, height: 1.1),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
+    );
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(onTap: onTap, child: content),
     );
   }
 
@@ -312,13 +331,13 @@ class EmployerProfileSidePanel extends StatelessWidget {
     return AppColors.success;
   }
 
-  Widget _buildProfileCompletionCard() {
+  Widget _buildProfileCompletionCard(AppSurfaceColors colors) {
     final ratio = profileCompletion.clamp(0.0, 1.0);
     final percentage = (ratio * 100).round();
     final color = _progressColor(ratio);
 
     return Material(
-      color: AppColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onProfileCompletionTap,
@@ -334,7 +353,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                 children: [
                   Text(
                     'Profil complété',
-                    style: AppTypography.cardTitle.copyWith(fontSize: 14),
+                    style: colors.cardTitle.copyWith(fontSize: 14),
                   ),
                   Text(
                     '$percentage%',

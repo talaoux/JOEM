@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 
@@ -12,6 +11,10 @@ class StatCard extends StatelessWidget {
   final Color iconColor;
   final String? miniChart;
 
+  /// Ouvre l'écran de détail du chiffre (`EmployerDashboard` : "Tableau de
+  /// bord"). `null` = carte non cliquable.
+  final VoidCallback? onTap;
+
   const StatCard({
     super.key,
     required this.title,
@@ -19,6 +22,7 @@ class StatCard extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     this.miniChart,
+    this.onTap,
   });
 
   /// Retourne true si l'écran est petit (< 360px)
@@ -84,15 +88,23 @@ class StatCard extends StatelessWidget {
         final titleFontSize = _getTitleFontSize(context);
         final miniChartFontSize = _getMiniChartFontSize(context);
         final cardPadding = _getCardPadding(context);
-        
+        final colors = AppSurfaceColors.of(context);
+
         return Container(
-          padding: EdgeInsets.all(cardPadding),
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: colors.background,
             borderRadius: AppRadius.statCardRadius,
             boxShadow: AppShadows.cardShadow,
           ),
-          child: Column(
+          child: Material(
+            type: MaterialType.transparency,
+            borderRadius: AppRadius.statCardRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: EdgeInsets.all(cardPadding),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -116,7 +128,7 @@ class StatCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       value,
-                      style: AppTypography.statNumber.copyWith(
+                      style: colors.statNumber.copyWith(
                         fontSize: valueFontSize,
                         height: 1.0,
                       ),
@@ -132,7 +144,7 @@ class StatCard extends StatelessWidget {
               // Titre
               Text(
                 title,
-                style: AppTypography.statLabel.copyWith(
+                style: colors.statLabel.copyWith(
                   fontSize: titleFontSize,
                   height: 1.0,
                 ),
@@ -156,6 +168,9 @@ class StatCard extends StatelessWidget {
                 ),
               ],
             ],
+              ),
+              ),
+            ),
           ),
         );
       },

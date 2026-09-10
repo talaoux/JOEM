@@ -3,11 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../data/account_search_repository.dart';
 import '../widgets/search_bar_widget.dart';
@@ -137,8 +137,9 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,9 +154,9 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   Expanded(
@@ -173,7 +174,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
             ),
 
             Expanded(
-              child: _hasQuery ? _buildResults() : _buildHistory(),
+              child: _hasQuery ? _buildResults(colors) : _buildHistory(colors),
             ),
           ],
         ),
@@ -181,12 +182,13 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
   }
 
-  Widget _buildResults() {
+  Widget _buildResults(AppSurfaceColors colors) {
     if (_isSearching) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_results.isEmpty) {
       return _buildEmptyState(
+        colors,
         icon: Icons.business_outlined,
         title: 'Aucun résultat',
         message: 'Aucune entreprise inscrite ne correspond à cette recherche.',
@@ -206,7 +208,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
   }
 
-  Widget _buildHistory() {
+  Widget _buildHistory(AppSurfaceColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,10 +219,10 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Historiques',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -232,6 +234,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
         Expanded(
           child: _history.isEmpty
               ? _buildEmptyState(
+                  colors,
                   icon: Icons.history_rounded,
                   title: 'Aucun historique',
                   message: 'Vos recherches récentes apparaîtront ici.',
@@ -241,14 +244,14 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                     horizontal: AppSpacing.safeAreaHorizontal,
                   ),
                   itemCount: _history.length,
-                  itemBuilder: (context, index) => _buildHistoryItem(index),
+                  itemBuilder: (context, index) => _buildHistoryItem(colors, index),
                 ),
         ),
       ],
     );
   }
 
-  Widget _buildHistoryItem(int index) {
+  Widget _buildHistoryItem(AppSurfaceColors colors, int index) {
     final query = _history[index];
     return InkWell(
       onTap: () => _onHistoryTap(query),
@@ -256,10 +259,10 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.history_rounded,
               size: 20,
-              color: Color(0xFF9CA3AF),
+              color: colors.textTertiary,
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -267,7 +270,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                 query,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -275,10 +278,10 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
             ),
             IconButton(
               onPressed: () => _removeHistoryItem(index),
-              icon: const Icon(
+              icon: Icon(
                 Icons.close_rounded,
                 size: 18,
-                color: Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -289,7 +292,8 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
   }
 
-  Widget _buildEmptyState({
+  Widget _buildEmptyState(
+    AppSurfaceColors colors, {
     required IconData icon,
     required String title,
     required String message,
@@ -300,15 +304,15 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: const Color(0xFF9CA3AF)),
+            Icon(icon, size: 48, color: colors.textTertiary),
             const SizedBox(height: AppSpacing.md),
-            Text(title, style: AppTypography.sectionTitle),
+            Text(title, style: colors.sectionTitle),
             const SizedBox(height: AppSpacing.xs),
             Text(
               message,
               style: AppTypography.interRegular.copyWith(
                 fontSize: 13,
-                color: const Color(0xFF6B7280),
+                color: colors.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -327,6 +331,7 @@ class _CompanyResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     final location = company.localisation?.trim() ?? '';
     final contact = company.contactName?.trim() ?? '';
 
@@ -336,7 +341,7 @@ class _CompanyResultCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.cardPadding),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: colors.background,
           borderRadius: AppRadius.cardRadius,
           boxShadow: AppShadows.cardShadow,
         ),
@@ -351,24 +356,24 @@ class _CompanyResultCard extends StatelessWidget {
                 children: [
                   Text(
                     company.companyName.isEmpty ? 'Entreprise' : company.companyName,
-                    style: AppTypography.jobTitle,
+                    style: colors.jobTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (contact.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(contact, style: AppTypography.companyName),
+                    Text(contact, style: colors.companyName),
                   ],
                   if (location.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                        Icon(Icons.location_on_outlined, size: 14, color: colors.textTertiary),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             location,
-                            style: AppTypography.jobInfo,
+                            style: colors.jobInfo,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

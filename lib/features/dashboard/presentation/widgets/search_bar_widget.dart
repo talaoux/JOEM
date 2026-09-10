@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 
 class SearchBarWidget extends StatelessWidget {
@@ -39,13 +40,14 @@ class SearchBarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.searchBarRadius,
         border: Border.all(
-          color: const Color(0xFFE5E7EB),
+          color: colors.divider,
           width: 1,
         ),
       ),
@@ -56,7 +58,7 @@ class SearchBarWidget extends StatelessWidget {
             padding: const EdgeInsets.only(left: AppSpacing.lg),
             child: Icon(
               Icons.search_rounded,
-              color: const Color(0xFF9CA3AF),
+              color: colors.textTertiary,
               size: 24,
             ),
           ),
@@ -73,13 +75,13 @@ class SearchBarWidget extends StatelessWidget {
               onTap: onTap,
               style: AppTypography.interRegular.copyWith(
                 fontSize: 15,
-                color: const Color(0xFF1A1A2E),
+                color: colors.textPrimary,
               ),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: AppTypography.interRegular.copyWith(
                   fontSize: 15,
-                  color: const Color(0xFF9CA3AF),
+                  color: colors.textTertiary,
                 ),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(

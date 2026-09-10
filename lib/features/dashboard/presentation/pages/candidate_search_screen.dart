@@ -121,6 +121,12 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
       );
       await _loadHistory();
     }
+    if (_userId.isNotEmpty) {
+      await _repository.recordProfileView(
+        profileUserId: candidate.userId,
+        viewerUserId: _userId,
+      );
+    }
     if (!mounted) return;
     Navigator.push(
       context,

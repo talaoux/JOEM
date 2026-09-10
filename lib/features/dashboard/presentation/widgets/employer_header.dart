@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/widgets/notification_badge.dart';
 import 'search_bar_widget.dart';
 
@@ -32,6 +33,7 @@ class EmployerHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.safeAreaHorizontal,
@@ -59,15 +61,15 @@ class EmployerHeader extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: colors.background,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                border: Border.all(color: colors.divider, width: 1),
               ),
               child: IconButton(
                 onPressed: onNotificationTap,
-                icon: const Icon(
+                icon: Icon(
                   Icons.notifications_outlined,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                   size: 20,
                 ),
                 padding: EdgeInsets.zero,

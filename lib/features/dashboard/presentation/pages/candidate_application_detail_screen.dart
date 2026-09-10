@@ -1,14 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
+import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
+import 'schedule_interview_screen.dart';
 
 /// Détail d'une candidature reçue — ouvert depuis
 /// `EmployerNotificationsScreen` en tapant sur une notification "Nouvelle
@@ -29,8 +33,10 @@ class CandidateApplicationDetailScreen extends StatefulWidget {
 class _CandidateApplicationDetailScreenState
     extends State<CandidateApplicationDetailScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
+  final InterviewRepository _interviewRepository = const InterviewRepository();
 
   JobSeekerProfileSummary? _profile;
+  Interview? _interview;
   bool _loadingProfile = true;
   bool _loadingCv = false;
 
@@ -51,6 +57,7 @@ class _CandidateApplicationDetailScreenState
   void initState() {
     super.initState();
     _loadProfile();
+    _loadInterview();
   }
 
   Future<void> _loadProfile() async {
@@ -61,6 +68,106 @@ class _CandidateApplicationDetailScreenState
       _profile = profile;
       _loadingProfile = false;
     });
+  }
+
+  Future<void> _loadInterview() async {
+    final interview =
+        await _interviewRepository.fetchByApplication(notification.applicationId);
+    if (!mounted) return;
+    setState(() => _interview = interview);
+  }
+
+  /// Ouvre `ScheduleInterviewScreen` — pré-rempli si un entretien est déjà
+  /// planifié pour cette candidature (re-planification).
+  Future<void> _openScheduleInterview() async {
+    final result = await Navigator.push<Interview>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScheduleInterviewScreen(
+          notification: notification,
+          existing: _interview,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => _interview = result);
+    }
+  }
+
+  /// Lance l'appel du candidat via l'application téléphone du système
+  /// (`tel:`). Les espaces/points/parenthèses sont retirés — un `tel:` ne
+  /// doit contenir que chiffres, `+`, `*`, `#`. Si aucune application ne
+  /// peut composer un numéro (bureau, navigateur sans téléphonie...), on
+  /// affiche le numéro dans une boîte de dialogue avec un bouton "Copier".
+  Future<void> _callCandidate(String phone) async {
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+*#]'), '');
+    final launched = await _tryLaunch(Uri.parse('tel:$cleaned'));
+    if (!launched && mounted) {
+      _showFallbackDialog(
+        title: 'Appeler le candidat',
+        value: phone,
+        actionLabel: 'Copier le numéro',
+      );
+    }
+  }
+
+  /// Ouvre le client mail du système sur un nouveau message adressé au
+  /// candidat (`mailto:`). Même repli que [_callCandidate].
+  Future<void> _emailCandidate(String email) async {
+    final launched = await _tryLaunch(Uri(scheme: 'mailto', path: email));
+    if (!launched && mounted) {
+      _showFallbackDialog(
+        title: 'Écrire au candidat',
+        value: email,
+        actionLabel: 'Copier l\'adresse',
+      );
+    }
+  }
+
+  /// Essaie d'ouvrir [uri] avec l'app externe, puis en mode plateforme par
+  /// défaut si le premier échoue — renvoie `true` dès qu'un lancement
+  /// réussit. Certaines plateformes (web notamment) ignorent `externalApplication`.
+  Future<bool> _tryLaunch(Uri uri) async {
+    for (final mode in const [LaunchMode.externalApplication, LaunchMode.platformDefault]) {
+      try {
+        if (await launchUrl(uri, mode: mode)) return true;
+      } catch (error, stackTrace) {
+        debugPrint('launchUrl($uri, $mode) a échoué : $error\n$stackTrace');
+      }
+    }
+    return false;
+  }
+
+  void _showFallbackDialog({
+    required String title,
+    required String value,
+    required String actionLabel,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: SelectableText(value),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fermer'),
+          ),
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              Navigator.pop(dialogContext);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Copié dans le presse-papiers.')),
+                );
+              }
+            },
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Charge le CV réel à la demande (`JobOfferRepository.fetchJobSeekerCv`,
@@ -142,8 +249,12 @@ class _CandidateApplicationDetailScreenState
     final offer = notification.offer;
     final phone = _profile?.telephone?.trim();
     final location = _profile?.localisation?.trim();
+    final email = _profile?.email?.trim();
     final about = _profile?.presentation?.trim();
     final skills = _profile?.skills ?? const [];
+    final hasContactInfo = (phone != null && phone.isNotEmpty) ||
+        (location != null && location.isNotEmpty) ||
+        (email != null && email.isNotEmpty);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -185,17 +296,26 @@ class _CandidateApplicationDetailScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildCandidateHeader(),
-                          if (phone != null && phone.isNotEmpty ||
-                              location != null && location.isNotEmpty) ...[
+                          if (hasContactInfo) ...[
                             const SizedBox(height: AppSpacing.lg),
                             Wrap(
                               spacing: AppSpacing.sm,
                               runSpacing: AppSpacing.sm,
                               children: [
                                 if (phone != null && phone.isNotEmpty)
-                                  _buildInfoChip(Icons.phone_outlined, phone),
+                                  _buildInfoChip(
+                                    Icons.phone_outlined,
+                                    phone,
+                                    onTap: () => _callCandidate(phone),
+                                  ),
                                 if (location != null && location.isNotEmpty)
                                   _buildInfoChip(Icons.location_on_outlined, location),
+                                if (email != null && email.isNotEmpty)
+                                  _buildInfoChip(
+                                    Icons.email_outlined,
+                                    email,
+                                    onTap: () => _emailCandidate(email),
+                                  ),
                               ],
                             ),
                           ],
@@ -229,13 +349,85 @@ class _CandidateApplicationDetailScreenState
                           Text('Offre concernée', style: AppTypography.cardTitle),
                           const SizedBox(height: AppSpacing.sm),
                           _buildOfferSummary(offer),
+                          if (_interview != null) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Text('Entretien planifié', style: AppTypography.cardTitle),
+                            const SizedBox(height: AppSpacing.sm),
+                            _buildInterviewSummary(_interview!),
+                          ],
                           const SizedBox(height: AppSpacing.xxl),
                         ],
                       ),
                     ),
             ),
+            if (!_loadingProfile) _buildScheduleBar(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleBar() {
+    final hasInterview = _interview != null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.safeAreaHorizontal,
+        AppSpacing.md,
+        AppSpacing.safeAreaHorizontal,
+        AppSpacing.md,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _openScheduleInterview,
+          icon: Icon(hasInterview ? Icons.edit_calendar_rounded : Icons.event_available_rounded, size: 18),
+          label: Text(
+            hasInterview ? 'Modifier l\'entretien' : 'Planifier un entretien',
+            style: AppTypography.primaryButton.copyWith(color: Colors.white),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: OnboardingColors.violet,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterviewSummary(Interview interview) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: OnboardingColors.violet.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _buildInfoChip(Icons.calendar_today_rounded, interview.dateLabel),
+              _buildInfoChip(Icons.access_time_rounded, interview.time),
+              _buildInfoChip(
+                interview.isVisio ? Icons.videocam_outlined : Icons.location_on_outlined,
+                interview.locationLabel,
+              ),
+            ],
+          ),
+          if ((interview.notes ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(interview.notes!.trim(), style: AppTypography.cardDescription),
+          ],
+        ],
       ),
     );
   }
@@ -367,30 +559,68 @@ class _CandidateApplicationDetailScreenState
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label) {
+  Widget _buildInfoChip(IconData icon, String label, {VoidCallback? onTap}) {
     if (label.isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: OnboardingColors.violet.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: OnboardingColors.violet),
-          const SizedBox(width: 6),
-          Text(
+    final tappable = onTap != null;
+
+    // Borne la largeur pour qu'un long libellé (email surtout) tronque avec
+    // "…" au lieu de déborder de l'écran dans le `Wrap`.
+    final maxTextWidth = MediaQuery.of(context).size.width -
+        AppSpacing.safeAreaHorizontal * 2 -
+        (tappable ? 74 : 56);
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: OnboardingColors.violet),
+        const SizedBox(width: 6),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxTextWidth < 60 ? 60 : maxTextWidth),
+          child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTypography.jobInfo.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w500,
             ),
           ),
+        ),
+        // Petit indice d'action (l'aspect de la puce, lui, ne change pas).
+        if (tappable) ...[
+          const SizedBox(width: 4),
+          Icon(
+            icon == Icons.phone_outlined ? Icons.call_rounded : Icons.open_in_new_rounded,
+            size: 13,
+            color: OnboardingColors.violet,
+          ),
         ],
+      ],
+    );
+
+    final decoration = BoxDecoration(
+      color: OnboardingColors.violet.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(999),
+    );
+    const chipPadding = EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    );
+
+    if (!tappable) {
+      return Container(padding: chipPadding, decoration: decoration, child: content);
+    }
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          decoration: decoration,
+          child: Padding(padding: chipPadding, child: content),
+        ),
       ),
     );
   }

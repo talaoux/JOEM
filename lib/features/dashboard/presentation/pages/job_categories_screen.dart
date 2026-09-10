@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../widgets/category_card.dart';
 import 'category_offers_screen.dart';
 
@@ -31,8 +30,9 @@ class JobCategoriesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,12 +46,12 @@ class JobCategoriesScreen extends StatelessWidget {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
-                  Text('Catégories', style: AppTypography.sectionTitle),
+                  Text('Catégories', style: colors.sectionTitle),
                 ],
               ),
             ),

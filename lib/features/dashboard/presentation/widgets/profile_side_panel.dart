@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 
 /// Panneau latéral affichant la photo de profil et le nom complet,
@@ -26,6 +26,12 @@ class ProfileSidePanel extends StatelessWidget {
   /// comme une barre de progression sous les statistiques.
   final double profileCompletion;
 
+  /// Les 4 cartes de "Les Statistiques". Le dashboard candidat passe des
+  /// valeurs réelles + un `onTap` par carte (voir `_buildProfileSidePanel`
+  /// dans `job_seeker_dashboard.dart`) vers les écrans `MyApplicationsScreen`
+  /// / `MyInterviewsScreen` / `MySavedOffersScreen` / `ProfileViewersScreen`.
+  /// Le défaut ci-dessous n'est qu'un repli statique et non cliquable.
+
   /// Tap sur la carte "Profil complété" — envoie vers `JobProfileScreen`
   /// pour compléter les champs manquants.
   final VoidCallback? onProfileCompletionTap;
@@ -46,26 +52,26 @@ class ProfileSidePanel extends StatelessWidget {
     this.stats = const [
       {
         'title': 'Candidatures envoyées',
-        'value': '12',
+        'value': '0',
         'icon': Icons.send_rounded,
         'iconColor': Color(0xFF3B82F6),
       },
       {
         'title': 'Entretiens',
-        'value': '3',
+        'value': '0',
         'icon': Icons.calendar_today_rounded,
         'iconColor': Color(0xFF10B981),
       },
       {
         'title': 'Favoris',
-        'value': '8',
+        'value': '0',
         'icon': Icons.favorite_rounded,
         'iconColor': Color(0xFFEF4444),
       },
       {
-        'title': 'Réponses reçues',
-        'value': '5',
-        'icon': Icons.mark_chat_read_rounded,
+        'title': 'Vues du profil',
+        'value': '0',
+        'icon': Icons.visibility_rounded,
         'iconColor': Color(0xFFF59E0B),
       },
     ],
@@ -73,6 +79,7 @@ class ProfileSidePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
@@ -103,7 +110,7 @@ class ProfileSidePanel extends StatelessWidget {
         widthFactor: 0.7,
         heightFactor: 1,
         child: Material(
-          color: AppColors.background,
+          color: colors.background,
           elevation: 12,
           child: SafeArea(
             child: Column(
@@ -121,9 +128,9 @@ class ProfileSidePanel extends StatelessWidget {
                           alignment: Alignment.centerRight,
                           child: IconButton(
                             onPressed: onClose,
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.close,
-                              color: AppColors.textPrimary,
+                              color: colors.textPrimary,
                             ),
                           ),
                         ),
@@ -153,7 +160,7 @@ class ProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             fullName,
-                            style: AppTypography.sectionTitle,
+                            style: colors.sectionTitle,
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -162,7 +169,7 @@ class ProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             skills,
-                            style: AppTypography.cardDescription,
+                            style: colors.cardDescription,
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -171,16 +178,16 @@ class ProfileSidePanel extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.max,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.location_on_outlined,
                               size: 16,
-                              color: AppColors.textSecondary,
+                              color: colors.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 location,
-                                style: AppTypography.cardDescription,
+                                style: colors.cardDescription,
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -191,7 +198,7 @@ class ProfileSidePanel extends StatelessWidget {
                           width: double.infinity,
                           child: Text(
                             'Les Statistiques',
-                            style: AppTypography.cardTitle,
+                            style: colors.cardTitle,
                             textAlign: TextAlign.left,
                           ),
                         ),
@@ -205,15 +212,17 @@ class ProfileSidePanel extends StatelessWidget {
                           mainAxisSpacing: 10,
                           children: stats.map((stat) {
                             return _buildStatItem(
+                              colors,
                               title: stat['title'] as String,
                               value: stat['value'] as String,
                               icon: stat['icon'] as IconData,
                               iconColor: stat['iconColor'] as Color,
+                              onTap: stat['onTap'] as VoidCallback?,
                             );
                           }).toList(),
                         ),
                         const SizedBox(height: 16),
-                        _buildProfileCompletionCard(),
+                        _buildProfileCompletionCard(colors),
                       ],
                     ),
                   ),
@@ -224,11 +233,13 @@ class ProfileSidePanel extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildActionItem(
+                        colors,
                         icon: Icons.settings_outlined,
                         label: 'Paramètres',
                         onTap: onSettingsTap,
                       ),
                       _buildActionItem(
+                        colors,
                         icon: Icons.logout_rounded,
                         label: 'Déconnexion',
                         onTap: onLogoutTap,
@@ -245,7 +256,8 @@ class ProfileSidePanel extends StatelessWidget {
     );
   }
 
-  Widget _buildActionItem({
+  Widget _buildActionItem(
+    AppSurfaceColors colors, {
     required IconData icon,
     required String label,
     required VoidCallback? onTap,
@@ -253,12 +265,12 @@ class ProfileSidePanel extends StatelessWidget {
   }) {
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: color ?? AppColors.textPrimary),
+      leading: Icon(icon, color: color ?? colors.textPrimary),
       title: Text(
         label,
-        style: AppTypography.cardTitle.copyWith(
+        style: colors.cardTitle.copyWith(
           fontSize: 14,
-          color: color ?? AppColors.textPrimary,
+          color: color ?? colors.textPrimary,
         ),
       ),
       dense: true,
@@ -273,13 +285,13 @@ class ProfileSidePanel extends StatelessWidget {
     return AppColors.success;
   }
 
-  Widget _buildProfileCompletionCard() {
+  Widget _buildProfileCompletionCard(AppSurfaceColors colors) {
     final ratio = profileCompletion.clamp(0.0, 1.0);
     final percentage = (ratio * 100).round();
     final color = _progressColor(ratio);
 
     return Material(
-      color: AppColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onProfileCompletionTap,
@@ -295,11 +307,11 @@ class ProfileSidePanel extends StatelessWidget {
                 children: [
                   Text(
                     'Profil complété',
-                    style: AppTypography.cardTitle.copyWith(fontSize: 14),
+                    style: colors.cardTitle.copyWith(fontSize: 14),
                   ),
                   Text(
                     '$percentage%',
-                    style: AppTypography.cardTitle.copyWith(fontSize: 14, color: color),
+                    style: colors.cardTitle.copyWith(fontSize: 14, color: color),
                   ),
                 ],
               ),
@@ -320,47 +332,59 @@ class ProfileSidePanel extends StatelessWidget {
     );
   }
 
-  Widget _buildStatItem({
+  Widget _buildStatItem(
+    AppSurfaceColors colors, {
     required String title,
     required String value,
     required IconData icon,
     required Color iconColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final content = Padding(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: iconColor, size: 14),
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 14),
+              ),
+              const Spacer(),
+              if (onTap != null)
+                Icon(Icons.chevron_right_rounded, size: 16, color: colors.textTertiary),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: AppTypography.statNumber.copyWith(fontSize: 16, height: 1.0),
+            style: colors.statNumber.copyWith(fontSize: 16, height: 1.0),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
           Text(
             title,
-            style: AppTypography.statLabel.copyWith(fontSize: 9, height: 1.1),
+            style: colors.statLabel.copyWith(fontSize: 9, height: 1.1),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
+    );
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(onTap: onTap, child: content),
     );
   }
 }

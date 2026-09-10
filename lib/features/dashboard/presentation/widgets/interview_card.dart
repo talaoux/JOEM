@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 
@@ -24,10 +24,11 @@ class InterviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.cardShadow,
       ),
@@ -54,7 +55,7 @@ class InterviewCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   company,
-                  style: AppTypography.interviewCompany,
+                  style: AppTypography.interviewCompany.copyWith(color: colors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -70,23 +71,23 @@ class InterviewCard extends StatelessWidget {
               Icon(
                 Icons.calendar_today_outlined,
                 size: 16,
-                color: const Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 date,
-                style: AppTypography.interviewDetail,
+                style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
               ),
               const SizedBox(width: AppSpacing.md),
               Icon(
                 Icons.access_time_rounded,
                 size: 16,
-                color: const Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 time,
-                style: AppTypography.interviewDetail,
+                style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
               ),
             ],
           ),
@@ -99,13 +100,13 @@ class InterviewCard extends StatelessWidget {
               Icon(
                 Icons.location_on_outlined,
                 size: 16,
-                color: const Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
                   location,
-                  style: AppTypography.interviewDetail,
+                  style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

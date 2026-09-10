@@ -135,6 +135,30 @@ class JobApplicationNotification {
   String get timeLabel => _relativeTimeLabel(appliedAt);
 }
 
+/// Une vue enregistrée sur une offre du recruteur (`job_offer_views`) —
+/// affichée par la page "Vues totales" du "Tableau de bord" recruteur.
+/// [viewerName] retombe sur "Un candidat" pour un compte de démo (aucune
+/// ligne `job_seeker_profiles`).
+class OfferView {
+  const OfferView({
+    required this.offerId,
+    required this.offerTitle,
+    required this.viewerName,
+    this.viewerPosition,
+    this.viewerPhoto,
+    required this.viewedAt,
+  });
+
+  final int offerId;
+  final String offerTitle;
+  final String viewerName;
+  final String? viewerPosition;
+  final Uint8List? viewerPhoto;
+  final DateTime viewedAt;
+
+  String get timeLabel => _relativeTimeLabel(viewedAt);
+}
+
 /// Compléments du profil d'un candidat au-delà du nom/poste dupliqués sur
 /// `job_applications` — affiché par `CandidateApplicationDetailScreen`
 /// quand disponible. Reste `null` pour un compte de démo (id négatif,
@@ -143,6 +167,7 @@ class JobSeekerProfileSummary {
   const JobSeekerProfileSummary({
     required this.firstName,
     required this.lastName,
+    this.email,
     this.photo,
     this.telephone,
     this.localisation,
@@ -159,6 +184,11 @@ class JobSeekerProfileSummary {
   final String lastName;
 
   String get fullName => '$firstName $lastName'.trim();
+
+  /// Email du compte du candidat (`users.email`) — affiché avec le
+  /// téléphone et la localisation dans les coordonnées de
+  /// `CandidateApplicationDetailScreen`. `null` pour un compte de démo.
+  final String? email;
 
   final Uint8List? photo;
   final String? telephone;
@@ -686,9 +716,19 @@ class JobOfferRepository {
       whereArgs: [userId],
     );
 
+    final userRows = await db.query(
+      'users',
+      columns: ['email'],
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    final email = userRows.isNotEmpty ? userRows.first['email'] as String? : null;
+
     return JobSeekerProfileSummary(
       firstName: profile['prenom'] as String? ?? '',
       lastName: profile['nom'] as String? ?? '',
+      email: email,
       photo: profile['photo'] as Uint8List?,
       telephone: profile['telephone'] as String?,
       localisation: profile['localisation'] as String?,
@@ -768,6 +808,231 @@ class JobOfferRepository {
       whereArgs: [jobSeekerUserId],
     );
     return rows.map((row) => row['job_offer_id'] as int).toSet();
+  }
+
+  /// Offres auxquelles ce chercheur d'emploi a postulé (`job_applications`
+  /// jointe à `job_offers`), la candidature la plus récente en premier —
+  /// page "Candidatures envoyées" ouverte depuis la stat du panneau latéral
+  /// candidat (`ProfileSidePanel`).
+  Future<List<JobOffer>> fetchAppliedOffers(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT jo.* FROM job_offers jo
+      INNER JOIN job_applications ja ON ja.job_offer_id = jo.id
+      WHERE ja.job_seeker_user_id = ?
+      ORDER BY ja.applied_at DESC
+      ''',
+      [jobSeekerUserId],
+    );
+    return rows.map(_fromRow).toList();
+  }
+
+  /// Offres que ce chercheur d'emploi a mises en favori (`job_offer_saves`
+  /// jointe à `job_offers`), la plus récemment enregistrée en premier —
+  /// page "Favoris" ouverte depuis la stat du panneau latéral candidat.
+  Future<List<JobOffer>> fetchSavedOffers(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT jo.* FROM job_offers jo
+      INNER JOIN job_offer_saves jos ON jos.job_offer_id = jo.id
+      WHERE jos.job_seeker_user_id = ?
+      ORDER BY jos.saved_at DESC
+      ''',
+      [jobSeekerUserId],
+    );
+    return rows.map(_fromRow).toList();
+  }
+
+  /// Retire toutes les offres enregistrées de ce candidat — "Vider mes
+  /// offres enregistrées" de `JobSeekerSettingsScreen`.
+  Future<void> clearSavedOffers(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    await db.delete(
+      'job_offer_saves',
+      where: 'job_seeker_user_id = ?',
+      whereArgs: [jobSeekerUserId],
+    );
+  }
+
+  /// Enregistre qu'un candidat a ouvert le détail de cette offre — au plus
+  /// une vue par couple (offre, candidat) grâce à `UNIQUE`, un candidat qui
+  /// rouvre la même offre ne regonfle pas le compteur. Alimente la carte
+  /// "Vues totales" de `EmployerDashboard`. Ne compte pas les vues du
+  /// recruteur sur sa propre offre (l'appelant filtre : seul un candidat
+  /// connecté appelle cette méthode).
+  Future<void> recordOfferView(int jobOfferId, String viewerUserId) async {
+    final db = await AppDatabase.instance.database;
+    await db.insert(
+      'job_offer_views',
+      {
+        'job_offer_id': jobOfferId,
+        'viewer_user_id': viewerUserId,
+        'viewed_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Nombre total de vues (candidats distincts) sur toutes les offres de ce
+  /// recruteur — carte statistique "Vues totales" de `EmployerDashboard`.
+  Future<int> countOfferViewsForEmployer(int employerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS count FROM job_offer_views jov
+      INNER JOIN job_offers jo ON jo.id = jov.job_offer_id
+      WHERE jo.employer_user_id = ?
+      ''',
+      [employerUserId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Détail des vues sur les offres de ce recruteur (`job_offer_views`
+  /// jointe à `job_offers` et, si le viewer est un compte inscrit, à
+  /// `job_seeker_profiles`) — la vue la plus récente en premier. Alimente
+  /// la page "Vues totales" ouverte depuis la carte du "Tableau de bord"
+  /// et du panneau latéral recruteur.
+  Future<List<OfferView>> fetchOfferViewsForEmployer(int employerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        jo.id AS offer_id,
+        jo.title AS offer_title,
+        jov.viewed_at AS viewed_at,
+        jsp.prenom AS prenom,
+        jsp.nom AS nom,
+        jsp.titre_professionnel AS titre_professionnel,
+        jsp.photo AS photo
+      FROM job_offer_views jov
+      INNER JOIN job_offers jo ON jo.id = jov.job_offer_id
+      LEFT JOIN job_seeker_profiles jsp
+        ON jsp.user_id = CAST(jov.viewer_user_id AS INTEGER)
+      WHERE jo.employer_user_id = ?
+      ORDER BY jov.viewed_at DESC
+      ''',
+      [employerUserId],
+    );
+    return rows.map((row) {
+      final prenom = (row['prenom'] as String?)?.trim() ?? '';
+      final nom = (row['nom'] as String?)?.trim() ?? '';
+      final name = '$prenom $nom'.trim();
+      return OfferView(
+        offerId: row['offer_id'] as int,
+        offerTitle: row['offer_title'] as String? ?? '',
+        viewerName: name.isEmpty ? 'Un candidat' : name,
+        viewerPosition: (row['titre_professionnel'] as String?)?.trim(),
+        viewerPhoto: row['photo'] as Uint8List?,
+        viewedAt:
+            DateTime.tryParse(row['viewed_at'] as String? ?? '') ?? DateTime.now(),
+      );
+    }).toList();
+  }
+
+  /// Nombre de candidatures reçues, offre par offre, pour ce recruteur —
+  /// une seule requête pour afficher le compteur sur chaque carte de "Mes
+  /// offres d'emploi" sans une requête par offre.
+  Future<Map<int, int>> fetchApplicantCountsByOffer(int employerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT ja.job_offer_id AS offer_id, COUNT(*) AS count
+      FROM job_applications ja
+      INNER JOIN job_offers jo ON jo.id = ja.job_offer_id
+      WHERE jo.employer_user_id = ?
+      GROUP BY ja.job_offer_id
+      ''',
+      [employerUserId],
+    );
+    return {
+      for (final row in rows) row['offer_id'] as int: row['count'] as int,
+    };
+  }
+
+  /// Toutes les candidatures reçues sur une offre précise, les plus
+  /// récentes en premier — c'est ce qu'affiche `OfferApplicantsScreen`
+  /// quand le recruteur tape sur une offre de "Mes offres d'emploi".
+  /// Contrairement à [fetchApplicationNotificationsForEmployer], n'exclut
+  /// pas les candidatures marquées "supprimées" côté notifications : le
+  /// recruteur veut voir tous les postulants d'une offre.
+  Future<List<JobApplicationNotification>> fetchApplicationsForOffer(int jobOfferId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        ja.id AS application_id,
+        ja.job_seeker_user_id AS job_seeker_user_id,
+        ja.candidate_name AS candidate_name,
+        ja.candidate_position AS candidate_position,
+        ja.applied_at AS applied_at,
+        jo.id AS offer_id,
+        jo.employer_user_id AS employer_user_id,
+        jo.company_name AS company_name,
+        jo.company_logo AS company_logo,
+        jo.title AS title,
+        jo.description AS description,
+        jo.location AS location,
+        jo.salary AS salary,
+        jo.contract_type AS contract_type,
+        jo.poster_image AS poster_image,
+        jo.created_at AS created_at
+      FROM job_applications ja
+      INNER JOIN job_offers jo ON jo.id = ja.job_offer_id
+      WHERE ja.job_offer_id = ?
+      ORDER BY ja.applied_at DESC
+      ''',
+      [jobOfferId],
+    );
+    if (rows.isEmpty) return [];
+
+    final applicationIds = rows.map((row) => row['application_id'] as int).toList();
+    final placeholders = List.filled(applicationIds.length, '?').join(',');
+    final stateRows = await db.query(
+      'job_application_notification_reads',
+      where: 'job_application_id IN ($placeholders)',
+      whereArgs: applicationIds,
+    );
+    final readByApplicationId = {
+      for (final row in stateRows) row['job_application_id'] as int: (row['is_read'] as int? ?? 0) == 1,
+    };
+
+    return rows.map((row) {
+      final applicationId = row['application_id'] as int;
+      return JobApplicationNotification(
+        applicationId: applicationId,
+        jobSeekerUserId: row['job_seeker_user_id'] as String,
+        offer: _fromRow({
+          'id': row['offer_id'],
+          'employer_user_id': row['employer_user_id'],
+          'company_name': row['company_name'],
+          'company_logo': row['company_logo'],
+          'title': row['title'],
+          'description': row['description'],
+          'location': row['location'],
+          'salary': row['salary'],
+          'contract_type': row['contract_type'],
+          'poster_image': row['poster_image'],
+          'created_at': row['created_at'],
+        }),
+        candidateName: row['candidate_name'] as String? ?? '',
+        candidatePosition: row['candidate_position'] as String?,
+        appliedAt: DateTime.parse(row['applied_at'] as String),
+        isRead: readByApplicationId[applicationId] ?? false,
+      );
+    }).toList();
+  }
+
+  /// Supprime définitivement une offre publiée par le recruteur — "Mes
+  /// offres d'emploi", appui long ou menu "Supprimer". Les candidatures,
+  /// enregistrements, états de notification et vues liés partent en cascade
+  /// (`ON DELETE CASCADE`). Les entretiens déjà planifiés restent (aucune
+  /// FK, `offer_title` dupliqué — voir `AppDatabase` migration v18 -> v19).
+  Future<void> deleteOffer(int jobOfferId) async {
+    final db = await AppDatabase.instance.database;
+    await db.delete('job_offers', where: 'id = ?', whereArgs: [jobOfferId]);
   }
 
   JobOffer _fromRow(Map<String, Object?> row) {

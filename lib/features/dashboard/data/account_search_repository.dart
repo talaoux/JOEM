@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:sqflite/sqflite.dart';
+
 import 'package:joem/core/database/app_database.dart';
 import 'package:joem/core/services/auth_service.dart' show JobExperience;
 
@@ -71,6 +73,19 @@ class CompanySearchResult {
   final Uint8List? logo;
 }
 
+/// Un recruteur ayant consulté le profil du candidat connecté
+/// (`job_seeker_profile_views` jointe à `employer_profiles`) — alimente la
+/// page "Vues du profil" ouverte depuis la stat du panneau latéral
+/// candidat. [company] est `null` pour un compte de démonstration (aucune
+/// ligne `employer_profiles`), la ligne s'affiche alors en générique et
+/// non cliquable.
+class ProfileViewer {
+  const ProfileViewer({required this.viewedAt, this.company});
+
+  final DateTime viewedAt;
+  final CompanySearchResult? company;
+}
+
 /// Recherche de comptes déjà inscrits (`users` + `job_seeker_profiles`/
 /// `employer_profiles`) — pas d'offres, pas de données mockées : un
 /// recruteur ne trouve que des candidats réellement inscrits, un candidat
@@ -88,8 +103,35 @@ class AccountSearchRepository {
     final term = query.trim();
     if (term.isEmpty) return [];
 
-    final db = await AppDatabase.instance.database;
     final like = '%${term.toLowerCase()}%';
+    return _fetchJobSeekers(
+      whereClause: '''
+        AND (
+          LOWER(jsp.prenom) LIKE ? OR
+          LOWER(jsp.nom) LIKE ? OR
+          LOWER(jsp.titre_professionnel) LIKE ? OR
+          LOWER(jsp.localisation) LIKE ? OR
+          LOWER(jss.name) LIKE ?
+        )
+      ''',
+      whereArgs: [like, like, like, like, like],
+    );
+  }
+
+  /// Tous les candidats réellement inscrits et dont le profil est visible
+  /// (`job_seeker_profiles.profil_visible = 1`) — sans filtre de texte.
+  /// Alimente "Candidats suggérés" de `EmployerDashboard`, qui affiche
+  /// désormais l'ensemble des inscrits (les plus pertinents pour les offres
+  /// du recruteur en tête, voir `EmployerDashboard._loadSuggestedCandidates`).
+  Future<List<CandidateSearchResult>> fetchAllJobSeekers() {
+    return _fetchJobSeekers(whereClause: '', whereArgs: const []);
+  }
+
+  Future<List<CandidateSearchResult>> _fetchJobSeekers({
+    required String whereClause,
+    required List<Object?> whereArgs,
+  }) async {
+    final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
       SELECT DISTINCT
@@ -105,16 +147,11 @@ class AccountSearchRepository {
       INNER JOIN job_seeker_profiles jsp ON jsp.user_id = u.id
       LEFT JOIN job_seeker_skills jss ON jss.user_id = u.id
       WHERE u.role = 'job_seeker'
-        AND (
-          LOWER(jsp.prenom) LIKE ? OR
-          LOWER(jsp.nom) LIKE ? OR
-          LOWER(jsp.titre_professionnel) LIKE ? OR
-          LOWER(jsp.localisation) LIKE ? OR
-          LOWER(jss.name) LIKE ?
-        )
+        AND jsp.profil_visible = 1
+        $whereClause
       ORDER BY jsp.prenom ASC
       ''',
-      [like, like, like, like, like],
+      whereArgs,
     );
     if (rows.isEmpty) return [];
 
@@ -187,6 +224,7 @@ class AccountSearchRepository {
       FROM users u
       INNER JOIN employer_profiles ep ON ep.user_id = u.id
       WHERE u.role = 'employer'
+        AND ep.entreprise_visible = 1
         AND (
           LOWER(ep.nom_entreprise) LIKE ? OR
           LOWER(ep.localisation) LIKE ? OR
@@ -270,5 +308,105 @@ class AccountSearchRepository {
       where: 'user_id = ? AND search_type = ? AND query = ?',
       whereArgs: [userId, searchType, query],
     );
+  }
+
+  /// Efface tout l'historique de recherche de [userId] pour [searchType] —
+  /// utilisé par "Effacer l'historique de recherche" de
+  /// `JobSeekerSettingsScreen`/`EmployerSettingsScreen`.
+  Future<void> clearHistory({
+    required String userId,
+    required String searchType,
+  }) async {
+    final db = await AppDatabase.instance.database;
+    await db.delete(
+      'search_history',
+      where: 'user_id = ? AND search_type = ?',
+      whereArgs: [userId, searchType],
+    );
+  }
+
+  /// Enregistre qu'un recruteur ([viewerUserId]) a ouvert le profil du
+  /// candidat [profileUserId] (`CandidateProfileViewScreen`) — au plus une
+  /// vue par couple (profil, recruteur) grâce à `UNIQUE`, un recruteur qui
+  /// rouvre le même profil ne regonfle pas le compteur. Alimente le
+  /// compteur "N vues du profil" de `JobProfileScreen`. À n'appeler que
+  /// lorsqu'un recruteur consulte le profil d'un *autre* utilisateur
+  /// (l'appelant filtre : jamais ses propres vues).
+  Future<void> recordProfileView({
+    required String profileUserId,
+    required String viewerUserId,
+  }) async {
+    if (profileUserId == viewerUserId) return;
+    final db = await AppDatabase.instance.database;
+    await db.insert(
+      'job_seeker_profile_views',
+      {
+        'profile_user_id': profileUserId,
+        'viewer_user_id': viewerUserId,
+        'viewed_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Nombre de recruteurs distincts ayant consulté le profil de
+  /// [profileUserId] — compteur "N vues du profil" de `JobProfileScreen` et
+  /// stat "Vues du profil" du panneau latéral candidat.
+  Future<int> countProfileViews(String profileUserId) async {
+    final db = await AppDatabase.instance.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM job_seeker_profile_views WHERE profile_user_id = ?',
+      [profileUserId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Recruteurs ayant consulté le profil de [profileUserId], la vue la plus
+  /// récente en premier — page "Vues du profil" du panneau latéral candidat.
+  Future<List<ProfileViewer>> fetchProfileViewers(String profileUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT v.viewer_user_id AS viewer_user_id,
+             v.viewed_at AS viewed_at,
+             ep.nom_entreprise AS nom_entreprise,
+             ep.nom AS nom,
+             ep.prenom AS prenom,
+             ep.localisation AS localisation,
+             ep.telephone AS telephone,
+             ep.description AS description,
+             ep.logo AS logo
+      FROM job_seeker_profile_views v
+      LEFT JOIN employer_profiles ep
+        ON ep.user_id = CAST(v.viewer_user_id AS INTEGER)
+      WHERE v.profile_user_id = ?
+      ORDER BY v.viewed_at DESC
+      ''',
+      [profileUserId],
+    );
+
+    return rows.map((row) {
+      final viewedAt =
+          DateTime.tryParse(row['viewed_at'] as String? ?? '') ?? DateTime.now();
+      final companyName = (row['nom_entreprise'] as String?)?.trim() ?? '';
+      if (companyName.isEmpty) {
+        return ProfileViewer(viewedAt: viewedAt);
+      }
+      final contactName =
+          '${(row['prenom'] as String?)?.trim() ?? ''} ${(row['nom'] as String?)?.trim() ?? ''}'
+              .trim();
+      return ProfileViewer(
+        viewedAt: viewedAt,
+        company: CompanySearchResult(
+          userId: (row['viewer_user_id'] as String?) ?? '',
+          companyName: companyName,
+          contactName: contactName.isEmpty ? null : contactName,
+          localisation: (row['localisation'] as String?)?.trim(),
+          telephone: (row['telephone'] as String?)?.trim(),
+          description: (row['description'] as String?)?.trim(),
+          logo: row['logo'] as Uint8List?,
+        ),
+      );
+    }).toList();
   }
 }

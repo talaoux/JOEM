@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -10,15 +11,23 @@ import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../features/login/presentation/login_screen.dart';
 import '../../data/account_search_repository.dart';
+import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/employer_header.dart';
 import '../widgets/employer_profile_side_panel.dart';
+import '../widgets/employer_offer_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/interview_card.dart';
 import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
+import 'candidate_application_detail_screen.dart';
+import 'candidate_profile_view_screen.dart';
 import 'candidate_search_screen.dart';
+import 'employer_offers_screen.dart';
+import 'employer_settings_screen.dart';
+import 'employer_stats_screens.dart';
 import 'job_offer_publish_screen.dart';
+import 'offer_applicants_screen.dart';
 import 'employer_notifications_screen.dart';
 import 'employer_profile_screen.dart';
 
@@ -33,8 +42,14 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+  final InterviewRepository _interviewRepository = const InterviewRepository();
+  final AccountSearchRepository _accountSearchRepository = const AccountSearchRepository();
   final TextEditingController _searchController = TextEditingController();
   int _currentNavIndex = 0;
+
+  /// Nombre d'offres affichées directement sur le dashboard — le reste est
+  /// accessible via "Voir tout" (`EmployerOffersScreen`).
+  static const int _dashboardOffersPreview = 3;
 
   /// Nombre réel de candidatures reçues que ce recruteur n'a pas encore
   /// lues (ni supprimées) — alimente la pastille du header et de la nav
@@ -50,7 +65,28 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   /// confondues (`job_applications`) — carte "Candidatures".
   int _applicantsCount = 0;
 
+  /// Candidatures reçues, offre par offre (`job_offer_id` -> nombre) — pour
+  /// le compteur affiché sur chaque carte de "Mes offres d'emploi".
+  Map<int, int> _applicantCountsByOffer = {};
+
+  /// Nombre total de vues (candidats distincts) sur toutes les offres de ce
+  /// recruteur (`job_offer_views`) — carte "Vues totales".
+  int _totalViews = 0;
+
+  /// Entretiens planifiés aujourd'hui / à venir pour ce recruteur
+  /// (`interviews`) — section "Entretiens du jour"/"Mes prochains
+  /// entretiens" et carte statistique "Entretiens".
+  List<Interview> _todayInterviews = [];
+  List<Interview> _upcomingInterviews = [];
+  bool _loadingInterviews = true;
+
   String get _companyName => _authService.currentUser?.companyName ?? 'Tech Solutions';
+
+  /// Palette de surfaces (fond de page, cartes, texte) dynamique selon le
+  /// "Mode nuit" de `EmployerSettingsScreen` — voir `AppSurfaceColors` /
+  /// `DisplayPreferencesController`. En mode clair, ces valeurs sont
+  /// identiques aux anciennes constantes `AppColors` utilisées ici.
+  AppSurfaceColors get _colors => AppSurfaceColors.of(context);
 
   /// `null` pour un compte sans session valide (ne devrait pas arriver
   /// une fois connecté) — les comptes de démo ont un id négatif exprès
@@ -61,22 +97,43 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   @override
   void initState() {
     super.initState();
+    final reducedAnimations = _authService.currentUser?.reducedAnimationsEnabled ?? false;
     _animationController = AnimationController(
-      duration: AppDurations.verySlow,
+      duration: reducedAnimations ? Duration.zero : AppDurations.verySlow,
       vsync: this,
     )..forward();
     _profilePanelController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: reducedAnimations ? Duration.zero : const Duration(milliseconds: 300),
       vsync: this,
     );
 
     _loadPostedOffers().then((_) => _loadSuggestedCandidates());
     _loadNotificationCount();
+    _loadInterviews();
+  }
+
+  /// Recharge tout ce que le dashboard affiche — appelé au retour d'un
+  /// sous-écran susceptible d'avoir changé les données (publication ou
+  /// suppression d'offre, planification d'entretien, lecture d'une
+  /// candidature...).
+  Future<void> _reloadAll() async {
+    await _loadPostedOffers();
+    await _loadSuggestedCandidates();
+    await _loadNotificationCount();
+    await _loadInterviews();
   }
 
   Future<void> _loadNotificationCount() async {
     final employerUserId = _employerUserId;
     if (employerUserId == null) return;
+    // "Nouvelles candidatures" désactivé dans `EmployerSettingsScreen` :
+    // la pastille reste à 0, les candidatures restent consultables depuis
+    // `EmployerNotificationsScreen`.
+    if (_authService.currentUser?.notificationsEnabled == false) {
+      if (!mounted) return;
+      setState(() => _notificationCount = 0);
+      return;
+    }
     final count = await _jobOfferRepository
         .countUnreadApplicationNotificationsForEmployer(employerUserId);
     if (!mounted) return;
@@ -92,21 +149,42 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     final offers = await _jobOfferRepository.fetchByEmployer(employerUserId);
     final applicantsCount =
         await _jobOfferRepository.countApplicantsForEmployer(employerUserId);
+    final applicantCountsByOffer =
+        await _jobOfferRepository.fetchApplicantCountsByOffer(employerUserId);
+    final totalViews =
+        await _jobOfferRepository.countOfferViewsForEmployer(employerUserId);
     if (!mounted) return;
     setState(() {
       _postedOffers = offers;
       _applicantsCount = applicantsCount;
+      _applicantCountsByOffer = applicantCountsByOffer;
+      _totalViews = totalViews;
       _loadingOffers = false;
     });
   }
 
-  // Candidats dont le profil correspond aux offres publiées par le
-  // recruteur (`_postedOffers`) — pas un simple historique d'activité :
-  // c'est ce qu'un recruteur veut voir en premier, des profils pertinents
-  // pour SES besoins, avec un taux de correspondance. Calculé pour de vrai
-  // à partir des candidats inscrits (voir `_loadSuggestedCandidates`),
-  // rien n'est simulé ici.
-  List<Map<String, dynamic>> _suggestedCandidates = [];
+  Future<void> _loadInterviews() async {
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) {
+      setState(() => _loadingInterviews = false);
+      return;
+    }
+    final today = await _interviewRepository.fetchTodayForEmployer(employerUserId);
+    final upcoming = await _interviewRepository.fetchUpcomingForEmployer(employerUserId);
+    if (!mounted) return;
+    setState(() {
+      _todayInterviews = today;
+      _upcomingInterviews = upcoming;
+      _loadingInterviews = false;
+    });
+  }
+
+  // "Candidats suggérés" : TOUS les candidats réellement inscrits (profil
+  // visible), triés par pertinence pour les offres publiées par le
+  // recruteur (`_postedOffers`). Ceux dont le titre/les compétences/la
+  // localisation recoupent une offre remontent en tête avec leur taux de
+  // correspondance ; les autres suivent, sans score. Rien n'est simulé.
+  List<_SuggestedCandidate> _suggestedCandidates = [];
   bool _loadingSuggestedCandidates = true;
 
   static const _matchStopWords = {
@@ -114,14 +192,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     'avec', 'dans', 'en', 'sur', 'aux', 'au', 'à', 'ou', 'the', 'and',
   };
 
-  /// Cherche, parmi les candidats réellement inscrits, ceux dont le titre
-  /// professionnel/les compétences/la localisation recoupent les mots
-  /// significatifs des offres publiées par ce recruteur (`_postedOffers`).
-  /// Le taux affiché est la proportion de mots de l'offre retrouvés chez
-  /// le candidat — une heuristique simple, mais calculée sur de vraies
-  /// données plutôt qu'inventée.
   Future<void> _loadSuggestedCandidates() async {
-    if (_postedOffers.isEmpty) {
+    final candidates = await _accountSearchRepository.fetchAllJobSeekers();
+    if (candidates.isEmpty) {
       if (!mounted) return;
       setState(() {
         _suggestedCandidates = [];
@@ -130,80 +203,55 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       return;
     }
 
-    const accountSearchRepository = AccountSearchRepository();
-    final resultByUserId = <String, CandidateSearchResult>{};
-    final bestPercentByUserId = <String, int>{};
-    final bestJobByUserId = <String, String>{};
-
+    // Mots significatifs de chaque offre publiée, regroupés par offre.
+    final offerWords = <String, Set<String>>{};
     for (final offer in _postedOffers) {
       final words = offer.title
           .toLowerCase()
           .split(RegExp(r'[^a-zà-ÿ0-9]+'))
           .where((w) => w.length >= 3 && !_matchStopWords.contains(w))
           .toSet();
-      if (words.isEmpty) continue;
-
-      final hitsByUserId = <String, int>{};
-      for (final word in words) {
-        final matches = await accountSearchRepository.searchJobSeekers(word);
-        for (final candidate in matches) {
-          hitsByUserId[candidate.userId] = (hitsByUserId[candidate.userId] ?? 0) + 1;
-          resultByUserId[candidate.userId] = candidate;
-        }
-      }
-
-      for (final entry in hitsByUserId.entries) {
-        final percent = ((entry.value / words.length) * 100).round().clamp(1, 100);
-        if (percent > (bestPercentByUserId[entry.key] ?? 0)) {
-          bestPercentByUserId[entry.key] = percent;
-          bestJobByUserId[entry.key] = offer.title;
-        }
-      }
+      if (words.isNotEmpty) offerWords[offer.title] = words;
     }
 
-    final ranked = bestPercentByUserId.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final suggestions = candidates.map((candidate) {
+      // Texte cherchable du candidat : titre + compétences + localisation.
+      final haystack = [
+        candidate.position ?? '',
+        candidate.localisation ?? '',
+        ...candidate.skills,
+      ].join(' ').toLowerCase();
 
-    final suggestions = ranked.take(5).map((entry) {
-      final candidate = resultByUserId[entry.key]!;
-      return <String, dynamic>{
-        'name': candidate.fullName.isNotEmpty ? candidate.fullName : 'Candidat',
-        'matchedJob': bestJobByUserId[entry.key] ?? '',
-        'matchPercent': entry.value,
-        'experience': candidate.experiences.isNotEmpty
-            ? '${candidate.experiences.length} expérience(s)'
-            : 'Junior',
-        'location': candidate.localisation?.trim().isNotEmpty == true
-            ? candidate.localisation!
-            : 'Non renseigné',
-      };
-    }).toList();
+      int bestPercent = 0;
+      String? bestJob;
+      offerWords.forEach((jobTitle, words) {
+        final hits = words.where((w) => haystack.contains(w)).length;
+        if (hits == 0) return;
+        final percent = ((hits / words.length) * 100).round().clamp(1, 100);
+        if (percent > bestPercent) {
+          bestPercent = percent;
+          bestJob = jobTitle;
+        }
+      });
+
+      return _SuggestedCandidate(
+        candidate: candidate,
+        matchPercent: bestPercent > 0 ? bestPercent : null,
+        matchedJob: bestJob,
+      );
+    }).toList()
+      ..sort((a, b) {
+        final pa = a.matchPercent ?? -1;
+        final pb = b.matchPercent ?? -1;
+        if (pa != pb) return pb.compareTo(pa);
+        return a.candidate.fullName.toLowerCase().compareTo(b.candidate.fullName.toLowerCase());
+      });
 
     if (!mounted) return;
     setState(() {
       _suggestedCandidates = suggestions;
       _loadingSuggestedCandidates = false;
     });
-  }
-
-  final List<Map<String, dynamic>> _interviews = [
-    {
-      'candidate': 'Jean Rakoto',
-      'date': '15 Jan 2026',
-      'time': '09:00',
-      'location': 'Antananarivo, Bureau 3',
-    },
-    {
-      'candidate': 'Pierre Andria',
-      'date': '18 Jan 2026',
-      'time': '14:30',
-      'location': 'Visioconférence',
-    },
-  ];
-
-  String getCandidateName(Map<String, dynamic> candidate) {
-    final name = candidate['name'];
-    return name != null ? name.toString() : 'Candidat';
   }
 
   // ===== RESPONSIVE HELPERS =====
@@ -298,6 +346,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Offre "${offer.title}" publiée avec succès.')),
     );
+    // Recalcule stats, compteurs par offre et "Candidats suggérés" (la
+    // nouvelle offre peut faire remonter des candidats jusque-là sans score).
+    _reloadAll();
   }
 
   @override
@@ -305,7 +356,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: _colors.background,
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -335,7 +386,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                             builder: (_) => const EmployerNotificationsScreen(),
                           ),
                         );
-                        _loadNotificationCount();
+                        _reloadAll();
                       },
                     ),
                   ),
@@ -387,7 +438,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                                           'Publier une offre',
                                           style: AppTypography.poppinsSemiBold.copyWith(
                                             fontSize: titleFontSize,
-                                            color: AppColors.textPrimary,
+                                            color: _colors.textPrimary,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -397,7 +448,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                                           'Trouvez les meilleurs talents',
                                           style: AppTypography.interRegular.copyWith(
                                             fontSize: subtitleFontSize,
-                                            color: AppColors.textSecondary,
+                                            color: _colors.textSecondary,
                                           ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
@@ -504,7 +555,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                         },
                       ),
                     );
-                    if (index == 3) _loadNotificationCount();
+                    _reloadAll();
                   }
                   if (mounted) {
                     setState(() {
@@ -543,6 +594,14 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       animation: _profilePanelController,
       onClose: _closeProfilePanel,
       onLogoutTap: _logout,
+      onSettingsTap: () async {
+        _closeProfilePanel();
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EmployerSettingsScreen()),
+        );
+        _reloadAll();
+      },
       companyName: _companyName,
       recruiterName: recruiterName ?? 'Jean Dupont',
       logoBytes: user?.photoBytes,
@@ -555,7 +614,45 @@ class _EmployerDashboardState extends State<EmployerDashboard>
           MaterialPageRoute(builder: (_) => const EmployerProfileScreen()),
         );
       },
+      // Mêmes 4 chiffres (et mêmes écrans de détail) que le "Tableau de
+      // bord" du corps du dashboard.
+      stats: [
+        {
+          'title': 'Offres publiées',
+          'value': '${_postedOffers.length}',
+          'icon': Icons.work_outline_rounded,
+          'iconColor': const Color(0xFF3B82F6),
+          'onTap': () => _openStatScreenFromPanel(const EmployerOffersScreen()),
+        },
+        {
+          'title': 'Candidatures reçues',
+          'value': '$_applicantsCount',
+          'icon': Icons.people_outline_rounded,
+          'iconColor': const Color(0xFF10B981),
+          'onTap': () => _openStatScreenFromPanel(const EmployerNotificationsScreen()),
+        },
+        {
+          'title': 'Entretiens programmés',
+          'value': '${_upcomingInterviews.length}',
+          'icon': Icons.calendar_today_rounded,
+          'iconColor': const Color(0xFFF59E0B),
+          'onTap': () => _openStatScreenFromPanel(const EmployerInterviewsScreen()),
+        },
+        {
+          'title': 'Vues totales',
+          'value': '$_totalViews',
+          'icon': Icons.visibility_rounded,
+          'iconColor': const Color(0xFF8B5CF6),
+          'onTap': () => _openStatScreenFromPanel(const EmployerOfferViewsScreen()),
+        },
+      ],
     );
+  }
+
+  /// Comme [_openStatScreen] mais ferme d'abord le panneau latéral.
+  void _openStatScreenFromPanel(Widget screen) {
+    _closeProfilePanel();
+    _openStatScreen(screen);
   }
 
   Widget _buildStatisticsSection() {
@@ -570,7 +667,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               ),
               child: Text(
                 'Tableau de bord',
-                style: AppTypography.sectionTitle,
+                style: _colors.sectionTitle,
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -592,6 +689,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                     icon: Icons.work_outline_rounded,
                     iconColor: const Color(0xFF3B82F6),
                     miniChart: 'Sur ${_postedOffers.length} publiées',
+                    onTap: () => _openStatScreen(const EmployerOffersScreen()),
                   ),
                   StatCard(
                     title: 'Candidatures',
@@ -599,20 +697,23 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                     icon: Icons.people_outline_rounded,
                     iconColor: const Color(0xFF10B981),
                     miniChart: 'Sur ${_postedOffers.length} offre${_postedOffers.length > 1 ? 's' : ''}',
+                    onTap: () => _openStatScreen(const EmployerNotificationsScreen()),
                   ),
                   StatCard(
                     title: 'Entretiens',
-                    value: '${_interviews.length}',
+                    value: '${_upcomingInterviews.length}',
                     icon: Icons.calendar_today_rounded,
                     iconColor: const Color(0xFFF59E0B),
-                    miniChart: 'Cette semaine',
+                    miniChart: 'À venir',
+                    onTap: () => _openStatScreen(const EmployerInterviewsScreen()),
                   ),
                   StatCard(
                     title: 'Vues totales',
-                    value: '156',
+                    value: '$_totalViews',
                     icon: Icons.visibility_outlined,
                     iconColor: const Color(0xFF8B5CF6),
-                    miniChart: '+23 cette semaine',
+                    miniChart: 'Sur vos offres',
+                    onTap: () => _openStatScreen(const EmployerOfferViewsScreen()),
                   ),
                 ],
               ),
@@ -623,196 +724,90 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     );
   }
 
-  Widget _buildPostedJobsSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmallScreen = _isSmallScreen(context);
-        final iconSize = isSmallScreen ? 24.0 : 28.0;
-        final iconContainerSize = isSmallScreen ? 48.0 : 56.0;
-        final titleFontSize = isSmallScreen ? 14.0 : 16.0;
-        final infoFontSize = isSmallScreen ? 11.0 : 13.0;
-        final badgeFontSize = isSmallScreen ? 10.0 : 12.0;
+  /// Ouvre l'écran de détail derrière une carte du "Tableau de bord", puis
+  /// recharge toutes les données au retour (les compteurs peuvent avoir
+  /// changé — offre supprimée, candidature lue...).
+  Future<void> _openStatScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (!mounted) return;
+    _reloadAll();
+  }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Mes offres d\'emploi',
-                    style: AppTypography.sectionTitle,
+  Future<void> _openOfferApplicants(JobOffer offer) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OfferApplicantsScreen(offer: offer)),
+    );
+    _reloadAll();
+  }
+
+  Future<void> _openAllOffers() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmployerOffersScreen()),
+    );
+    _reloadAll();
+  }
+
+  Widget _buildPostedJobsSection() {
+    final preview = _postedOffers.take(_dashboardOffersPreview).toList();
+    final hasMore = _postedOffers.length > _dashboardOffersPreview;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Mes offres d\'emploi', style: _colors.sectionTitle),
+              if (_postedOffers.isNotEmpty)
+                TextButton(
+                  onPressed: _openAllOffers,
+                  child: Text(
+                    hasMore ? 'Voir tout (${_postedOffers.length})' : 'Voir tout',
+                    style: AppTypography.secondaryButton.copyWith(fontSize: 13),
                   ),
-                  TextButton(
-                    onPressed: () {},
-                    child: Text(
-                      'Voir tout',
-                      style: AppTypography.secondaryButton.copyWith(
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (_loadingOffers)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_postedOffers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: Text(
+              "Vous n'avez publié aucune offre pour le moment.",
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: _colors.textTertiary,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (!_loadingOffers && _postedOffers.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.safeAreaHorizontal,
-                ),
-                child: Text(
-                  "Vous n'avez publié aucune offre pour le moment.",
-                  style: AppTypography.interRegular.copyWith(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _postedOffers.length,
-                itemBuilder: (context, index) {
-                  final offer = _postedOffers[index];
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: AppSpacing.md,
-                      left: AppSpacing.safeAreaHorizontal,
-                      right: AppSpacing.safeAreaHorizontal,
-                    ),
-                    child: Container(
-                      padding: EdgeInsets.all(_getCardPadding(context)),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: AppRadius.cardRadius,
-                        boxShadow: AppShadows.cardShadow,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: iconContainerSize,
-                            height: iconContainerSize,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [AppColors.primaryLightest, AppColors.primaryLighter],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(iconContainerSize * 0.28),
-                            ),
-                            child: Icon(
-                              Icons.work_outline_rounded,
-                              color: AppColors.primary,
-                              size: iconSize,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  offer.title,
-                                  style: AppTypography.jobTitle.copyWith(
-                                    fontSize: titleFontSize,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: AppSpacing.xs),
-                                Wrap(
-                                  spacing: AppSpacing.sm,
-                                  runSpacing: 4,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.location_on_outlined,
-                                          size: isSmallScreen ? 12 : 14,
-                                          color: AppColors.textTertiary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          offer.location,
-                                          style: AppTypography.jobInfo.copyWith(
-                                            fontSize: infoFontSize,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.work_outline_rounded,
-                                          size: isSmallScreen ? 12 : 14,
-                                          color: AppColors.textTertiary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          offer.contractType,
-                                          style: AppTypography.jobInfo.copyWith(
-                                            fontSize: infoFontSize,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Flexible(
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isSmallScreen ? AppSpacing.sm : AppSpacing.md,
-                                vertical: AppSpacing.sm,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.schedule_rounded,
-                                    size: isSmallScreen ? 14 : 16,
-                                    color: AppColors.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Flexible(
-                                    child: Text(
-                                      offer.publishedLabel,
-                                      style: AppTypography.interSemiBold.copyWith(
-                                        fontSize: badgeFontSize,
-                                        color: AppColors.primary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-          ],
-        );
-      },
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            itemCount: preview.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+            itemBuilder: (context, index) {
+              final offer = preview[index];
+              return EmployerOfferCard(
+                offer: offer,
+                applicantCount: _applicantCountsByOffer[offer.id] ?? 0,
+                onTap: () => _openOfferApplicants(offer),
+              );
+            },
+          ),
+      ],
     );
   }
 
@@ -825,262 +820,302 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     return const Color(0xFFF59E0B);
   }
 
-  Widget _buildSuggestedCandidatesSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmallScreen = _isSmallScreen(context);
-        final avatarSize = isSmallScreen ? 40.0 : 48.0;
-        final avatarFontSize = isSmallScreen ? 16.0 : 20.0;
-        final nameFontSize = isSmallScreen ? 13.0 : 15.0;
-        final positionFontSize = isSmallScreen ? 11.0 : 13.0;
-        final badgeFontSize = isSmallScreen ? 10.0 : 12.0;
-        final iconSize = isSmallScreen ? 12.0 : 14.0;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Candidats suggérés',
-                    style: AppTypography.sectionTitle,
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CandidateSearchScreen(),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'Voir tout',
-                      style: AppTypography.secondaryButton.copyWith(
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: Text(
-                'Profils qui correspondent le mieux à vos offres publiées',
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 12,
-                  color: AppColors.textTertiary,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (!_loadingSuggestedCandidates && _suggestedCandidates.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.safeAreaHorizontal,
-                ),
-                child: Text(
-                  _postedOffers.isEmpty
-                      ? 'Publiez une offre pour voir apparaître des candidats suggérés.'
-                      : 'Aucun candidat inscrit ne correspond encore à vos offres.',
-                  style: AppTypography.interRegular.copyWith(
-                    fontSize: 13,
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _suggestedCandidates.length,
-              itemBuilder: (context, index) {
-                final candidate = _suggestedCandidates[index];
-                final matchPercent = candidate['matchPercent'] as int;
-                final matchColor = _matchColor(matchPercent);
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: AppSpacing.md,
-                    left: AppSpacing.safeAreaHorizontal,
-                    right: AppSpacing.safeAreaHorizontal,
-                  ),
-                  child: Container(
-                    padding: EdgeInsets.all(_getCardPadding(context)),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: AppRadius.cardRadius,
-                      boxShadow: AppShadows.cardShadow,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: avatarSize,
-                          height: avatarSize,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppColors.primaryLightest, AppColors.primaryLighter],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(avatarSize / 2),
-                          ),
-                          child: Center(
-                            child: Text(
-                              getCandidateName(candidate).isNotEmpty
-                                  ? getCandidateName(candidate)[0]
-                                  : '?',
-                              style: AppTypography.poppinsSemiBold.copyWith(
-                                color: AppColors.primary,
-                                fontSize: avatarFontSize,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                getCandidateName(candidate),
-                                style: AppTypography.interviewCompany.copyWith(
-                                  fontSize: nameFontSize,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.work_outline_rounded,
-                                    size: iconSize,
-                                    color: AppColors.textTertiary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      'Pour "${candidate['matchedJob']}" · ${candidate['experience']}',
-                                      style: AppTypography.companyName.copyWith(
-                                        fontSize: positionFontSize,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.location_on_outlined,
-                                    size: iconSize,
-                                    color: AppColors.textTertiary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      candidate['location'] as String,
-                                      style: AppTypography.companyName.copyWith(
-                                        fontSize: positionFontSize,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Flexible(
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isSmallScreen ? AppSpacing.sm : AppSpacing.md,
-                              vertical: AppSpacing.sm,
-                            ),
-                            decoration: BoxDecoration(
-                              color: matchColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.bolt_rounded,
-                                  size: isSmallScreen ? 14 : 16,
-                                  color: matchColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    '$matchPercent%',
-                                    style: AppTypography.interSemiBold.copyWith(
-                                      fontSize: badgeFontSize,
-                                      color: matchColor,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-      },
+  Future<void> _openCandidateProfile(CandidateSearchResult candidate) async {
+    final viewerId = _authService.currentUser?.id;
+    if (viewerId != null && viewerId.isNotEmpty) {
+      await _accountSearchRepository.recordProfileView(
+        profileUserId: candidate.userId,
+        viewerUserId: viewerId,
+      );
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CandidateProfileViewScreen(candidate: candidate)),
     );
   }
 
-  Widget _buildInterviewsSection() {
+  Widget _buildSuggestedCandidatesSection() {
+    final preview = _suggestedCandidates.take(6).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.safeAreaHorizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Candidats suggérés', style: _colors.sectionTitle),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CandidateSearchScreen()),
+                  );
+                },
+                child: Text(
+                  'Voir tout',
+                  style: AppTypography.secondaryButton.copyWith(fontSize: 13),
+                ),
+              ),
+            ],
           ),
-          child: Text('Entretiens du jour', style: AppTypography.sectionTitle),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+          child: Text(
+            _postedOffers.isEmpty
+                ? 'Tous les candidats inscrits — publiez une offre pour les voir classés par pertinence'
+                : 'Tous les candidats inscrits, les plus proches de vos offres en tête',
+            style: AppTypography.interRegular.copyWith(
+              fontSize: 12,
+              color: _colors.textTertiary,
+            ),
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _interviews.length,
-          itemBuilder: (context, index) {
-            final interview = _interviews[index];
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: AppSpacing.md,
-                left: AppSpacing.safeAreaHorizontal,
-                right: AppSpacing.safeAreaHorizontal,
+        if (_loadingSuggestedCandidates)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_suggestedCandidates.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: Text(
+              "Aucun candidat inscrit pour le moment.",
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 13,
+                color: _colors.textTertiary,
               ),
-              child: InterviewCard(
-                company: interview['candidate'] as String,
-                date: interview['date'] as String,
-                time: interview['time'] as String,
-                location: interview['location'] as String,
-                onViewDetails: () {},
-              ),
-            );
-          },
-        ),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            itemCount: preview.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+            itemBuilder: (context, index) => _buildSuggestedCandidateCard(preview[index]),
+          ),
       ],
+    );
+  }
+
+  Widget _buildSuggestedCandidateCard(_SuggestedCandidate suggestion) {
+    final candidate = suggestion.candidate;
+    final name = candidate.fullName.isNotEmpty ? candidate.fullName : 'Candidat';
+    final position = candidate.position?.trim() ?? '';
+    final location = candidate.localisation?.trim() ?? '';
+    final matchPercent = suggestion.matchPercent;
+    final subtitle = matchPercent != null
+        ? 'Pour "${suggestion.matchedJob}"'
+        : (position.isNotEmpty ? position : 'Chercheur d\'emploi');
+
+    return InkWell(
+      onTap: () => _openCandidateProfile(candidate),
+      borderRadius: AppRadius.cardRadius,
+      child: Container(
+        padding: EdgeInsets.all(_getCardPadding(context)),
+        decoration: BoxDecoration(
+          color: _colors.background,
+          borderRadius: AppRadius.cardRadius,
+          boxShadow: AppShadows.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primaryLightest, AppColors.primaryLighter],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                image: candidate.photo != null
+                    ? DecorationImage(image: MemoryImage(candidate.photo!), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: candidate.photo == null
+                  ? Center(
+                      child: Text(
+                        name[0].toUpperCase(),
+                        style: AppTypography.poppinsSemiBold.copyWith(
+                          color: AppColors.primary,
+                          fontSize: 18,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: AppTypography.interviewCompany
+                        .copyWith(fontSize: 15, color: _colors.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: _colors.companyName.copyWith(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (location.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 13, color: _colors.textTertiary),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            location,
+                            style: _colors.jobInfo.copyWith(fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (matchPercent != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _matchColor(matchPercent).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 14, color: _matchColor(matchPercent)),
+                    const SizedBox(width: 2),
+                    Text(
+                      '$matchPercent%',
+                      style: AppTypography.interSemiBold.copyWith(
+                        fontSize: 11,
+                        color: _matchColor(matchPercent),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else
+              Icon(Icons.chevron_right_rounded, color: _colors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterviewsSection() {
+    // "Entretiens du jour" si au moins un entretien aujourd'hui ; sinon on
+    // bascule sur "Mes prochains entretiens" (les 3 plus proches à venir).
+    final showToday = _todayInterviews.isNotEmpty;
+    final list = showToday
+        ? _todayInterviews
+        : _upcomingInterviews.take(3).toList();
+    final title = showToday ? 'Entretiens du jour' : 'Mes prochains entretiens';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+          child: Text(title, style: _colors.sectionTitle),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (_loadingInterviews)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (list.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: Text(
+              "Aucun entretien planifié. Ouvrez une candidature reçue pour en planifier un.",
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: _colors.textTertiary,
+              ),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              final interview = list[index];
+              return Padding(
+                padding: const EdgeInsets.only(
+                  bottom: AppSpacing.md,
+                  left: AppSpacing.safeAreaHorizontal,
+                  right: AppSpacing.safeAreaHorizontal,
+                ),
+                child: InterviewCard(
+                  company: interview.candidateName.trim().isNotEmpty
+                      ? interview.candidateName.trim()
+                      : 'Candidat',
+                  date: interview.dateLabel,
+                  time: interview.time,
+                  location: interview.offerTitle.trim().isNotEmpty
+                      ? '${interview.locationLabel} · ${interview.offerTitle}'
+                      : interview.locationLabel,
+                  onViewDetails: () => _openInterviewCandidate(interview),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  /// "Voir" sur une carte d'entretien : ouvre le détail de la candidature
+  /// liée (profil du candidat + offre + entretien planifié) si elle existe
+  /// encore, sinon informe que la candidature a été retirée.
+  Future<void> _openInterviewCandidate(Interview interview) async {
+    final applicationId = interview.jobApplicationId;
+    if (applicationId == null) {
+      _showInterviewGone();
+      return;
+    }
+    final applications =
+        await _jobOfferRepository.fetchApplicationsForOffer(interview.jobOfferId ?? -1);
+    final match = applications.where((a) => a.applicationId == applicationId).toList();
+    if (!mounted) return;
+    if (match.isEmpty) {
+      _showInterviewGone();
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CandidateApplicationDetailScreen(notification: match.first),
+      ),
+    );
+    _reloadAll();
+  }
+
+  void _showInterviewGone() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('La candidature liée à cet entretien a été retirée.')),
     );
   }
 
@@ -1095,4 +1130,20 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       ),
     );
   }
+}
+
+/// Un candidat inscrit proposé dans "Candidats suggérés" — le profil réel
+/// ([candidate]) plus, quand il recoupe une offre publiée par le recruteur,
+/// le taux de correspondance ([matchPercent], `null` sinon) et l'intitulé
+/// de l'offre la mieux matchée ([matchedJob]).
+class _SuggestedCandidate {
+  const _SuggestedCandidate({
+    required this.candidate,
+    this.matchPercent,
+    this.matchedJob,
+  });
+
+  final CandidateSearchResult candidate;
+  final int? matchPercent;
+  final String? matchedJob;
 }

@@ -3,6 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../data/account_search_repository.dart';
@@ -23,21 +24,22 @@ class CompanyProfileViewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildBannerAndLogo(context),
+              _buildBannerAndLogo(context, colors),
               const SizedBox(height: AppSpacing.sectionSpacing),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.safeAreaHorizontal,
                 ),
-                child: _buildIdentitySection(),
+                child: _buildIdentitySection(colors),
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
               Padding(
@@ -48,13 +50,15 @@ class CompanyProfileViewScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSectionCard(
+                      colors,
                       title: 'À propos de l\'entreprise',
-                      child: _buildAbout(),
+                      child: _buildAbout(colors),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'Coordonnées',
-                      child: _buildContactInfo(),
+                      child: _buildContactInfo(colors),
                     ),
                     const SizedBox(height: AppSpacing.sectionSpacing),
                   ],
@@ -67,7 +71,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBannerAndLogo(BuildContext context) {
+  Widget _buildBannerAndLogo(BuildContext context, AppSurfaceColors colors) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -75,7 +79,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
         Container(
           height: _bannerHeight,
           width: double.infinity,
-          decoration: const BoxDecoration(color: Color(0xFFE4E6EB)),
+          decoration: BoxDecoration(color: colors.divider),
         ),
         Positioned(
           top: AppSpacing.sm,
@@ -117,7 +121,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildIdentitySection() {
+  Widget _buildIdentitySection(AppSurfaceColors colors) {
     final companyName = company.companyName.trim().isNotEmpty ? company.companyName.trim() : 'Entreprise';
     final contactName = company.contactName?.trim() ?? '';
     final location = company.localisation?.trim() ?? '';
@@ -127,31 +131,31 @@ class CompanyProfileViewScreen extends StatelessWidget {
       children: [
         Text(
           companyName,
-          style: AppTypography.dashboardTitle.copyWith(fontSize: 20),
+          style: colors.dashboardTitle.copyWith(fontSize: 20),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           contactName.isNotEmpty ? 'Géré par $contactName' : 'Espace recruteur',
           style: AppTypography.interRegular.copyWith(
             fontSize: 14,
-            color: const Color(0xFF6B7280),
+            color: colors.textSecondary,
           ),
         ),
         if (location.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.location_on_outlined,
                 size: 16,
-                color: Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 location,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 13,
-                  color: const Color(0xFF9CA3AF),
+                  color: colors.textTertiary,
                 ),
               ),
             ],
@@ -161,40 +165,40 @@ class CompanyProfileViewScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAbout() {
+  Widget _buildAbout(AppSurfaceColors colors) {
     final description = company.description?.trim() ?? '';
     return Text(
       description.isNotEmpty ? description : "Cette entreprise n'a pas encore ajouté de description.",
       style: AppTypography.interRegular.copyWith(
         fontSize: 14,
         fontStyle: description.isNotEmpty ? FontStyle.normal : FontStyle.italic,
-        color: const Color(0xFF6B7280),
+        color: colors.textSecondary,
         height: 1.5,
       ),
     );
   }
 
-  Widget _buildContactInfo() {
+  Widget _buildContactInfo(AppSurfaceColors colors) {
     final telephone = company.telephone?.trim() ?? '';
     final location = company.localisation?.trim() ?? '';
 
     if (telephone.isEmpty && location.isEmpty) {
-      return _buildEmptyPlaceholder("Aucune coordonnée renseignée pour le moment.");
+      return _buildEmptyPlaceholder(colors, "Aucune coordonnée renseignée pour le moment.");
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (telephone.isNotEmpty) ...[
-          _buildContactRow(Icons.call_rounded, telephone),
+          _buildContactRow(colors, Icons.call_rounded, telephone),
           if (location.isNotEmpty) const SizedBox(height: AppSpacing.sm),
         ],
-        if (location.isNotEmpty) _buildContactRow(Icons.location_on_outlined, location),
+        if (location.isNotEmpty) _buildContactRow(colors, Icons.location_on_outlined, location),
       ],
     );
   }
 
-  Widget _buildContactRow(IconData icon, String value) {
+  Widget _buildContactRow(AppSurfaceColors colors, IconData icon, String value) {
     return Row(
       children: [
         Icon(icon, size: 18, color: OnboardingColors.violet),
@@ -204,7 +208,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
             value,
             style: AppTypography.interRegular.copyWith(
               fontSize: 14,
-              color: AppColors.textPrimary,
+              color: colors.textPrimary,
             ),
           ),
         ),
@@ -212,19 +216,23 @@ class CompanyProfileViewScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionCard({required String title, required Widget child}) {
+  Widget _buildSectionCard(
+    AppSurfaceColors colors, {
+    required String title,
+    required Widget child,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTypography.sectionTitle),
+          Text(title, style: colors.sectionTitle),
           const SizedBox(height: AppSpacing.md),
           child,
         ],
@@ -232,13 +240,13 @@ class CompanyProfileViewScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyPlaceholder(String message) {
+  Widget _buildEmptyPlaceholder(AppSurfaceColors colors, String message) {
     return Text(
       message,
       style: AppTypography.interRegular.copyWith(
         fontSize: 13,
         fontStyle: FontStyle.italic,
-        color: const Color(0xFF9CA3AF),
+        color: colors.textTertiary,
       ),
     );
   }

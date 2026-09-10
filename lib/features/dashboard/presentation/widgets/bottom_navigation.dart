@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/widgets/notification_badge.dart';
@@ -77,14 +78,15 @@ class BottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final colors = AppSurfaceColors.of(context);
         final iconSize = _getIconSize(context);
         final labelFontSize = _getLabelFontSize(context);
         final itemHorizontalPadding = _getItemHorizontalPadding(context);
         final itemVerticalPadding = _getItemVerticalPadding(context);
-        
+
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: colors.background,
             boxShadow: AppShadows.bottomNavShadow,
           ),
           child: SafeArea(
@@ -97,6 +99,7 @@ class BottomNavigation extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildNavItem(
+                    colors,
                     icon: Icons.home_rounded,
                     label: 'Accueil',
                     index: 0,
@@ -107,6 +110,7 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
+                    colors,
                     icon: secondItemIcon,
                     label: secondItemLabel,
                     index: 1,
@@ -117,6 +121,7 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
+                    colors,
                     icon: Icons.post_add_rounded,
                     label: 'Publier',
                     index: 2,
@@ -127,6 +132,7 @@ class BottomNavigation extends StatelessWidget {
                     itemVerticalPadding: itemVerticalPadding,
                   ),
                   _buildNavItem(
+                    colors,
                     icon: Icons.notifications_rounded,
                     label: 'Notifications',
                     index: 3,
@@ -138,6 +144,7 @@ class BottomNavigation extends StatelessWidget {
                     badgeCount: notificationCount,
                   ),
                   _buildNavItem(
+                    colors,
                     icon: Icons.person_rounded,
                     label: 'Profil',
                     index: 4,
@@ -156,7 +163,8 @@ class BottomNavigation extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem({
+  Widget _buildNavItem(
+    AppSurfaceColors colors, {
     required IconData icon,
     required String label,
     required int index,
@@ -188,7 +196,7 @@ class BottomNavigation extends StatelessWidget {
               count: badgeCount,
               child: Icon(
                 icon,
-                color: isActive ? (accentColor ?? AppColors.primary) : const Color(0xFF9CA3AF),
+                color: isActive ? (accentColor ?? AppColors.primary) : colors.textTertiary,
                 size: iconSize,
               ),
             ),
@@ -197,7 +205,7 @@ class BottomNavigation extends StatelessWidget {
               label,
               style: isActive
                   ? AppTypography.navLabelActive.copyWith(fontSize: labelFontSize)
-                  : AppTypography.navLabel.copyWith(fontSize: labelFontSize),
+                  : colors.navLabel.copyWith(fontSize: labelFontSize),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
@@ -11,6 +12,7 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/light_text_field.dart';
 import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
+import '../../data/account_search_repository.dart';
 import '../../data/job_offer_repository.dart';
 import 'edit_job_seeker_profile_screen.dart';
 
@@ -29,6 +31,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
 
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+  final AccountSearchRepository _searchRepository = const AccountSearchRepository();
   final ImagePicker _picker = ImagePicker();
 
   /// Nombre réel de candidatures envoyées (`job_applications`) — `null`
@@ -36,10 +39,16 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   /// requête.
   int? _applicationsCount;
 
+  /// Nombre réel de recruteurs distincts ayant consulté le profil
+  /// (`job_seeker_profile_views`, enregistré à l'ouverture de
+  /// `CandidateProfileViewScreen`) — `null` tant que non chargé.
+  int? _profileViewsCount;
+
   @override
   void initState() {
     super.initState();
     _loadApplicationsCount();
+    _loadProfileViewsCount();
   }
 
   Future<void> _loadApplicationsCount() async {
@@ -48,6 +57,14 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     final count = await _jobOfferRepository.countApplicationsForJobSeeker(userId);
     if (!mounted) return;
     setState(() => _applicationsCount = count);
+  }
+
+  Future<void> _loadProfileViewsCount() async {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return;
+    final count = await _searchRepository.countProfileViews(userId);
+    if (!mounted) return;
+    setState(() => _profileViewsCount = count);
   }
 
   /// Photo de profil affichée : toujours celle de l'utilisateur connecté
@@ -137,21 +154,22 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildBannerAndAvatar(),
+              _buildBannerAndAvatar(colors),
               const SizedBox(height: 7),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.safeAreaHorizontal,
                 ),
-                child: _buildIdentitySection(),
+                child: _buildIdentitySection(colors),
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
               Padding(
@@ -161,22 +179,24 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildCompletionCard(),
+                    _buildCompletionCard(colors),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'À propos',
                       child: Text(
                         _about ?? "Vous n'avez pas encore ajouté de présentation.",
                         style: AppTypography.interRegular.copyWith(
                           fontSize: 14,
                           fontStyle: _about == null ? FontStyle.italic : FontStyle.normal,
-                          color: const Color(0xFF6B7280),
+                          color: colors.textSecondary,
                           height: 1.5,
                         ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'Expérience',
                       trailing: IconButton(
                         onPressed: _showAddExperienceSheet,
@@ -190,30 +210,35 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                       ),
                       child: _experiences.isEmpty
                           ? _buildEmptySectionPlaceholder(
+                              colors,
                               "Aucune expérience renseignée pour le moment.",
                             )
                           : Column(
                               children: [
                                 for (int i = 0; i < _experiences.length; i++) ...[
-                                  if (i > 0) const Divider(height: 24, color: Color(0xFFF0F0F3)),
-                                  _buildExperienceRow(i, _experiences[i]),
+                                  if (i > 0) Divider(height: 24, color: colors.divider),
+                                  _buildExperienceRow(colors, i, _experiences[i]),
                                 ],
                               ],
                             ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'Formation',
                       // Idem : aucune formation collectée à l'inscription.
                       child: _buildEmptySectionPlaceholder(
+                        colors,
                         "Aucune formation renseignée pour le moment.",
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'Compétences',
                       child: _skills.isEmpty
                           ? _buildEmptySectionPlaceholder(
+                              colors,
                               "Vous n'avez pas encore ajouté de compétence.",
                             )
                           : Wrap(
@@ -226,6 +251,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _buildSectionCard(
+                      colors,
                       title: 'CV',
                       child: _buildCvContent(),
                     ),
@@ -240,7 +266,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     );
   }
 
-  Widget _buildBannerAndAvatar() {
+  Widget _buildBannerAndAvatar(AppSurfaceColors colors) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -254,10 +280,10 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
         Container(
           height: _bannerHeight,
           width: double.infinity,
-          // Pas de photo de couverture choisie : fond gris uni façon
-          // Facebook plutôt que le dégradé violet de la marque.
+          // Pas de photo de couverture choisie : fond neutre plutôt que le
+          // dégradé violet de la marque.
           decoration: BoxDecoration(
-            color: _coverImageBytes == null ? const Color(0xFFE4E6EB) : null,
+            color: _coverImageBytes == null ? colors.divider : null,
             image: _coverImageBytes != null
                 ? DecorationImage(
                     image: MemoryImage(_coverImageBytes!),
@@ -338,9 +364,10 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   }
 
   void _showProfilePhotoOptions() {
+    final colors = AppSurfaceColors.of(context);
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -354,21 +381,21 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: colors.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.visibility_outlined,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
                 title: Text(
                   'Voir la photo de profil',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: colors.textPrimary,
                   ),
                 ),
                 onTap: () {
@@ -377,15 +404,15 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.camera_alt_outlined,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
                 title: Text(
                   'Prendre une photo',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: colors.textPrimary,
                   ),
                 ),
                 onTap: () {
@@ -394,15 +421,15 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.photo_library_outlined,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
                 title: Text(
                   'Choisir depuis la galerie',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: colors.textPrimary,
                   ),
                 ),
                 onTap: () {
@@ -418,7 +445,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     );
   }
 
-  Widget _buildIdentitySection() {
+  Widget _buildIdentitySection(AppSurfaceColors colors) {
     final user = _authService.currentUser;
     final fullName = user != null ? '${user.firstName} ${user.lastName}' : 'Marie Martin';
     final position = user?.position?.trim();
@@ -436,7 +463,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
             Expanded(
               child: Text(
                 fullName,
-                style: AppTypography.dashboardTitle.copyWith(fontSize: 20),
+                style: colors.dashboardTitle.copyWith(fontSize: 20),
               ),
             ),
             IconButton(
@@ -454,37 +481,37 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
           subtitle,
           style: AppTypography.interRegular.copyWith(
             fontSize: 14,
-            color: const Color(0xFF6B7280),
+            color: colors.textSecondary,
           ),
         ),
         if (location != null && location.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.location_on_outlined,
                 size: 16,
-                color: Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 location,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 13,
-                  color: const Color(0xFF9CA3AF),
+                  color: colors.textTertiary,
                 ),
               ),
             ],
           ),
         ],
         const SizedBox(height: AppSpacing.md),
-        // "vues du profil" reste simulé (aucun suivi des vues n'existe) ;
-        // "candidatures envoyées" est réel (`job_applications`, voir
-        // `_loadApplicationsCount`).
+        // "vues du profil" est réel (`job_seeker_profile_views`, voir
+        // `_loadProfileViewsCount`) ; "candidatures envoyées" aussi
+        // (`job_applications`, voir `_loadApplicationsCount`).
         Row(
           children: [
             Text(
-              '128 vues du profil',
+              '${_profileViewsCount ?? 0} vues du profil',
               style: AppTypography.interRegular.copyWith(
                 fontSize: 13,
                 color: OnboardingColors.violet,
@@ -516,7 +543,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     return AppColors.success;
   }
 
-  Widget _buildCompletionCard() {
+  Widget _buildCompletionCard(AppSurfaceColors colors) {
     final user = _authService.currentUser;
     final ratio = (user?.profileCompletion ?? 0.0).clamp(0.0, 1.0);
     final percent = (ratio * 100).round();
@@ -528,7 +555,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.cardShadow,
       ),
@@ -540,7 +567,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
             children: [
               Text(
                 'Profil complété',
-                style: AppTypography.sectionTitle,
+                style: colors.sectionTitle,
               ),
               Text(
                 '$percent%',
@@ -568,7 +595,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
               'Votre profil est complet, bravo !',
               style: AppTypography.interRegular.copyWith(
                 fontSize: 12,
-                color: const Color(0xFF9CA3AF),
+                color: colors.textTertiary,
               ),
             )
           else
@@ -582,7 +609,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                       '• $suggestion',
                       style: AppTypography.interRegular.copyWith(
                         fontSize: 12,
-                        color: const Color(0xFF9CA3AF),
+                        color: colors.textTertiary,
                       ),
                     ),
                   ),
@@ -593,12 +620,17 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     );
   }
 
-  Widget _buildSectionCard({required String title, required Widget child, Widget? trailing}) {
+  Widget _buildSectionCard(
+    AppSurfaceColors colors, {
+    required String title,
+    required Widget child,
+    Widget? trailing,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: colors.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.cardShadow,
       ),
@@ -608,7 +640,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: AppTypography.sectionTitle),
+              Text(title, style: colors.sectionTitle),
               if (trailing != null) trailing,
             ],
           ),
@@ -622,18 +654,18 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   /// Texte d'état vide (italique, gris) utilisé pour "Expérience"/
   /// "Formation"/"Compétences" quand l'inscription n'a fourni aucune
   /// donnée réelle pour la section.
-  Widget _buildEmptySectionPlaceholder(String message) {
+  Widget _buildEmptySectionPlaceholder(AppSurfaceColors colors, String message) {
     return Text(
       message,
       style: AppTypography.interRegular.copyWith(
         fontSize: 13,
         fontStyle: FontStyle.italic,
-        color: const Color(0xFF9CA3AF),
+        color: colors.textTertiary,
       ),
     );
   }
 
-  Widget _buildExperienceRow(int index, JobExperience experience) {
+  Widget _buildExperienceRow(AppSurfaceColors colors, int index, JobExperience experience) {
     final period = experience.enCours
         ? '${experience.dateDebut} - Aujourd\'hui'
         : (experience.dateFin != null && experience.dateFin!.isNotEmpty)
@@ -663,7 +695,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -671,7 +703,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 experience.entreprise,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 13,
-                  color: const Color(0xFF6B7280),
+                  color: colors.textSecondary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -679,7 +711,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 period,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 12,
-                  color: const Color(0xFF9CA3AF),
+                  color: colors.textTertiary,
                 ),
               ),
               if (experience.description != null && experience.description!.trim().isNotEmpty) ...[
@@ -688,7 +720,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                   experience.description!,
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 13,
-                    color: const Color(0xFF6B7280),
+                    color: colors.textSecondary,
                     height: 1.4,
                   ),
                 ),
@@ -714,7 +746,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: AppSurfaceColors.of(context).background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -766,7 +798,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
             style: AppTypography.interRegular.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppSurfaceColors.of(context).textPrimary,
             ),
           ),
         ),
@@ -875,6 +907,7 @@ class _AddExperienceSheetState extends State<_AddExperienceSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.safeAreaHorizontal,
@@ -893,12 +926,12 @@ class _AddExperienceSheetState extends State<_AddExperienceSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: colors.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
             ),
-            Text('Ajouter une expérience', style: AppTypography.dashboardTitle.copyWith(fontSize: 18)),
+            Text('Ajouter une expérience', style: colors.dashboardTitle.copyWith(fontSize: 18)),
             const SizedBox(height: AppSpacing.md),
             LightTextField(
               label: 'Poste',
@@ -943,7 +976,7 @@ class _AddExperienceSheetState extends State<_AddExperienceSheet> {
                   const SizedBox(width: 10),
                   Text(
                     'Poste actuel',
-                    style: AppTypography.interRegular.copyWith(fontSize: 14, color: AppColors.textPrimary),
+                    style: AppTypography.interRegular.copyWith(fontSize: 14, color: colors.textPrimary),
                   ),
                 ],
               ),

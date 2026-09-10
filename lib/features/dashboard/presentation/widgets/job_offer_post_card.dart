@@ -6,16 +6,18 @@ import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// Carte "Recommandées pour vous" façon publication de réseau social (voir
-/// `pub2.png`) : compte recruteur + heure de publication en en-tête, menu
-/// "..." (Enregistrer publication) et "X" (masquer cette offre de son
-/// propre fil, `JobOfferRepository.deleteNotification` sous le capot),
-/// description dépliable ("Voir plus"/"Voir moins"), affiche optionnelle,
-/// puis le bouton "Postuler" existant — tout est réellement persisté, rien
-/// n'est simulé ici.
+/// `pub2.png`) : compte recruteur + heure de publication en en-tête, cœur
+/// "favori" (vide/gris → plein/rouge, `job_offer_saves` via `onToggleSave`)
+/// et "X" (masquer cette offre de son propre fil,
+/// `JobOfferRepository.deleteNotification` sous le capot), description
+/// dépliable ("Voir plus"/"Voir moins"), affiche optionnelle, puis le
+/// bouton "Postuler" existant — tout est réellement persisté, rien n'est
+/// simulé ici.
 class JobOfferPostCard extends StatefulWidget {
   const JobOfferPostCard({
     super.key,
@@ -78,29 +80,33 @@ class JobOfferPostCard extends StatefulWidget {
 }
 
 class _JobOfferPostCardState extends State<JobOfferPostCard> {
+  /// Rouge du cœur "favori" une fois l'offre enregistrée.
+  static const Color _favoriteColor = Color(0xFFEF4444);
+
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return InkWell(
       onTap: widget.onTap,
       borderRadius: AppRadius.cardRadius,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.cardPadding),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: colors.background,
           borderRadius: AppRadius.cardRadius,
           boxShadow: AppShadows.cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(colors),
             const SizedBox(height: AppSpacing.md),
             Text(
               widget.jobTitle,
-              style: AppTypography.jobTitle,
+              style: colors.jobTitle,
             ),
             const SizedBox(height: AppSpacing.xs),
-            _buildInfoRow(),
+            _buildInfoRow(colors),
             const SizedBox(height: AppSpacing.md),
             _ExpandableDescription(text: widget.description),
             if (widget.posterImage != null) ...[
@@ -115,14 +121,14 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
-            _buildApplyButton(),
+            _buildApplyButton(colors),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppSurfaceColors colors) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -156,7 +162,7 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
                 widget.companyName,
                 style: AppTypography.companyName.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -166,41 +172,33 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
                 children: [
                   Text(
                     widget.publishedLabel,
-                    style: AppTypography.jobInfo.copyWith(fontSize: 11),
+                    style: colors.jobInfo.copyWith(fontSize: 11),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.public_rounded, size: 11, color: Color(0xFF9CA3AF)),
+                  Icon(Icons.public_rounded, size: 11, color: colors.textTertiary),
                 ],
               ),
             ],
           ),
         ),
-        PopupMenuButton<String>(
+        // Cœur "favori" : vide/gris tant que l'offre n'est pas enregistrée,
+        // plein et rouge dès qu'elle l'est (`job_offer_saves` via
+        // `onToggleSave`). Remplace l'ancien menu "..." qui ne servait qu'à
+        // ça.
+        IconButton(
+          onPressed: widget.onToggleSave,
+          icon: Icon(
+            widget.isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: widget.isSaved ? _favoriteColor : colors.textTertiary,
+            size: 22,
+          ),
           padding: EdgeInsets.zero,
-          icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF9CA3AF)),
-          onSelected: (_) => widget.onToggleSave(),
-          itemBuilder: (context) => [
-            PopupMenuItem<String>(
-              value: 'save',
-              child: Row(
-                children: [
-                  Icon(
-                    widget.isSaved ? Icons.bookmark_remove_outlined : Icons.bookmark_add_outlined,
-                    size: 18,
-                    color: OnboardingColors.violet,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    widget.isSaved ? 'Retirer des enregistrements' : 'Enregistrer publication',
-                  ),
-                ],
-              ),
-            ),
-          ],
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: widget.isSaved ? 'Retirer des favoris' : 'Ajouter aux favoris',
         ),
         IconButton(
           onPressed: widget.onDismiss,
-          icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF), size: 20),
+          icon: Icon(Icons.close_rounded, color: colors.textTertiary, size: 20),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
         ),
@@ -208,39 +206,40 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
     );
   }
 
-  Widget _buildInfoRow() {
+  Widget _buildInfoRow(AppSurfaceColors colors) {
     return Wrap(
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.xs,
       children: [
-        if (widget.location.isNotEmpty) _buildInfoItem(Icons.location_on_outlined, widget.location),
-        if (widget.salary.isNotEmpty) _buildInfoItem(Icons.attach_money_rounded, widget.salary),
+        if (widget.location.isNotEmpty)
+          _buildInfoItem(colors, Icons.location_on_outlined, widget.location),
+        if (widget.salary.isNotEmpty)
+          _buildInfoItem(colors, Icons.attach_money_rounded, widget.salary),
         if (widget.contractType.isNotEmpty)
-          _buildInfoItem(Icons.work_outline_rounded, widget.contractType),
+          _buildInfoItem(colors, Icons.work_outline_rounded, widget.contractType),
       ],
     );
   }
 
-  Widget _buildInfoItem(IconData icon, String label) {
+  Widget _buildInfoItem(AppSurfaceColors colors, IconData icon, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF9CA3AF)),
+        Icon(icon, size: 16, color: colors.textTertiary),
         const SizedBox(width: AppSpacing.xs),
-        Text(label, style: AppTypography.jobInfo),
+        Text(label, style: colors.jobInfo),
       ],
     );
   }
 
-  Widget _buildApplyButton() {
+  Widget _buildApplyButton(AppSurfaceColors colors) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: widget.hasApplied ? () => _confirmWithdraw(context) : widget.onApply,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-              widget.hasApplied ? const Color(0xFFE5E7EB) : OnboardingColors.violet,
-          foregroundColor: widget.hasApplied ? const Color(0xFF6B7280) : Colors.white,
+          backgroundColor: widget.hasApplied ? colors.divider : OnboardingColors.violet,
+          foregroundColor: widget.hasApplied ? colors.textSecondary : Colors.white,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
@@ -256,7 +255,7 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
               widget.hasApplied ? 'Candidature envoyée' : 'Postuler',
               style: AppTypography.primaryButton.copyWith(
                 fontSize: 14,
-                color: widget.hasApplied ? const Color(0xFF6B7280) : Colors.white,
+                color: widget.hasApplied ? colors.textSecondary : Colors.white,
               ),
             ),
           ],
@@ -310,7 +309,7 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
 
   @override
   Widget build(BuildContext context) {
-    final style = AppTypography.cardDescription;
+    final style = AppSurfaceColors.of(context).cardDescription;
     final text = widget.text.isNotEmpty
         ? widget.text
         : 'Aucune description fournie pour cette offre.';

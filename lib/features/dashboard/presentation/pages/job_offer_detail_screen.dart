@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../data/job_offer_repository.dart';
@@ -34,6 +35,17 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
   void initState() {
     super.initState();
     _loadApplicationStatus();
+    _recordView();
+  }
+
+  /// Enregistre une vue de cette offre (au plus une par candidat, voir
+  /// `JobOfferRepository.recordOfferView`) — alimente la carte "Vues
+  /// totales" du `EmployerDashboard`. Seuls les chercheurs d'emploi
+  /// comptent : le recruteur qui consulte sa propre offre ne se compte pas.
+  Future<void> _recordView() async {
+    final user = _authService.currentUser;
+    if (user == null || user.role != 'job_seeker') return;
+    await _repository.recordOfferView(offer.id, user.id);
   }
 
   Future<void> _loadApplicationStatus() async {
@@ -126,8 +138,9 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,15 +154,15 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   Expanded(
                     child: Text(
                       "Détail de l'offre",
-                      style: AppTypography.sectionTitle,
+                      style: colors.sectionTitle,
                     ),
                   ),
                 ],
@@ -163,25 +176,25 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildCompanyHeader(),
+                    _buildCompanyHeader(colors),
                     const SizedBox(height: AppSpacing.lg),
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
                       children: [
-                        _buildInfoChip(Icons.location_on_outlined, offer.location),
-                        _buildInfoChip(Icons.attach_money_rounded, offer.salary),
-                        _buildInfoChip(Icons.work_outline_rounded, offer.contractType),
+                        _buildInfoChip(colors, Icons.location_on_outlined, offer.location),
+                        _buildInfoChip(colors, Icons.attach_money_rounded, offer.salary),
+                        _buildInfoChip(colors, Icons.work_outline_rounded, offer.contractType),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    Text('Description du poste', style: AppTypography.cardTitle),
+                    Text('Description du poste', style: colors.cardTitle),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       offer.description.isNotEmpty
                           ? offer.description
                           : 'Aucune description fournie pour cette offre.',
-                      style: AppTypography.cardDescription,
+                      style: colors.cardDescription,
                     ),
                     if (offer.posterImage != null) ...[
                       const SizedBox(height: AppSpacing.lg),
@@ -214,12 +227,12 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
                       : (_hasApplied ? _confirmWithdraw : _handleApply),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _hasApplied
-                        ? const Color(0xFFE5E7EB)
+                        ? colors.divider
                         : OnboardingColors.violet,
                     foregroundColor:
-                        _hasApplied ? const Color(0xFF6B7280) : Colors.white,
-                    disabledBackgroundColor: const Color(0xFFE5E7EB),
-                    disabledForegroundColor: const Color(0xFF6B7280),
+                        _hasApplied ? colors.textSecondary : Colors.white,
+                    disabledBackgroundColor: colors.divider,
+                    disabledForegroundColor: colors.textSecondary,
                     padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -261,7 +274,7 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
     );
   }
 
-  Widget _buildCompanyHeader() {
+  Widget _buildCompanyHeader(AppSurfaceColors colors) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -291,21 +304,21 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(offer.title, style: AppTypography.dashboardSubtitle),
+              Text(offer.title, style: colors.dashboardSubtitle),
               const SizedBox(height: 2),
-              Text(offer.companyName, style: AppTypography.companyName),
+              Text(offer.companyName, style: colors.companyName),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_rounded,
                     size: 12,
-                    color: Color(0xFF9CA3AF),
+                    color: colors.textTertiary,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     offer.publishedLabel,
-                    style: AppTypography.jobInfo,
+                    style: colors.jobInfo,
                   ),
                 ],
               ),
@@ -316,7 +329,7 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label) {
+  Widget _buildInfoChip(AppSurfaceColors colors, IconData icon, String label) {
     if (label.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -334,8 +347,8 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
           const SizedBox(width: 6),
           Text(
             label,
-            style: AppTypography.jobInfo.copyWith(
-              color: AppColors.textPrimary,
+            style: colors.jobInfo.copyWith(
+              color: colors.textPrimary,
               fontWeight: FontWeight.w500,
             ),
           ),

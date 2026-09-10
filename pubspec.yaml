@@ -58,6 +58,10 @@ dependencies:
   sqflite_common_ffi_web: ^1.1.2
   google_sign_in: ^7.2.0
 
+  # Ouvre le composeur téléphonique (tel:) et le client mail (mailto:) —
+  # coordonnées cliquables du candidat dans CandidateApplicationDetailScreen
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

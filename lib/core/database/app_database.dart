@@ -55,7 +55,7 @@ class AppDatabase {
 
     return openDatabase(
       dbPath,
-      version: 14,
+      version: 24,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -303,6 +303,246 @@ class AppDatabase {
             await db.execute('ALTER TABLE employer_profiles ADD COLUMN cover_photo BLOB');
           }
         }
+        // v14 -> v15 : ajout de `job_seeker_profiles.profil_visible` — le
+        // réglage "Confidentialité" de `JobSeekerSettingsScreen` permet à un
+        // candidat de se retirer des résultats de `AccountSearchRepository
+        // .searchJobSeekers` (recherche recruteur + "Candidats suggérés")
+        // sans supprimer son compte. `DEFAULT 1` : un profil existant reste
+        // visible tant que l'utilisateur n'a rien changé.
+        if (oldVersion < 15) {
+          final columns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('profil_visible')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN profil_visible INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+        }
+        // v15 -> v16 : ajout des réglages "Notifications" et
+        // "Confidentialité" (publicité) de `JobSeekerSettingsScreen` —
+        // `notifications_actives` gate la pastille de compteur de nouvelles
+        // offres (voir `AuthService.updateNotificationsEnabled`) ;
+        // `publicite_personnalisee`/`communications_marketing` sont deux
+        // consentements enregistrés dès maintenant (voir doc de
+        // `User.adsPersonalized`/`User.marketingOptIn`) bien que JOEM ne
+        // diffuse aujourd'hui ni publicité ni communication marketing.
+        // `communications_marketing` démarre à 0 : un consentement marketing
+        // ne doit jamais être présumé acquis.
+        if (oldVersion < 16) {
+          final columns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('notifications_actives')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN notifications_actives INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+          if (!columnNames.contains('publicite_personnalisee')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN publicite_personnalisee INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+          if (!columnNames.contains('communications_marketing')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN communications_marketing INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+        }
+        // v16 -> v17 : ajout de la section "Affichage" de
+        // `JobSeekerSettingsScreen` — `mode_nuit` (voir `AppSurfaceColors`/
+        // `DisplayPreferencesController`), `texte_agrandi` (facteur
+        // d'échelle appliqué au `MediaQuery.textScaler` global dans
+        // `main.dart`) et `animations_reduites` (raccourcit les animations
+        // d'apparition de `JobSeekerDashboard`/`ProfileSidePanel`).
+        if (oldVersion < 17) {
+          final columns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('mode_nuit')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN mode_nuit INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('texte_agrandi')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN texte_agrandi INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('animations_reduites')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN animations_reduites INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+        }
+        // v17 -> v18 : ajout de `job_offer_views` — une ligne par candidat
+        // qui ouvre le détail d'une offre (`JobOfferDetailScreen`), au plus
+        // une par couple (offre, candidat) grâce à `UNIQUE`. Alimente la
+        // carte statistique "Vues totales" de `EmployerDashboard`, jusqu'ici
+        // figée à une valeur en dur. `viewer_user_id` en TEXT sans FK, même
+        // raison que `job_offer_notification_reads.job_seeker_user_id` (les
+        // comptes de démo n'ont aucune ligne dans `users`).
+        if (oldVersion < 18) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_offer_views (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_offer_id INTEGER NOT NULL REFERENCES job_offers(id) ON DELETE CASCADE,
+              viewer_user_id TEXT NOT NULL,
+              viewed_at TEXT NOT NULL,
+              UNIQUE(job_offer_id, viewer_user_id)
+            )
+          ''');
+        }
+        // v18 -> v19 : ajout de `interviews` — entretiens planifiés par un
+        // recruteur pour un candidat qui a postulé (`ScheduleInterviewScreen`,
+        // ouvert depuis `CandidateApplicationDetailScreen`). Alimente
+        // "Entretiens du jour"/"Mes prochains entretiens" et la carte
+        // statistique "Entretiens" de `EmployerDashboard`. `candidate_name`/
+        // `offer_title` sont dupliqués (instantané pris à la planification)
+        // plutôt que rejoints, même raisonnement que `job_applications` :
+        // aucune FK, pour rester compatible avec les comptes de démo et
+        // survivre à la suppression de l'offre/de la candidature liée.
+        // `scheduled_date` au format 'yyyy-MM-dd', `scheduled_time` 'HH:mm' ;
+        // `mode` vaut 'presentiel' ou 'visio' ; `status` 'scheduled',
+        // 'done' ou 'cancelled'.
+        if (oldVersion < 19) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS interviews (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              employer_user_id INTEGER NOT NULL,
+              job_application_id INTEGER,
+              job_offer_id INTEGER,
+              job_seeker_user_id TEXT NOT NULL,
+              candidate_name TEXT NOT NULL DEFAULT '',
+              offer_title TEXT NOT NULL DEFAULT '',
+              scheduled_date TEXT NOT NULL,
+              scheduled_time TEXT NOT NULL,
+              location TEXT,
+              mode TEXT NOT NULL DEFAULT 'presentiel',
+              notes TEXT,
+              status TEXT NOT NULL DEFAULT 'scheduled',
+              created_at TEXT NOT NULL
+            )
+          ''');
+        }
+        // v19 -> v20 : côté candidat, chaque entretien planifié par un
+        // recruteur EST une notification ("L'entreprise souhaite vous
+        // rencontrer"). `seeker_read`/`seeker_deleted` portent l'état de
+        // cette notification, propre au candidat concerné (un entretien
+        // n'a qu'un seul candidat, comme `job_application_notification_reads`
+        // n'a qu'un seul recruteur — l'état vit donc directement sur la
+        // ligne `interviews`). Re-planifier un entretien remet `seeker_read`
+        // à 0 (voir `InterviewRepository.update`) pour re-notifier le
+        // candidat du changement de date/heure/lieu.
+        if (oldVersion < 20) {
+          final columns = await db.rawQuery('PRAGMA table_info(interviews)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('seeker_read')) {
+            await db.execute(
+              'ALTER TABLE interviews ADD COLUMN seeker_read INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('seeker_deleted')) {
+            await db.execute(
+              'ALTER TABLE interviews ADD COLUMN seeker_deleted INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+        }
+        // v20 -> v21 : `revision` + `notified_at` sur `interviews`. Quand le
+        // recruteur modifie un entretien déjà planifié (`InterviewRepository
+        // .update`), `revision` est incrémenté et `notified_at` repositionné
+        // à maintenant : la notification du candidat repasse alors en non-lue
+        // ET change de libellé ("Entretien modifié" au lieu de "Proposition
+        // d'entretien"), et remonte en tête de `JobNotificationsScreen`
+        // (tri sur `notified_at`). `notified_at` NULL pour les lignes
+        // antérieures → on retombe sur `created_at` à la lecture.
+        if (oldVersion < 21) {
+          final columns = await db.rawQuery('PRAGMA table_info(interviews)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('revision')) {
+            await db.execute(
+              'ALTER TABLE interviews ADD COLUMN revision INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('notified_at')) {
+            await db.execute('ALTER TABLE interviews ADD COLUMN notified_at TEXT');
+            await db.execute('UPDATE interviews SET notified_at = created_at');
+          }
+        }
+        // v21 -> v22 : réglages de `EmployerSettingsScreen` sur
+        // `employer_profiles`, miroirs de ceux de `JobSeekerSettingsScreen`
+        // sur `job_seeker_profiles` : `notifications_actives` (met en
+        // sourdine la pastille de nouvelles candidatures), `entreprise_visible`
+        // (retire l'entreprise de `AccountSearchRepository.searchEmployers`
+        // sans supprimer le compte), `publicite_personnalisee` /
+        // `communications_marketing` (deux consentements enregistrés d'avance,
+        // aucune régie pub ni canal marketing dans l'app). `communications_marketing`
+        // démarre à 0.
+        if (oldVersion < 22) {
+          final columns = await db.rawQuery('PRAGMA table_info(employer_profiles)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('notifications_actives')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN notifications_actives INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+          if (!columnNames.contains('entreprise_visible')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN entreprise_visible INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+          if (!columnNames.contains('publicite_personnalisee')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN publicite_personnalisee INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+          if (!columnNames.contains('communications_marketing')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN communications_marketing INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+        }
+        // v22 -> v23 : section "Affichage" de `EmployerSettingsScreen`,
+        // miroir de celle de `JobSeekerSettingsScreen` sur
+        // `job_seeker_profiles` : `mode_nuit` (bascule `AppSurfaceColors`
+        // clair/sombre via `DisplayPreferencesController`/`main.dart`),
+        // `texte_agrandi` (facteur d'échelle du `MediaQuery.textScaler`
+        // global) et `animations_reduites` (raccourcit les animations
+        // d'apparition du dashboard recruteur).
+        if (oldVersion < 23) {
+          final columns = await db.rawQuery('PRAGMA table_info(employer_profiles)');
+          final columnNames = columns.map((c) => c['name'] as String).toSet();
+          if (!columnNames.contains('mode_nuit')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN mode_nuit INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('texte_agrandi')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN texte_agrandi INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (!columnNames.contains('animations_reduites')) {
+            await db.execute(
+              'ALTER TABLE employer_profiles ADD COLUMN animations_reduites INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+        }
+        // v23 -> v24 : ajout de `job_seeker_profile_views` — une ligne par
+        // recruteur distinct qui ouvre le profil d'un candidat
+        // (`CandidateProfileViewScreen`), au plus une par couple (profil,
+        // recruteur) grâce à `UNIQUE`. Alimente le compteur "N vues du
+        // profil" de `JobProfileScreen`, jusqu'ici figé à "128". `TEXT` sans
+        // FK des deux côtés, même raison que `job_offer_views.viewer_user_id`
+        // (les comptes de démo n'ont aucune ligne dans `users`).
+        if (oldVersion < 24) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_seeker_profile_views (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              profile_user_id TEXT NOT NULL,
+              viewer_user_id TEXT NOT NULL,
+              viewed_at TEXT NOT NULL,
+              UNIQUE(profile_user_id, viewer_user_id)
+            )
+          ''');
+        }
       },
       onDowngrade: onDatabaseDowngradeDelete,
       onCreate: (db, version) async {
@@ -333,7 +573,14 @@ class AppDatabase {
             cv_path TEXT,
             tarif_journalier TEXT,
             disponibilite TEXT,
-            cover_photo BLOB
+            cover_photo BLOB,
+            profil_visible INTEGER NOT NULL DEFAULT 1,
+            notifications_actives INTEGER NOT NULL DEFAULT 1,
+            publicite_personnalisee INTEGER NOT NULL DEFAULT 1,
+            communications_marketing INTEGER NOT NULL DEFAULT 0,
+            mode_nuit INTEGER NOT NULL DEFAULT 0,
+            texte_agrandi INTEGER NOT NULL DEFAULT 0,
+            animations_reduites INTEGER NOT NULL DEFAULT 0
           )
         ''');
 
@@ -366,7 +613,14 @@ class AppDatabase {
             description TEXT,
             logo BLOB,
             categorie TEXT,
-            cover_photo BLOB
+            cover_photo BLOB,
+            notifications_actives INTEGER NOT NULL DEFAULT 1,
+            entreprise_visible INTEGER NOT NULL DEFAULT 1,
+            publicite_personnalisee INTEGER NOT NULL DEFAULT 1,
+            communications_marketing INTEGER NOT NULL DEFAULT 0,
+            mode_nuit INTEGER NOT NULL DEFAULT 0,
+            texte_agrandi INTEGER NOT NULL DEFAULT 0,
+            animations_reduites INTEGER NOT NULL DEFAULT 0
           )
         ''');
 
@@ -464,6 +718,49 @@ class AppDatabase {
             query TEXT NOT NULL,
             searched_at TEXT NOT NULL,
             UNIQUE(user_id, search_type, query)
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_offer_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_offer_id INTEGER NOT NULL REFERENCES job_offers(id) ON DELETE CASCADE,
+            viewer_user_id TEXT NOT NULL,
+            viewed_at TEXT NOT NULL,
+            UNIQUE(job_offer_id, viewer_user_id)
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_seeker_profile_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_user_id TEXT NOT NULL,
+            viewer_user_id TEXT NOT NULL,
+            viewed_at TEXT NOT NULL,
+            UNIQUE(profile_user_id, viewer_user_id)
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE interviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employer_user_id INTEGER NOT NULL,
+            job_application_id INTEGER,
+            job_offer_id INTEGER,
+            job_seeker_user_id TEXT NOT NULL,
+            candidate_name TEXT NOT NULL DEFAULT '',
+            offer_title TEXT NOT NULL DEFAULT '',
+            scheduled_date TEXT NOT NULL,
+            scheduled_time TEXT NOT NULL,
+            location TEXT,
+            mode TEXT NOT NULL DEFAULT 'presentiel',
+            notes TEXT,
+            status TEXT NOT NULL DEFAULT 'scheduled',
+            created_at TEXT NOT NULL,
+            seeker_read INTEGER NOT NULL DEFAULT 0,
+            seeker_deleted INTEGER NOT NULL DEFAULT 0,
+            revision INTEGER NOT NULL DEFAULT 0,
+            notified_at TEXT
           )
         ''');
       },

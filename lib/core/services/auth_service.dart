@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/services/display_preferences_controller.dart';
 import 'package:joem/core/services/google_auth_service.dart';
 import 'package:joem/core/utils/cv_storage.dart';
 import 'package:joem/core/utils/password_hasher.dart';
@@ -99,6 +100,53 @@ class User {
   /// `JobProfileScreen` (`job_seeker_experiences`) — liste vide si aucune.
   final List<JobExperience> experiences;
 
+  /// `false` si le candidat a désactivé "Profil visible par les
+  /// recruteurs" (`JobSeekerSettingsScreen`) — exclut alors son profil de
+  /// `AccountSearchRepository.searchJobSeekers` (recherche recruteur et
+  /// "Candidats suggérés"). Toujours `true` pour un employeur (non
+  /// concerné) et pour un compte fraîchement chargé sans préférence
+  /// explicite.
+  final bool profilVisible;
+
+  /// `false` si le candidat a désactivé "Recevoir des notifications de
+  /// nouvelles offres" (`JobSeekerSettingsScreen`) — la pastille de
+  /// compteur (header, nav basse) reste alors à 0 sans interroger
+  /// `JobOfferRepository.countUnreadNotificationsForJobSeeker`, voir
+  /// `JobSeekerDashboard._loadNotificationCount`. Les notifications déjà
+  /// reçues restent consultables depuis `JobNotificationsScreen`, rien
+  /// n'est supprimé.
+  final bool notificationsEnabled;
+
+  /// Consentement "Publicités personnalisées" (`JobSeekerSettingsScreen`,
+  /// section Confidentialité) — équivalent du réglage `Ad personalization`
+  /// des grands OS/apps. JOEM ne diffuse aujourd'hui aucune publicité
+  /// (application 100% locale, sans SDK publicitaire) : cette préférence
+  /// est donc pour l'instant seulement enregistrée, prête à être respectée
+  /// si une régie publicitaire est un jour intégrée.
+  final bool adsPersonalized;
+
+  /// Consentement "Communications marketing" (offres promotionnelles et
+  /// actualités JOEM) — décoché par défaut, comme tout consentement
+  /// marketing. Même remarque que [adsPersonalized] : aucun canal d'envoi
+  /// (email/push) n'existe encore dans l'app pour l'honorer.
+  final bool marketingOptIn;
+
+  /// "Mode nuit" (`JobSeekerSettingsScreen`, section Affichage) — synchronisé
+  /// vers `DisplayPreferencesController` à chaque connexion/déconnexion
+  /// (voir `AuthService`), qui pilote réellement l'assombrissement de tout
+  /// le parcours candidat via `AppSurfaceColors`/`main.dart`.
+  final bool darkModeEnabled;
+
+  /// "Texte agrandi" — applique `DisplayPreferencesController
+  /// .largeTextScaleFactor` au `MediaQuery.textScaler` global (voir
+  /// `main.dart`), donc à tout texte de l'app tant que ce compte est
+  /// connecté.
+  final bool largeTextEnabled;
+
+  /// "Réduire les animations" — raccourcit le fondu d'apparition de
+  /// `JobSeekerDashboard` et le glissement de `ProfileSidePanel`.
+  final bool reducedAnimationsEnabled;
+
   User({
     required this.id,
     required this.email,
@@ -120,13 +168,36 @@ class User {
     this.skills = const [],
     this.workModes = const [],
     this.experiences = const [],
+    this.profilVisible = true,
+    this.notificationsEnabled = true,
+    this.adsPersonalized = true,
+    this.marketingOptIn = false,
+    this.darkModeEnabled = false,
+    this.largeTextEnabled = false,
+    this.reducedAnimationsEnabled = false,
   });
 
-  /// Copie l'utilisateur avec une nouvelle photo — utilisé par
-  /// `AuthService.updateProfilePhoto` pour propager un changement d'avatar
-  /// à tout le reste de l'app (header, panneau latéral, etc.) sans
-  /// resaisir les autres champs.
-  User copyWithPhoto(Uint8List photoBytes) {
+  /// Copie l'utilisateur en ne remplaçant que les champs fournis — les
+  /// champs saisis à l'inscription (nom, coordonnées, tarif...) se
+  /// modifient via `AuthService.updateJobSeekerProfile`/
+  /// `updateEmployerProfile`, qui reconstruisent `User` en entier ; ce
+  /// `copyWith` couvre les mises à jour ponctuelles (photo, CV,
+  /// expériences, préférences) déclenchées depuis un seul écran.
+  User copyWith({
+    Uint8List? photoBytes,
+    Uint8List? coverPhotoBytes,
+    String? cvPath,
+    String? cvFileName,
+    bool clearCv = false,
+    List<JobExperience>? experiences,
+    bool? profilVisible,
+    bool? notificationsEnabled,
+    bool? adsPersonalized,
+    bool? marketingOptIn,
+    bool? darkModeEnabled,
+    bool? largeTextEnabled,
+    bool? reducedAnimationsEnabled,
+  }) {
     return User(
       id: id,
       email: email,
@@ -136,99 +207,25 @@ class User {
       companyName: companyName,
       categorieEntreprise: categorieEntreprise,
       position: position,
-      photoBytes: photoBytes,
-      coverPhotoBytes: coverPhotoBytes,
+      photoBytes: photoBytes ?? this.photoBytes,
+      coverPhotoBytes: coverPhotoBytes ?? this.coverPhotoBytes,
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
-      cvPath: cvPath,
-      cvFileName: cvFileName,
+      cvPath: clearCv ? null : (cvPath ?? this.cvPath),
+      cvFileName: clearCv ? null : (cvFileName ?? this.cvFileName),
       tarifJournalier: tarifJournalier,
       disponibilite: disponibilite,
       skills: skills,
       workModes: workModes,
-      experiences: experiences,
-    );
-  }
-
-  /// Copie l'utilisateur avec une nouvelle photo de couverture — utilisé
-  /// par `AuthService.updateCoverPhoto`.
-  User copyWithCoverPhoto(Uint8List coverPhotoBytes) {
-    return User(
-      id: id,
-      email: email,
-      firstName: firstName,
-      lastName: lastName,
-      role: role,
-      companyName: companyName,
-      categorieEntreprise: categorieEntreprise,
-      position: position,
-      photoBytes: photoBytes,
-      coverPhotoBytes: coverPhotoBytes,
-      telephone: telephone,
-      localisation: localisation,
-      presentation: presentation,
-      cvPath: cvPath,
-      cvFileName: cvFileName,
-      tarifJournalier: tarifJournalier,
-      disponibilite: disponibilite,
-      skills: skills,
-      workModes: workModes,
-      experiences: experiences,
-    );
-  }
-
-  /// Copie l'utilisateur avec une nouvelle liste d'expériences — utilisé
-  /// par `AuthService.addExperience`/`deleteExperienceAt`.
-  User copyWithExperiences(List<JobExperience> experiences) {
-    return User(
-      id: id,
-      email: email,
-      firstName: firstName,
-      lastName: lastName,
-      role: role,
-      companyName: companyName,
-      categorieEntreprise: categorieEntreprise,
-      position: position,
-      photoBytes: photoBytes,
-      coverPhotoBytes: coverPhotoBytes,
-      telephone: telephone,
-      localisation: localisation,
-      presentation: presentation,
-      cvPath: cvPath,
-      cvFileName: cvFileName,
-      tarifJournalier: tarifJournalier,
-      disponibilite: disponibilite,
-      skills: skills,
-      workModes: workModes,
-      experiences: experiences,
-    );
-  }
-
-  /// Copie l'utilisateur avec un nouveau CV — utilisé par
-  /// `AuthService.updateCv`.
-  User copyWithCv({required String cvPath, required String cvFileName}) {
-    return User(
-      id: id,
-      email: email,
-      firstName: firstName,
-      lastName: lastName,
-      role: role,
-      companyName: companyName,
-      categorieEntreprise: categorieEntreprise,
-      position: position,
-      photoBytes: photoBytes,
-      coverPhotoBytes: coverPhotoBytes,
-      telephone: telephone,
-      localisation: localisation,
-      presentation: presentation,
-      cvPath: cvPath,
-      cvFileName: cvFileName,
-      tarifJournalier: tarifJournalier,
-      disponibilite: disponibilite,
-      skills: skills,
-      workModes: workModes,
-      experiences: experiences,
+      experiences: experiences ?? this.experiences,
+      profilVisible: profilVisible ?? this.profilVisible,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      adsPersonalized: adsPersonalized ?? this.adsPersonalized,
+      marketingOptIn: marketingOptIn ?? this.marketingOptIn,
+      darkModeEnabled: darkModeEnabled ?? this.darkModeEnabled,
+      largeTextEnabled: largeTextEnabled ?? this.largeTextEnabled,
+      reducedAnimationsEnabled: reducedAnimationsEnabled ?? this.reducedAnimationsEnabled,
     );
   }
 
@@ -376,6 +373,7 @@ class AuthService extends ChangeNotifier {
       final demoAccount = _demoAccounts[email];
       if (demoAccount != null && demoAccount['password'] == password) {
         _currentUser = demoAccount['user'] as User;
+        _syncDisplayPreferences();
         await _persistSession(email);
         return true;
       }
@@ -383,6 +381,7 @@ class AuthService extends ChangeNotifier {
       final dbUser = await _loginFromDatabase(email, password);
       if (dbUser != null) {
         _currentUser = dbUser;
+        _syncDisplayPreferences();
         await _persistSession(email);
         return true;
       }
@@ -414,6 +413,7 @@ class AuthService extends ChangeNotifier {
     final demoAccount = _demoAccounts[email];
     if (demoAccount != null) {
       _currentUser = demoAccount['user'] as User;
+      _syncDisplayPreferences();
       notifyListeners();
       return true;
     }
@@ -424,8 +424,24 @@ class AuthService extends ChangeNotifier {
       return false;
     }
     _currentUser = user;
+    _syncDisplayPreferences();
     notifyListeners();
     return true;
+  }
+
+  /// Applique les préférences d'affichage (`darkModeEnabled`/
+  /// `largeTextEnabled`/`reducedAnimationsEnabled`) de [_currentUser] à
+  /// `DisplayPreferencesController`, seule source consultée par `main.dart`/
+  /// `JobSeekerDashboard` — appelé après toute connexion réussie. Sans
+  /// effet si personne n'est connecté (comptes employeur : ces préférences
+  /// restent à leurs valeurs par défaut, `false`).
+  void _syncDisplayPreferences() {
+    final user = _currentUser;
+    DisplayPreferencesController.instance.syncFrom(
+      isDarkMode: user?.darkModeEnabled ?? false,
+      isLargeText: user?.largeTextEnabled ?? false,
+      reducedAnimations: user?.reducedAnimationsEnabled ?? false,
+    );
   }
 
   Future<void> _persistSession(String email) async {
@@ -475,7 +491,9 @@ class AuthService extends ChangeNotifier {
         columns: [
           'prenom', 'nom', 'telephone', 'localisation', 'titre_professionnel',
           'presentation', 'photo', 'cover_photo', 'cv_path', 'cv_file_name',
-          'tarif_journalier', 'disponibilite',
+          'tarif_journalier', 'disponibilite', 'profil_visible',
+          'notifications_actives', 'publicite_personnalisee', 'communications_marketing',
+          'mode_nuit', 'texte_agrandi', 'animations_reduites',
         ],
         where: 'user_id = ?',
         whereArgs: [userId],
@@ -515,6 +533,13 @@ class AuthService extends ChangeNotifier {
         cvFileName: profile?['cv_file_name'] as String?,
         tarifJournalier: profile?['tarif_journalier'] as String?,
         disponibilite: profile?['disponibilite'] as String?,
+        profilVisible: (profile?['profil_visible'] as int? ?? 1) == 1,
+        notificationsEnabled: (profile?['notifications_actives'] as int? ?? 1) == 1,
+        adsPersonalized: (profile?['publicite_personnalisee'] as int? ?? 1) == 1,
+        marketingOptIn: (profile?['communications_marketing'] as int? ?? 0) == 1,
+        darkModeEnabled: (profile?['mode_nuit'] as int? ?? 0) == 1,
+        largeTextEnabled: (profile?['texte_agrandi'] as int? ?? 0) == 1,
+        reducedAnimationsEnabled: (profile?['animations_reduites'] as int? ?? 0) == 1,
         skills: skillRows.map((row) => row['name'] as String).toList(),
         workModes: workModeRows.map((row) => row['work_mode'] as String).toList(),
         experiences: experienceRows
@@ -553,6 +578,17 @@ class AuthService extends ChangeNotifier {
         telephone: profile?['telephone'] as String?,
         localisation: profile?['localisation'] as String?,
         presentation: profile?['description'] as String?,
+        // Réglages `EmployerSettingsScreen` (colonnes ajoutées en v22, la
+        // section "Affichage" en v23). `profilVisible` sert ici de
+        // "entreprise visible dans la recherche des candidats"
+        // (`employer_profiles.entreprise_visible`).
+        profilVisible: (profile?['entreprise_visible'] as int? ?? 1) == 1,
+        notificationsEnabled: (profile?['notifications_actives'] as int? ?? 1) == 1,
+        adsPersonalized: (profile?['publicite_personnalisee'] as int? ?? 1) == 1,
+        marketingOptIn: (profile?['communications_marketing'] as int? ?? 0) == 1,
+        darkModeEnabled: (profile?['mode_nuit'] as int? ?? 0) == 1,
+        largeTextEnabled: (profile?['texte_agrandi'] as int? ?? 0) == 1,
+        reducedAnimationsEnabled: (profile?['animations_reduites'] as int? ?? 0) == 1,
       );
     }
 
@@ -564,6 +600,7 @@ class AuthService extends ChangeNotifier {
   /// sans lui refaire saisir ses identifiants.
   Future<void> setSession(User user) async {
     _currentUser = user;
+    _syncDisplayPreferences();
     notifyListeners();
     await _persistSession(user.email);
   }
@@ -587,6 +624,7 @@ class AuthService extends ChangeNotifier {
     if (user == null) return false;
 
     _currentUser = user;
+    _syncDisplayPreferences();
     notifyListeners();
     await _persistSession(user.email);
     return true;
@@ -600,6 +638,7 @@ class AuthService extends ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 500));
 
     _currentUser = null;
+    DisplayPreferencesController.instance.reset();
     await _clearPersistedSession();
     _isLoading = false;
     notifyListeners();
@@ -646,7 +685,7 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
-    _currentUser = user.copyWithPhoto(photoBytes);
+    _currentUser = user.copyWith(photoBytes: photoBytes);
     notifyListeners();
 
     final userId = int.tryParse(user.id);
@@ -679,7 +718,7 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
-    _currentUser = user.copyWithCoverPhoto(coverPhotoBytes);
+    _currentUser = user.copyWith(coverPhotoBytes: coverPhotoBytes);
     notifyListeners();
 
     final userId = int.tryParse(user.id);
@@ -712,7 +751,7 @@ class AuthService extends ChangeNotifier {
 
     final cvPath = await saveCvFile(cvBytes, cvFileName);
 
-    _currentUser = user.copyWithCv(cvPath: cvPath, cvFileName: cvFileName);
+    _currentUser = user.copyWith(cvPath: cvPath, cvFileName: cvFileName);
     notifyListeners();
 
     final userId = int.tryParse(user.id);
@@ -722,6 +761,221 @@ class AuthService extends ChangeNotifier {
     await db.update(
       'job_seeker_profiles',
       {'cv_path': cvPath, 'cv_file_name': cvFileName, 'cv_picked': 1},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  /// Supprime le CV du chercheur d'emploi connecté — fichier sur le disque
+  /// (`deleteCvFile`) et champs en base, utilisé par "Supprimer mon CV" de
+  /// `JobSeekerSettingsScreen`. Ne fait rien si aucun CV n'est attaché.
+  Future<void> deleteCv() async {
+    final user = _currentUser;
+    if (user == null || user.cvPath == null) return;
+
+    await deleteCvFile(user.cvPath!);
+
+    _currentUser = user.copyWith(clearCv: true);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_seeker_profiles',
+      {'cv_path': null, 'cv_file_name': null, 'cv_picked': 0},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  /// Change la préférence "Profil visible par les recruteurs" du candidat
+  /// connecté et la persiste (`job_seeker_profiles.profil_visible`) —
+  /// réglage "Confidentialité" de `JobSeekerSettingsScreen`. Un profil
+  /// masqué disparaît de `AccountSearchRepository.searchJobSeekers`
+  /// (recherche recruteur et "Candidats suggérés") sans supprimer le
+  /// compte. Comptes de démo (id négatif) : la préférence ne vit que pour
+  /// la session en cours, aucune ligne `job_seeker_profiles` à mettre à
+  /// jour.
+  Future<void> updateProfileVisibility(bool visible) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(profilVisible: visible);
+    notifyListeners();
+    await _persistProfileFlag(
+      user,
+      jobSeekerColumn: 'profil_visible',
+      employerColumn: 'entreprise_visible',
+      value: visible,
+    );
+  }
+
+  /// Écrit un drapeau booléen (`0`/`1`) de réglage sur la table de profil
+  /// correspondant au rôle de [user] — `job_seeker_profiles` ou
+  /// `employer_profiles`, colonnes miroir de `JobSeekerSettingsScreen` /
+  /// `EmployerSettingsScreen`. Ne fait rien pour un compte de démo (id
+  /// négatif) : la préférence ne vit alors que pour la session en cours.
+  Future<void> _persistProfileFlag(
+    User user, {
+    required String jobSeekerColumn,
+    required String employerColumn,
+    required bool value,
+  }) async {
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    final (table, column) = user.role == 'employer'
+        ? ('employer_profiles', employerColumn)
+        : ('job_seeker_profiles', jobSeekerColumn);
+    await db.update(
+      table,
+      {column: value ? 1 : 0},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  /// Change la préférence "Recevoir des notifications de nouvelles offres"
+  /// du candidat connecté et la persiste (`job_seeker_profiles
+  /// .notifications_actives`) — réglage "Notifications" de
+  /// `JobSeekerSettingsScreen`. Désactivée, la pastille de compteur
+  /// (header, nav basse) reste à 0 sans interroger `JobOfferRepository
+  /// .countUnreadNotificationsForJobSeeker` (voir `JobSeekerDashboard
+  /// ._loadNotificationCount`) ; les notifications déjà reçues restent
+  /// consultables depuis `JobNotificationsScreen`, rien n'est supprimé.
+  Future<void> updateNotificationsEnabled(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(notificationsEnabled: enabled);
+    notifyListeners();
+    await _persistProfileFlag(
+      user,
+      jobSeekerColumn: 'notifications_actives',
+      employerColumn: 'notifications_actives',
+      value: enabled,
+    );
+  }
+
+  /// Change le consentement "Publicités personnalisées" du candidat
+  /// connecté et le persiste (`job_seeker_profiles.publicite_personnalisee`)
+  /// — réglage "Confidentialité" de `JobSeekerSettingsScreen`. JOEM ne
+  /// diffuse aujourd'hui aucune publicité (voir doc de [User.adsPersonalized]) :
+  /// cette préférence est enregistrée pour être respectée si une régie
+  /// publicitaire est un jour intégrée.
+  Future<void> updateAdsPersonalized(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(adsPersonalized: enabled);
+    notifyListeners();
+    await _persistProfileFlag(
+      user,
+      jobSeekerColumn: 'publicite_personnalisee',
+      employerColumn: 'publicite_personnalisee',
+      value: enabled,
+    );
+  }
+
+  /// Change le consentement "Communications marketing" (offres
+  /// promotionnelles et actualités JOEM) du candidat connecté et le
+  /// persiste (`job_seeker_profiles.communications_marketing`) — réglage
+  /// "Confidentialité" de `JobSeekerSettingsScreen`. Voir doc de
+  /// [User.marketingOptIn] : aucun canal d'envoi n'existe encore dans
+  /// l'app pour l'honorer.
+  Future<void> updateMarketingOptIn(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(marketingOptIn: enabled);
+    notifyListeners();
+    await _persistProfileFlag(
+      user,
+      jobSeekerColumn: 'communications_marketing',
+      employerColumn: 'communications_marketing',
+      value: enabled,
+    );
+  }
+
+  /// Table de profil qui porte les colonnes de réglages (`mode_nuit`,
+  /// `texte_agrandi`, `animations_reduites`, visibilité, notifications...)
+  /// pour [user] : `employer_profiles` pour un recruteur, sinon
+  /// `job_seeker_profiles`. Les deux tables ont les mêmes colonnes de
+  /// réglages depuis les migrations v22/v23.
+  String _profileTableFor(User user) =>
+      user.role == 'employer' ? 'employer_profiles' : 'job_seeker_profiles';
+
+  /// Change "Mode nuit" de l'utilisateur connecté (candidat ou recruteur),
+  /// le persiste (`<profil>.mode_nuit`) et met à jour
+  /// `DisplayPreferencesController` — qui pilote l'assombrissement via
+  /// `AppSurfaceColors`/`main.dart`.
+  Future<void> updateDarkMode(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(darkModeEnabled: enabled);
+    DisplayPreferencesController.instance.setDarkMode(enabled);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      _profileTableFor(user),
+      {'mode_nuit': enabled ? 1 : 0},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  /// Change "Texte agrandi" de l'utilisateur connecté (candidat ou
+  /// recruteur), le persiste (`<profil>.texte_agrandi`) et met à jour
+  /// `DisplayPreferencesController` — qui applique le facteur d'échelle au
+  /// `MediaQuery.textScaler` global (voir `main.dart`).
+  Future<void> updateLargeText(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(largeTextEnabled: enabled);
+    DisplayPreferencesController.instance.setLargeText(enabled);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      _profileTableFor(user),
+      {'texte_agrandi': enabled ? 1 : 0},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  /// Change "Réduire les animations" de l'utilisateur connecté (candidat ou
+  /// recruteur), le persiste (`<profil>.animations_reduites`) et met à jour
+  /// `DisplayPreferencesController` — consulté par `JobSeekerDashboard`/
+  /// `ProfileSidePanel` et `EmployerDashboard` pour raccourcir leurs
+  /// animations d'apparition.
+  Future<void> updateReducedAnimations(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(reducedAnimationsEnabled: enabled);
+    DisplayPreferencesController.instance.setReducedAnimations(enabled);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      _profileTableFor(user),
+      {'animations_reduites': enabled ? 1 : 0},
       where: 'user_id = ?',
       whereArgs: [userId],
     );
@@ -768,6 +1022,13 @@ class AuthService extends ChangeNotifier {
       skills: skills,
       workModes: workModes,
       experiences: user.experiences,
+      profilVisible: user.profilVisible,
+      notificationsEnabled: user.notificationsEnabled,
+      adsPersonalized: user.adsPersonalized,
+      marketingOptIn: user.marketingOptIn,
+      darkModeEnabled: user.darkModeEnabled,
+      largeTextEnabled: user.largeTextEnabled,
+      reducedAnimationsEnabled: user.reducedAnimationsEnabled,
     );
     notifyListeners();
 
@@ -841,6 +1102,13 @@ class AuthService extends ChangeNotifier {
       skills: user.skills,
       workModes: user.workModes,
       experiences: user.experiences,
+      profilVisible: user.profilVisible,
+      notificationsEnabled: user.notificationsEnabled,
+      adsPersonalized: user.adsPersonalized,
+      marketingOptIn: user.marketingOptIn,
+      darkModeEnabled: user.darkModeEnabled,
+      largeTextEnabled: user.largeTextEnabled,
+      reducedAnimationsEnabled: user.reducedAnimationsEnabled,
     );
     notifyListeners();
 
@@ -903,7 +1171,7 @@ class AuthService extends ChangeNotifier {
       enCours: enCours,
       description: description,
     );
-    _currentUser = user.copyWithExperiences([...user.experiences, experience]);
+    _currentUser = user.copyWith(experiences: [...user.experiences, experience]);
     notifyListeners();
   }
 
@@ -916,7 +1184,7 @@ class AuthService extends ChangeNotifier {
 
     final experience = user.experiences[index];
     final updated = List<JobExperience>.from(user.experiences)..removeAt(index);
-    _currentUser = user.copyWithExperiences(updated);
+    _currentUser = user.copyWith(experiences: updated);
     notifyListeners();
 
     if (experience.id != null) {
@@ -933,5 +1201,83 @@ class AuthService extends ChangeNotifier {
   /// Vérifier si l'utilisateur est un chercheur d'emploi
   bool isJobSeeker() {
     return _currentUser?.role == 'job_seeker';
+  }
+
+  /// `true` pour un compte de démo (`_demoAccounts`, id négatif, aucune
+  /// ligne dans `users`) — ces comptes n'ont ni mot de passe modifiable ni
+  /// ligne à supprimer, utilisé par `JobSeekerSettingsScreen` pour
+  /// désactiver "Changer le mot de passe"/"Supprimer mon compte".
+  bool get isDemoAccount {
+    final userId = int.tryParse(_currentUser?.id ?? '');
+    return userId != null && userId < 0;
+  }
+
+  /// Vérifie que [password] correspond bien au mot de passe actuel du
+  /// compte connecté — utilisé par l'écran "Changer le mot de passe" avant
+  /// d'appeler [resetPassword], pour ne jamais laisser quelqu'un déjà dans
+  /// la session en changer le mot de passe sans le connaître.
+  Future<bool> verifyCurrentPassword(String password) async {
+    final user = _currentUser;
+    if (user == null) return false;
+
+    final demoAccount = _demoAccounts[user.email];
+    if (demoAccount != null) {
+      return demoAccount['password'] == password;
+    }
+
+    final db = await AppDatabase.instance.database;
+    final rows = await db.query(
+      'users',
+      where: 'email = ?',
+      whereArgs: [user.email],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    return rows.first['password_hash'] == hashPassword(password);
+  }
+
+  /// Supprime définitivement le compte connecté : la ligne `users`
+  /// (entraîne, via `ON DELETE CASCADE`, la suppression du profil,
+  /// compétences, modes de travail, expériences liés — et, pour un
+  /// recruteur, ses offres avec en cascade candidatures / enregistrements /
+  /// vues / notifications). Les tables qui référencent l'utilisateur par un
+  /// `TEXT` sans clé étrangère (comptes de démo obligent) sont nettoyées à
+  /// la main selon le rôle. Déconnecte ensuite la session. Renvoie `false`
+  /// sans rien modifier pour un compte de démo (id négatif, aucune ligne
+  /// `users` à supprimer).
+  Future<bool> deleteAccount() async {
+    final user = _currentUser;
+    if (user == null) return false;
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return false;
+
+    final db = await AppDatabase.instance.database;
+    if (user.role == 'employer') {
+      // `job_offers` n'a pas de FK vers `users` (comptes de démo obligent,
+      // voir `AppDatabase.onCreate`) — on supprime les offres à la main,
+      // ce qui fait partir en cascade candidatures / enregistrements /
+      // vues / états de notification (eux ont bien une FK vers
+      // `job_offers`). `interviews` n'a aucune FK non plus.
+      await db.delete('job_offers', where: 'employer_user_id = ?', whereArgs: [userId]);
+      await db.delete('interviews', where: 'employer_user_id = ?', whereArgs: [userId]);
+    } else {
+      await db.delete('job_offer_saves', where: 'job_seeker_user_id = ?', whereArgs: [user.id]);
+      await db.delete(
+        'job_offer_notification_reads',
+        where: 'job_seeker_user_id = ?',
+        whereArgs: [user.id],
+      );
+      await db.delete('job_applications', where: 'job_seeker_user_id = ?', whereArgs: [user.id]);
+      await db.delete('interviews', where: 'job_seeker_user_id = ?', whereArgs: [user.id]);
+    }
+    await db.delete('search_history', where: 'user_id = ?', whereArgs: [user.id]);
+    await db.delete('users', where: 'id = ?', whereArgs: [userId]);
+
+    _currentUser = null;
+    DisplayPreferencesController.instance.reset();
+    await _clearPersistedSession();
+    notifyListeners();
+    return true;
   }
 }
