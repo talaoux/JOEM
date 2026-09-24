@@ -3,15 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../../../core/theme/app_surface_colors.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/employer_offer_card.dart';
+import '../widgets/soft_ui.dart';
+import 'job_offer_publish_screen.dart';
 import 'offer_applicants_screen.dart';
 
 /// Liste complète des offres publiées par le recruteur connecté — ouverte
 /// via "Voir tout" de la section "Mes offres d'emploi" du `EmployerDashboard`.
-/// Chaque carte ouvre `OfferApplicantsScreen` ; le menu "..." supprime
-/// l'offre (`JobOfferRepository.deleteOffer`, cascade sur candidatures/
+/// Chaque carte ouvre `OfferApplicantsScreen` ; le menu "..." permet de
+/// modifier l'offre (`JobOfferPublishScreen` en mode édition) ou de la
+/// supprimer (`JobOfferRepository.deleteOffer`, cascade sur candidatures/
 /// enregistrements/vues).
 class EmployerOffersScreen extends StatefulWidget {
   const EmployerOffersScreen({super.key});
@@ -26,6 +31,7 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
 
   List<JobOffer> _offers = [];
   Map<int, int> _applicantCounts = {};
+  Map<int, List<String>> _categoriesByOffer = {};
   bool _loading = true;
 
   int? get _employerUserId => int.tryParse(_authService.currentUser?.id ?? '');
@@ -44,10 +50,12 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
     }
     final offers = await _repository.fetchByEmployer(employerUserId);
     final counts = await _repository.fetchApplicantCountsByOffer(employerUserId);
+    final categories = await _repository.fetchCategoriesByOffer(employerUserId);
     if (!mounted) return;
     setState(() {
       _offers = offers;
       _applicantCounts = counts;
+      _categoriesByOffer = categories;
       _loading = false;
     });
   }
@@ -57,6 +65,15 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
       context,
       MaterialPageRoute(builder: (_) => OfferApplicantsScreen(offer: offer)),
     );
+    _load();
+  }
+
+  Future<void> _editOffer(JobOffer offer) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => JobOfferPublishScreen(offer: offer)),
+    );
+    if (!mounted) return;
     _load();
   }
 
@@ -94,29 +111,23 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-        title: Text('Mes offres d\'emploi', style: AppTypography.sectionTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(AppSurfaceColors.of(context)),
+      appBar: const SoftAppBar(title: 'Mes offres d\'emploi'),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.safeAreaHorizontal),
+                child: SkeletonCardList(
+                  count: 4,
+                  cardBuilder: (context, index) => const EmployerOfferCardSkeleton(),
+                ),
+              )
             : _offers.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
-                      child: Text(
-                        "Vous n'avez publié aucune offre pour le moment.",
-                        textAlign: TextAlign.center,
-                        style: AppTypography.interRegular.copyWith(
-                          fontSize: 13,
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.textTertiary,
-                        ),
-                      ),
+                ? const Padding(
+                    padding: EdgeInsets.all(AppSpacing.safeAreaHorizontal),
+                    child: SoftEmptyState(
+                      icon: Icons.work_outline_rounded,
+                      text: "Vous n'avez publié aucune offre pour le moment.",
                     ),
                   )
                 : ListView.separated(
@@ -125,11 +136,17 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                     itemBuilder: (context, index) {
                       final offer = _offers[index];
-                      return EmployerOfferCard(
-                        offer: offer,
-                        applicantCount: _applicantCounts[offer.id] ?? 0,
-                        onTap: () => _openApplicants(offer),
-                        onDelete: () => _confirmDelete(offer),
+                      return FadeSlideIn(
+                        key: ValueKey(offer.id),
+                        delay: staggerDelayFor(index),
+                        child: EmployerOfferCard(
+                          offer: offer,
+                          applicantCount: _applicantCounts[offer.id] ?? 0,
+                          onTap: () => _openApplicants(offer),
+                          categories: _categoriesByOffer[offer.id] ?? const [],
+                          onEdit: () => _editOffer(offer),
+                          onDelete: () => _confirmDelete(offer),
+                        ),
                       );
                     },
                   ),

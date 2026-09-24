@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
+import 'soft_ui.dart';
 
+/// Bannière "Trouvez votre prochain emploi" de l'accueil candidat — style
+/// "nouveau design" (voir `soft_ui.dart`) : carte blanche, titre serif,
+/// bouton pilule à teinte pâle aligné à droite (même composition que la
+/// carte "Publier une offre" de l'accueil recruteur).
 class HeroCard extends StatelessWidget {
   final VoidCallback onFindJobTap;
 
@@ -11,81 +15,61 @@ class HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [OnboardingColors.lavender, OnboardingColors.violetLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: AppRadius.cardRadius,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        child: Row(
-          children: [
-            // Contenu texte
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Trouvez votre prochain emploi',
-                    style: AppTypography.dashboardTitle.copyWith(
-                      fontSize: 22,
-                      color: const Color(0xFF1A1A2E),
-                    ),
+    final colors = AppSurfaceColors.of(context);
+    return SoftCard(
+      radius: 28,
+      padding: const EdgeInsets.fromLTRB(22, 20, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Trouvez votre prochain emploi',
+                  style: AppTypography.frauncesBold.copyWith(
+                    fontSize: 23,
+                    color: colors.textPrimary,
+                    height: 1.15,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Découvrez les meilleures opportunités adaptées à votre profil.',
-                    style: AppTypography.cardDescription.copyWith(
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  ElevatedButton(
-                    onPressed: onFindJobTap,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: OnboardingColors.violet,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xl,
-                        vertical: AppSpacing.md,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      'Trouver un emploi',
-                      style: AppTypography.primaryButton.copyWith(
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: SoftUi.tint(colors, DashboardColors.accent),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.work_outline_rounded,
+                  size: 22,
+                  color: SoftUi.brandInk(colors),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Découvrez les meilleures opportunités adaptées à votre profil.',
+            style: AppTypography.interRegular.copyWith(
+              fontSize: 14,
+              color: colors.textSecondary,
+              height: 1.4,
             ),
-
-            // Illustration discrète
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.work_outline_rounded,
-                size: 60,
-                color: OnboardingColors.violet.withOpacity(0.4),
-              ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SoftPillButton(
+              label: 'Trouver un emploi',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: onFindJobTap,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

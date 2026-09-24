@@ -3,15 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:joem/core/constants/job_categories.dart';
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/core/services/auth_service.dart';
-import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
-import 'package:joem/core/theme/app_typography.dart';
+import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/location_autocomplete_field.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/features/dashboard/presentation/widgets/soft_ui.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran "Modifier le profil" — ouvert depuis l'icône stylo de
 /// `EmployerProfileScreen`, équivalent recruteur de
@@ -97,31 +95,28 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-        title: Text('Modifier le profil', style: AppTypography.dashboardTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(AppSurfaceColors.of(context)),
+      appBar: const SoftAppBar(title: 'Modifier le profil'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.safeAreaHorizontal),
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: staggered([
               _buildCard(
                 title: 'Identité',
                 children: [
                   _TwoColumnRow(
                     left: LightTextField(
+                      accentColor: DashboardColors.accent,
                       label: 'Prénom',
                       hint: 'Jean',
                       icon: Icons.person_outline_rounded,
                       controller: _prenomController,
                     ),
                     right: LightTextField(
+                      accentColor: DashboardColors.accent,
                       label: 'Nom',
                       hint: 'Dupont',
                       icon: Icons.person_outline_rounded,
@@ -130,6 +125,7 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                   ),
                   const SizedBox(height: 18),
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Nom de l\'entreprise',
                     hint: 'Ex: Tech Solutions',
                     icon: Icons.business_rounded,
@@ -137,6 +133,7 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                   ),
                   const SizedBox(height: 18),
                   LightDropdown(
+                    accentColor: DashboardColors.accent,
                     label: 'Catégorie d\'entreprise',
                     hint: 'Sélectionnez un secteur d\'activité',
                     icon: Icons.category_outlined,
@@ -151,6 +148,7 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                 title: 'Coordonnées',
                 children: [
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Téléphone',
                     hint: '+261 XX XX XXX XX',
                     icon: Icons.call_rounded,
@@ -159,6 +157,7 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                   ),
                   const SizedBox(height: 18),
                   LocationAutocompleteField(
+                    accentColor: DashboardColors.accent,
                     controller: _localisationController,
                     options: kMalagasyCities,
                   ),
@@ -169,6 +168,7 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                 title: 'À propos de l\'entreprise',
                 children: [
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Description',
                     hint: 'Décrivez votre entreprise et vos besoins',
                     icon: Icons.notes_rounded,
@@ -178,28 +178,14 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
                 ],
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: (_isValid && !_isSaving) ? _save : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: OnboardingColors.violet,
-                    disabledBackgroundColor: OnboardingColors.violet.withValues(alpha: 0.4),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                        )
-                      : const Text('Enregistrer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                ),
+              SoftPrimaryButton(
+                label: 'Enregistrer',
+                icon: Icons.check_rounded,
+                loading: _isSaving,
+                onPressed: _isValid ? _save : null,
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
-            ],
+            ]),
           ),
         ),
       ),
@@ -207,21 +193,14 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.sectionTitle),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
-        ],
+      child: SoftSection(
+        title: title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
       ),
     );
   }

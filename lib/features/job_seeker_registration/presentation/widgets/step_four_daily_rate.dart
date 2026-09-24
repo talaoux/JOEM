@@ -1,8 +1,10 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 const List<String> kAvailabilityOptions = [
   'Disponible immédiatement',
@@ -48,13 +50,14 @@ class StepFourDailyRate extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Tarif journalier',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+            color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -94,7 +97,7 @@ class StepFourDailyRate extends StatelessWidget {
             checked: selectedWorkModes.contains(mode),
             onTap: () => onWorkModeToggled(mode),
           ),
-      ],
+      ]),
     );
   }
 }
@@ -122,10 +125,10 @@ class _WorkModeCheckbox extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: checked ? OnboardingColors.violet : Colors.transparent,
+                color: checked ? OnboardingColors.accent : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: checked ? OnboardingColors.violet : const Color(0xFFD8D8E2),
+                  color: checked ? OnboardingColors.accent : const Color(0xFFD8D8E2),
                   width: 1.5,
                 ),
               ),

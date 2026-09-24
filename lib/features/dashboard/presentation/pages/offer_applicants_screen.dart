@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../data/job_offer_repository.dart';
+import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Liste des candidats ayant postulé à une offre précise — ouverte en
 /// tapant sur une carte de "Mes offres d'emploi" (`EmployerDashboard` ou
@@ -28,6 +27,8 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
 
   List<JobApplicationNotification> _applications = [];
   bool _loading = true;
+
+  AppSurfaceColors get _colors => AppSurfaceColors.of(context);
 
   @override
   void initState() {
@@ -57,13 +58,8 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-        title: Text('Candidats', style: AppTypography.sectionTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(_colors),
+      appBar: const SoftAppBar(title: 'Candidats'),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,28 +71,35 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
                 AppSpacing.safeAreaHorizontal,
                 AppSpacing.md,
               ),
-              child: Text(
-                widget.offer.title,
-                style: AppTypography.jobTitle.copyWith(fontSize: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.work_outline_rounded, size: 16, color: _colors.textTertiary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.offer.title,
+                      style: AppTypography.interMedium.copyWith(
+                        fontSize: 14,
+                        color: _colors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(child: CircularProgressIndicator(color: SoftUi.brandInk(_colors)))
                   : _applications.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.safeAreaHorizontal,
-                            ),
-                            child: Text(
-                              "Aucune candidature reçue sur cette offre pour le moment.",
-                              textAlign: TextAlign.center,
-                              style: AppTypography.interRegular.copyWith(
-                                fontSize: 13,
-                                fontStyle: FontStyle.italic,
-                                color: AppColors.textTertiary,
-                              ),
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.safeAreaHorizontal,
+                          ),
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: SoftEmptyState(
+                              icon: Icons.people_outline_rounded,
+                              text: 'Aucune candidature reçue sur cette offre pour le moment.',
                             ),
                           ),
                         )
@@ -107,7 +110,11 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
                           ),
                           itemCount: _applications.length,
                           separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-                          itemBuilder: (context, index) => _buildApplicantCard(_applications[index]),
+                          itemBuilder: (context, index) => FadeSlideIn(
+                            key: ValueKey(_applications[index].applicationId),
+                            delay: staggerDelayFor(index),
+                            child: _buildApplicantCard(_applications[index]),
+                          ),
                         ),
             ),
           ],
@@ -122,70 +129,46 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
         : 'Candidat';
     final position = application.candidatePosition?.trim() ?? '';
 
-    return InkWell(
+    return SoftCard(
       onTap: () => _openApplication(application),
-      borderRadius: AppRadius.cardRadius,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.cardRadius,
-          boxShadow: AppShadows.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: OnboardingColors.violet.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  name[0].toUpperCase(),
-                  style: AppTypography.poppinsSemiBold.copyWith(
-                    color: OnboardingColors.violet,
-                    fontSize: 18,
-                  ),
+      child: Row(
+        children: [
+          SoftAvatar(name: name),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: _colors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: AppTypography.jobTitle.copyWith(fontSize: 15),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (position.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(position, style: AppTypography.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    'A postulé ${application.timeLabel.toLowerCase()}',
-                    style: AppTypography.jobInfo,
-                  ),
+                if (position.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(position, style: _colors.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
-              ),
-            ),
-            if (!application.isRead)
-              Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: OnboardingColors.violet,
-                  shape: BoxShape.circle,
+                const SizedBox(height: 4),
+                Text(
+                  'A postulé ${application.timeLabel.toLowerCase()}',
+                  style: _colors.jobInfo,
                 ),
-              ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
+              ],
+            ),
+          ),
+          if (application.isRejected) ...[
+            const SoftDotBadge(label: 'Rejetée', color: Color(0xFFDC2626)),
+            const SizedBox(width: 4),
+          ] else if (application.isAccepted) ...[
+            const SoftDotBadge(label: 'Acceptée', color: Color(0xFF0F8A6E)),
+            const SizedBox(width: 4),
+          ] else if (!application.isRead) ...[
+            const SoftDotBadge(label: 'Nouveau', color: DashboardColors.accent),
+            const SizedBox(width: 4),
           ],
-        ),
+          Icon(Icons.chevron_right_rounded, color: _colors.textTertiary),
+        ],
       ),
     );
   }

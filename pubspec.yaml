@@ -73,6 +73,33 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Génère l'icône d'application (Android/iOS/web/desktop) à partir de
+  # assets/images/joem-apk-logo.png — voir la section `flutter_launcher_icons`
+  # plus bas. Régénérer avec : `dart run flutter_launcher_icons`.
+  flutter_launcher_icons: ^0.14.3
+
+# Icône de l'application affichée sur l'écran d'accueil, générée depuis le
+# logo JOEM (remplace l'icône Flutter par défaut). `dart run flutter_launcher_icons`
+# écrit les fichiers dans android/.../res/mipmap-*, ios/Runner/Assets.xcassets,
+# web/icons, windows/runner/resources et macos/.../AppIcon.appiconset.
+flutter_launcher_icons:
+  image_path: "assets/images/joem-apk-logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/joem-apk-logo.png"
+  web:
+    generate: true
+    background_color: "#5B2A9E"
+    theme_color: "#A855F7"
+  windows:
+    generate: true
+    icon_size: 48
+  macos:
+    generate: true
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -95,6 +122,7 @@ flutter:
     - assets/images/pexels-tima-miroshnichenko-5439467.jpg
     - assets/images/google_logo.png
     - assets/images/joem_logo.png
+    - assets/images/joem-apk-logo.png
     - assets/images/avatar_portfolio1.jpg
     - assets/images/appareil-photo-reflex-numerique.png
     - assets/images/stylo.png

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// The white/outlined "Continuer avec Google" button shared by every
 /// account/login form in the app.
@@ -10,7 +11,7 @@ class GoogleSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return PressableScale(child: Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -43,6 +44,6 @@ class GoogleSignInButton extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }

@@ -31,8 +31,8 @@ class Interview {
     required this.jobSeekerUserId,
     required this.candidateName,
     required this.offerTitle,
-    required this.date,
-    required this.time,
+    this.date,
+    this.time,
     this.location,
     required this.mode,
     this.notes,
@@ -52,11 +52,13 @@ class Interview {
   final String offerTitle;
 
   /// Jour de l'entretien (heure à minuit) — combiné à [time] pour
-  /// [scheduledDateTime].
-  final DateTime date;
+  /// [scheduledDateTime]. `null` = date "à définir" : le recruteur a
+  /// accepté/convoqué le candidat sans encore fixer de créneau (stocké
+  /// comme chaîne vide dans `interviews.scheduled_date`).
+  final DateTime? date;
 
-  /// Heure de l'entretien au format 'HH:mm'.
-  final String time;
+  /// Heure de l'entretien au format 'HH:mm' — `null` quand [date] l'est.
+  final String? time;
 
   /// Adresse (présentiel) ou lien/plateforme (visio) — peut être vide.
   final String? location;
@@ -89,17 +91,46 @@ class Interview {
 
   bool get isVisio => mode == InterviewMode.visio;
 
+  /// `true` si la date (et l'heure) de l'entretien restent à définir.
+  bool get isDateToBeDefined => date == null;
+
   /// Date + heure combinées — utilisé pour trier et distinguer les
-  /// entretiens à venir de ceux déjà passés.
-  DateTime get scheduledDateTime {
-    final parts = time.split(':');
+  /// entretiens à venir de ceux déjà passés. `null` si la date est à
+  /// définir (entretien considéré comme à venir, trié en dernier).
+  DateTime? get scheduledDateTime {
+    final day = date;
+    if (day == null) return null;
+    final parts = (time ?? '').split(':');
     final hour = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
     final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
-    return DateTime(date.year, date.month, date.day, hour, minute);
+    return DateTime(day.year, day.month, day.day, hour, minute);
   }
 
-  /// "15 Jan 2026".
-  String get dateLabel => '${date.day} ${_shortMonths[date.month - 1]} ${date.year}';
+  /// "15 Jan 2026", ou "Date à définir".
+  String get dateLabel {
+    final day = date;
+    if (day == null) return 'Date à définir';
+    return '${day.day} ${_shortMonths[day.month - 1]} ${day.year}';
+  }
+
+  /// "14:30", ou "Heure à définir".
+  String get timeLabel {
+    final value = time?.trim() ?? '';
+    return value.isEmpty ? 'Heure à définir' : value;
+  }
+
+  /// "15 Jan 2026 · 14:30", ou simplement "Date à définir".
+  String get whenLabel => isDateToBeDefined ? dateLabel : '$dateLabel · $timeLabel';
+
+  /// Ordre chronologique, les entretiens sans date en dernier.
+  static int compareBySchedule(Interview a, Interview b) {
+    final da = a.scheduledDateTime;
+    final db = b.scheduledDateTime;
+    if (da == null && db == null) return a.createdAt.compareTo(b.createdAt);
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da.compareTo(db);
+  }
 
   /// Libellé de lieu affiché sur la carte : le lieu saisi, ou un texte
   /// générique selon le mode s'il est vide.
@@ -115,8 +146,10 @@ class Interview {
 class InterviewRepository {
   const InterviewRepository();
 
-  static String _dateKey(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  /// 'AAAA-MM-JJ', ou '' pour une date à définir (colonne `NOT NULL`).
+  static String _dateKey(DateTime? d) => d == null
+      ? ''
+      : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<Interview> schedule({
     required int employerUserId,
@@ -125,8 +158,8 @@ class InterviewRepository {
     required String jobSeekerUserId,
     required String candidateName,
     required String offerTitle,
-    required DateTime date,
-    required String time,
+    DateTime? date,
+    String? time,
     String? location,
     required String mode,
     String? notes,
@@ -143,7 +176,7 @@ class InterviewRepository {
       'candidate_name': candidateName,
       'offer_title': offerTitle,
       'scheduled_date': dateKey,
-      'scheduled_time': time,
+      'scheduled_time': date == null ? '' : (time ?? ''),
       'location': location,
       'mode': mode,
       'notes': notes,
@@ -161,8 +194,8 @@ class InterviewRepository {
       jobSeekerUserId: jobSeekerUserId,
       candidateName: candidateName,
       offerTitle: offerTitle,
-      date: DateTime(date.year, date.month, date.day),
-      time: time,
+      date: date == null ? null : DateTime(date.year, date.month, date.day),
+      time: date == null ? null : time,
       location: location,
       mode: mode,
       notes: notes,
@@ -179,8 +212,8 @@ class InterviewRepository {
   /// ("Entretien modifié") et remonte en tête de `JobNotificationsScreen`.
   Future<void> update({
     required int id,
-    required DateTime date,
-    required String time,
+    DateTime? date,
+    String? time,
     String? location,
     required String mode,
     String? notes,
@@ -203,7 +236,7 @@ class InterviewRepository {
       ''',
       [
         _dateKey(date),
-        time,
+        date == null ? '' : (time ?? ''),
         location,
         mode,
         notes,
@@ -251,8 +284,7 @@ class InterviewRepository {
       where: 'employer_user_id = ? AND status != ?',
       whereArgs: [employerUserId, InterviewStatus.cancelled],
     );
-    final interviews = rows.map(_fromRow).toList()
-      ..sort((a, b) => a.scheduledDateTime.compareTo(b.scheduledDateTime));
+    final interviews = rows.map(_fromRow).toList()..sort(Interview.compareBySchedule);
     return interviews;
   }
 
@@ -266,21 +298,22 @@ class InterviewRepository {
       where: 'employer_user_id = ? AND status = ? AND scheduled_date = ?',
       whereArgs: [employerUserId, InterviewStatus.scheduled, todayKey],
     );
-    final interviews = rows.map(_fromRow).toList()
-      ..sort((a, b) => a.scheduledDateTime.compareTo(b.scheduledDateTime));
+    final interviews = rows.map(_fromRow).toList()..sort(Interview.compareBySchedule);
     return interviews;
   }
 
   /// Entretiens à venir (dès maintenant, aujourd'hui inclus) pour ce
-  /// recruteur, du plus proche au plus lointain.
+  /// recruteur, du plus proche au plus lointain — ceux dont la date est à
+  /// définir comptent comme à venir (ils restent à organiser) et viennent
+  /// en dernier.
   Future<List<Interview>> fetchUpcomingForEmployer(int employerUserId) async {
     final now = DateTime.now();
     final all = await fetchForEmployer(employerUserId);
-    return all
-        .where((i) =>
-            i.status == InterviewStatus.scheduled &&
-            i.scheduledDateTime.isAfter(now.subtract(const Duration(minutes: 1))))
-        .toList();
+    return all.where((i) {
+      if (i.status != InterviewStatus.scheduled) return false;
+      final when = i.scheduledDateTime;
+      return when == null || when.isAfter(now.subtract(const Duration(minutes: 1)));
+    }).toList();
   }
 
   /// Nombre d'entretiens à venir — carte statistique "Entretiens" de
@@ -291,10 +324,16 @@ class InterviewRepository {
   }
 
   Interview _fromRow(Map<String, Object?> row) {
-    final dateParts = (row['scheduled_date'] as String).split('-');
-    final year = int.tryParse(dateParts[0]) ?? DateTime.now().year;
-    final month = dateParts.length > 1 ? int.tryParse(dateParts[1]) ?? 1 : 1;
-    final day = dateParts.length > 2 ? int.tryParse(dateParts[2]) ?? 1 : 1;
+    final rawDate = (row['scheduled_date'] as String? ?? '').trim();
+    DateTime? date;
+    if (rawDate.isNotEmpty) {
+      final dateParts = rawDate.split('-');
+      final year = int.tryParse(dateParts[0]) ?? DateTime.now().year;
+      final month = dateParts.length > 1 ? int.tryParse(dateParts[1]) ?? 1 : 1;
+      final day = dateParts.length > 2 ? int.tryParse(dateParts[2]) ?? 1 : 1;
+      date = DateTime(year, month, day);
+    }
+    final rawTime = (row['scheduled_time'] as String? ?? '').trim();
 
     return Interview(
       id: row['id'] as int,
@@ -304,8 +343,8 @@ class InterviewRepository {
       jobSeekerUserId: row['job_seeker_user_id'] as String,
       candidateName: row['candidate_name'] as String? ?? '',
       offerTitle: row['offer_title'] as String? ?? '',
-      date: DateTime(year, month, day),
-      time: row['scheduled_time'] as String? ?? '00:00',
+      date: date,
+      time: date == null || rawTime.isEmpty ? null : rawTime,
       location: row['location'] as String?,
       mode: row['mode'] as String? ?? InterviewMode.presentiel,
       notes: row['notes'] as String?,

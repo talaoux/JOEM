@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'soft_ui.dart';
+import 'stat_card.dart';
 
 /// Panneau latéral affichant le logo et le nom de l'entreprise, glissant
 /// depuis la droite vers le centre du dashboard — équivalent recruteur de
@@ -49,25 +51,25 @@ class EmployerProfileSidePanel extends StatelessWidget {
         'title': 'Offres publiées',
         'value': '0',
         'icon': Icons.work_outline_rounded,
-        'iconColor': Color(0xFF3B82F6),
+        'iconColor': DashboardColors.accentStrong,
       },
       {
         'title': 'Candidatures reçues',
         'value': '0',
         'icon': Icons.people_outline_rounded,
-        'iconColor': Color(0xFF10B981),
+        'iconColor': Color(0xFF0F8A6E),
       },
       {
         'title': 'Entretiens programmés',
         'value': '0',
         'icon': Icons.calendar_today_rounded,
-        'iconColor': Color(0xFFF59E0B),
+        'iconColor': Color(0xFFC2780E),
       },
       {
         'title': 'Vues totales',
         'value': '0',
         'icon': Icons.visibility_rounded,
-        'iconColor': Color(0xFF8B5CF6),
+        'iconColor': Color(0xFFD1366E),
       },
     ],
   });
@@ -102,19 +104,23 @@ class EmployerProfileSidePanel extends StatelessWidget {
         );
       },
       child: FractionallySizedBox(
-        widthFactor: 0.7,
+        widthFactor: 0.78,
         heightFactor: 1,
         child: Material(
-          color: colors.background,
+          color: SoftUi.pageBackground(colors),
           elevation: 12,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(28)),
+          ),
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             child: Column(
               children: [
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                      horizontal: 20,
+                      vertical: 12,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -129,31 +135,26 @@ class EmployerProfileSidePanel extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        CircleAvatar(
-                          radius: 56,
-                          backgroundColor: AppColors.primaryLightest,
-                          backgroundImage: logoBytes != null
-                              ? MemoryImage(logoBytes!) as ImageProvider
-                              : null,
-                          child: logoBytes == null
-                              ? const Icon(
-                                  Icons.business_rounded,
-                                  color: AppColors.primary,
-                                  size: 44,
-                                )
-                              : null,
+                        SoftAvatar(
+                          name: companyName,
+                          size: 104,
+                          icon: Icons.business_rounded,
+                          photo: logoBytes != null ? MemoryImage(logoBytes!) : null,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
                           child: Text(
                             companyName,
-                            style: colors.sectionTitle,
+                            style: AppTypography.frauncesBold.copyWith(
+                              fontSize: 22,
+                              color: colors.textPrimary,
+                              height: 1.15,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         SizedBox(
                           width: double.infinity,
                           child: Text(
@@ -162,55 +163,56 @@ class EmployerProfileSidePanel extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.max,
                           children: [
                             Icon(
                               Icons.location_on_outlined,
-                              size: 16,
-                              color: colors.textSecondary,
+                              size: 15,
+                              color: colors.textTertiary,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 location,
-                                style: AppTypography.cardDescription,
+                                style: colors.cardDescription.copyWith(fontSize: 12.5),
                                 textAlign: TextAlign.center,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
-                        SizedBox(
+                        const SizedBox(height: 22),
+                        const SizedBox(
                           width: double.infinity,
-                          child: Text(
-                            'Les Statistiques',
-                            style: colors.cardTitle,
-                            textAlign: TextAlign.left,
+                          child: SerifSectionTitle('Les statistiques', fontSize: 18),
+                        ),
+                        const SizedBox(height: 10),
+                        // Même bloc teinté que le "Tableau de bord" du
+                        // dashboard : tuiles blanches, gros chiffre serif.
+                        StatCardGroup(
+                          tint: DashboardColors.accent,
+                          child: GridView.count(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 2,
+                            childAspectRatio: 1.05,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                            children: stats.map((stat) {
+                              return _buildStatItem(
+                                colors: colors,
+                                title: stat['title'] as String,
+                                value: stat['value'] as String,
+                                accent: stat['iconColor'] as Color,
+                                onTap: stat['onTap'] as VoidCallback?,
+                              );
+                            }).toList(),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        GridView.count(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisCount: 2,
-                          childAspectRatio: 1.0,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          children: stats.map((stat) {
-                            return _buildStatItem(
-                              colors: colors,
-                              title: stat['title'] as String,
-                              value: stat['value'] as String,
-                              icon: stat['icon'] as IconData,
-                              iconColor: stat['iconColor'] as Color,
-                              onTap: stat['onTap'] as VoidCallback?,
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         _buildProfileCompletionCard(colors),
                       ],
                     ),
@@ -218,7 +220,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                 ),
                 Divider(height: 1, color: colors.divider),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
                     children: [
                       _buildActionItem(
@@ -252,121 +254,155 @@ class EmployerProfileSidePanel extends StatelessWidget {
     required VoidCallback? onTap,
     Color? color,
   }) {
+    final accent = color ?? DashboardColors.accent;
+    final ink = color == null ? SoftUi.brandInk(colors) : SoftUi.accentInk(colors, accent);
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: color ?? colors.textPrimary),
+      leading: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: SoftUi.tint(colors, accent),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: ink, size: 18),
+      ),
       title: Text(
         label,
-        style: AppTypography.cardTitle.copyWith(
+        style: AppTypography.interSemiBold.copyWith(
           fontSize: 14,
           color: color ?? colors.textPrimary,
         ),
       ),
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
     );
   }
 
+  /// Tuile chiffrée : gros nombre serif teinté de [accent], puis point de
+  /// couleur + libellé (même principe que `StatCard`).
   Widget _buildStatItem({
     required AppSurfaceColors colors,
     required String title,
     required String value,
-    required IconData icon,
-    required Color iconColor,
+    required Color accent,
     VoidCallback? onTap,
   }) {
-    final content = Padding(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
+    final ink = SoftUi.accentInk(colors, accent);
+    return Material(
+      color: colors.background,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: AppTypography.frauncesBold.copyWith(
+                    fontSize: 28,
+                    color: ink,
+                    height: 1.0,
+                  ),
                 ),
-                child: Icon(icon, color: iconColor, size: 14),
               ),
-              const Spacer(),
-              if (onTap != null)
-                Icon(Icons.chevron_right_rounded, size: 16, color: colors.textTertiary),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(color: ink, shape: BoxShape.circle),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: AppTypography.interMedium.copyWith(
+                        fontSize: 11,
+                        color: colors.textPrimary,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: colors.statNumber.copyWith(fontSize: 16, height: 1.0),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: colors.statLabel.copyWith(fontSize: 9, height: 1.1),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
-    );
-
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(onTap: onTap, child: content),
     );
   }
 
-  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75% — même
+  /// Rouge sous 40%, ambre entre 40% et 74%, vert à partir de 75% — même
   /// seuils que la carte "Profil complété" côté candidat.
   Color _progressColor(double ratio) {
-    if (ratio < 0.4) return AppColors.error;
-    if (ratio < 0.75) return AppColors.warning;
-    return AppColors.success;
+    if (ratio < 0.4) return const Color(0xFFD1366E);
+    if (ratio < 0.75) return const Color(0xFFC2780E);
+    return const Color(0xFF0F8A6E);
   }
 
   Widget _buildProfileCompletionCard(AppSurfaceColors colors) {
     final ratio = profileCompletion.clamp(0.0, 1.0);
     final percentage = (ratio * 100).round();
-    final color = _progressColor(ratio);
+    final color = SoftUi.accentInk(colors, _progressColor(ratio));
 
     return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(12),
+      color: colors.background,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: colors.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onProfileCompletionTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Profil complété',
-                    style: colors.cardTitle.copyWith(fontSize: 14),
+                    '$percentage %',
+                    style: AppTypography.frauncesBold.copyWith(
+                      fontSize: 26,
+                      color: colors.textPrimary,
+                      height: 1.0,
+                    ),
                   ),
-                  Text(
-                    '$percentage%',
-                    style: AppTypography.cardTitle.copyWith(fontSize: 14, color: color),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'profil complété',
+                      style: AppTypography.interRegular.copyWith(
+                        fontSize: 12.5,
+                        color: colors.textSecondary,
+                      ),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(999),
                 child: LinearProgressIndicator(
                   value: ratio,
-                  minHeight: 8,
+                  minHeight: 7,
                   backgroundColor: color.withValues(alpha: 0.15),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),

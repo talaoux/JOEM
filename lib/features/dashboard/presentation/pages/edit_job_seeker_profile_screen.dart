@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/core/services/auth_service.dart';
-import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
@@ -12,7 +10,8 @@ import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/location_autocomplete_field.dart';
 import 'package:joem/features/job_seeker_registration/presentation/widgets/step_four_daily_rate.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import '../widgets/soft_ui.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran "Modifier le profil" — ouvert depuis l'icône stylo de
 /// `JobProfileScreen`. Champs réels (ceux collectés à l'inscription, plus
@@ -36,6 +35,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
   late final TextEditingController _telephoneController;
   late final TextEditingController _localisationController;
   late final TextEditingController _presentationController;
+  late final TextEditingController _objectifsController;
   late final TextEditingController _rateController;
   late final TextEditingController _newSkillController;
 
@@ -61,6 +61,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
     _telephoneController = TextEditingController(text: user?.telephone ?? '');
     _localisationController = TextEditingController(text: user?.localisation ?? '');
     _presentationController = TextEditingController(text: user?.presentation ?? '');
+    _objectifsController = TextEditingController(text: user?.objectifs ?? '');
     _rateController = TextEditingController(text: user?.tarifJournalier ?? '');
     _newSkillController = TextEditingController();
     _skills = List<String>.from(user?.skills ?? const []);
@@ -85,6 +86,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
     _telephoneController.dispose();
     _localisationController.dispose();
     _presentationController.dispose();
+    _objectifsController.dispose();
     _rateController.dispose();
     _newSkillController.dispose();
     super.dispose();
@@ -137,6 +139,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
       telephone: _telephoneController.text.trim(),
       localisation: _localisationController.text.trim(),
       presentation: _presentationController.text.trim(),
+      objectifs: _objectifsController.text.trim(),
       tarifJournalier: _rateController.text.trim(),
       disponibilite: _availability,
       skills: _skills,
@@ -151,31 +154,28 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: colors.surface,
-      appBar: AppBar(
-        backgroundColor: colors.surface,
-        elevation: 0,
-        foregroundColor: colors.textPrimary,
-        title: Text('Modifier le profil', style: colors.dashboardTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(colors),
+      appBar: const SoftAppBar(title: 'Modifier le profil'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.safeAreaHorizontal),
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: staggered([
               _buildCard(
                 title: 'Identité',
                 children: [
                   _TwoColumnRow(
                     left: LightTextField(
+                      accentColor: DashboardColors.accent,
                       label: 'Prénom',
                       hint: 'Hery',
                       icon: Icons.person_outline_rounded,
                       controller: _prenomController,
                     ),
                     right: LightTextField(
+                      accentColor: DashboardColors.accent,
                       label: 'Nom',
                       hint: 'Rakoto',
                       icon: Icons.person_outline_rounded,
@@ -184,6 +184,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                   ),
                   const SizedBox(height: 18),
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Titre professionnel',
                     hint: 'Ex: Développeur Web, Électricien...',
                     icon: Icons.badge_outlined,
@@ -191,11 +192,12 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _buildCard(
                 title: 'Coordonnées',
                 children: [
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Téléphone',
                     hint: '+261 XX XX XXX XX',
                     icon: Icons.call_rounded,
@@ -204,29 +206,41 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                   ),
                   const SizedBox(height: 18),
                   LocationAutocompleteField(
+                    accentColor: DashboardColors.accent,
                     controller: _localisationController,
                     options: kMalagasyCities,
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _buildCard(
                 title: 'À propos',
                 children: [
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Présentation',
                     hint: 'Présentez-vous en quelques mots',
                     icon: Icons.notes_rounded,
                     controller: _presentationController,
                     maxLines: 4,
                   ),
+                  const SizedBox(height: 18),
+                  LightTextField(
+                    accentColor: DashboardColors.accent,
+                    label: 'Mes objectifs',
+                    hint: 'Ce que vous recherchez professionnellement',
+                    icon: Icons.track_changes_outlined,
+                    controller: _objectifsController,
+                    maxLines: 3,
+                  ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _buildCard(
                 title: 'Tarif et disponibilité',
                 children: [
                   LightTextField(
+                    accentColor: DashboardColors.accent,
                     label: 'Tarif journalier souhaité',
                     hint: 'Ex: 50000',
                     icon: Icons.payments_outlined,
@@ -236,6 +250,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                   ),
                   const SizedBox(height: 18),
                   LightDropdown(
+                    accentColor: DashboardColors.accent,
                     label: 'Disponibilité',
                     hint: 'Sélectionnez votre disponibilité',
                     icon: Icons.event_available_outlined,
@@ -249,7 +264,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                     style: AppTypography.interRegular.copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF2A2A38),
+                      color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -273,12 +288,12 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _buildCard(
                 title: 'CV',
                 children: [_buildCvContent()],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _buildCard(
                 title: 'Compétences',
                 children: [
@@ -296,6 +311,7 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                     children: [
                       Expanded(
                         child: LightTextField(
+                          accentColor: DashboardColors.accent,
                           hint: 'Ex: Maçonnerie, Comptabilité...',
                           icon: Icons.star_border_rounded,
                           controller: _newSkillController,
@@ -304,35 +320,21 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: _addSkill,
-                        icon: const Icon(Icons.add_circle_rounded, color: OnboardingColors.violet, size: 32),
+                        icon: Icon(Icons.add_circle_rounded, color: SoftUi.brandInk(colors), size: 32),
                       ),
                     ],
                   ),
                 ],
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: (_isValid && !_isSaving) ? _save : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: OnboardingColors.violet,
-                    disabledBackgroundColor: OnboardingColors.violet.withOpacity(0.4),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                        )
-                      : const Text('Enregistrer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                ),
+              SoftPrimaryButton(
+                label: 'Enregistrer',
+                icon: Icons.check_rounded,
+                loading: _isSaving,
+                onPressed: _isValid ? _save : null,
               ),
               const SizedBox(height: AppSpacing.sectionSpacing),
-            ],
+            ]),
           ),
         ),
       ),
@@ -340,82 +342,68 @@ class _EditJobSeekerProfileScreenState extends State<EditJobSeekerProfileScreen>
   }
 
   Widget _buildCvContent() {
+    final colors = AppSurfaceColors.of(context);
     final cvFileName = _authService.currentUser?.cvFileName;
 
     if (cvFileName == null) {
-      return GestureDetector(
-        onTap: _pickCv,
-        child: Row(
-          children: [
-            const Icon(Icons.upload_file_rounded, color: OnboardingColors.violet, size: 20),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                'Ajouter votre CV (PDF ou image)',
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 13,
-                  color: OnboardingColors.violet,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Ajoutez votre CV (PDF ou image).',
+              style: AppTypography.interRegular.copyWith(fontSize: 13, color: colors.textSecondary),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          SoftPillButton(
+            label: 'Ajouter',
+            icon: Icons.upload_file_rounded,
+            compact: true,
+            onPressed: _pickCv,
+          ),
+        ],
       );
     }
 
     final isPdf = cvFileName.toLowerCase().endsWith('.pdf');
     return Row(
       children: [
-        Icon(
-          isPdf ? Icons.picture_as_pdf_outlined : Icons.image_outlined,
-          color: OnboardingColors.violet,
-          size: 22,
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: SoftUi.tint(colors, DashboardColors.accent),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            isPdf ? Icons.picture_as_pdf_outlined : Icons.image_outlined,
+            color: SoftUi.brandInk(colors),
+            size: 20,
+          ),
         ),
-        const SizedBox(width: AppSpacing.sm),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(
             cvFileName,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.interRegular.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppSurfaceColors.of(context).textPrimary,
-            ),
+            style: AppTypography.interMedium.copyWith(fontSize: 13.5, color: colors.textPrimary),
           ),
         ),
-        TextButton(
-          onPressed: _pickCv,
-          child: Text(
-            'Remplacer',
-            style: AppTypography.interRegular.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: OnboardingColors.violet,
-            ),
-          ),
-        ),
+        const SizedBox(width: AppSpacing.sm),
+        SoftPillButton(label: 'Remplacer', compact: true, onPressed: _pickCv),
       ],
     );
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
-    final colors = AppSurfaceColors.of(context);
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: colors.sectionTitle),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
-        ],
+      child: SoftSection(
+        title: title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
       ),
     );
   }
@@ -464,21 +452,24 @@ class _WorkModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final ink = SoftUi.brandInk(colors);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
         decoration: BoxDecoration(
-          color: selected ? OnboardingColors.violet : const Color(0xFFF5F5F8),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? OnboardingColors.violet : const Color(0xFFE3E3EC)),
+          color: selected
+              ? SoftUi.tint(colors, DashboardColors.accent)
+              : (SoftUi.isDark(colors) ? colors.surface : DashboardColors.segment),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? ink : Colors.transparent, width: 1.5),
         ),
         child: Text(
           mode.label,
-          style: TextStyle(
+          style: AppTypography.interSemiBold.copyWith(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : const Color(0xFF6B7280),
+            color: selected ? ink : colors.textSecondary,
           ),
         ),
       ),
@@ -494,23 +485,28 @@ class _SkillChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final ink = SoftUi.brandInk(colors);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
       decoration: BoxDecoration(
-        color: OnboardingColors.lavender.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
+        color: SoftUi.tint(colors, DashboardColors.accent),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: OnboardingColors.violetDeep, fontWeight: FontWeight.w600),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: ink, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
+          Text(label, style: AppTypography.interSemiBold.copyWith(fontSize: 12.5, color: ink)),
+          const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close_rounded, size: 16, color: OnboardingColors.violetDeep),
+            child: Icon(Icons.close_rounded, size: 16, color: ink),
           ),
         ],
       ),

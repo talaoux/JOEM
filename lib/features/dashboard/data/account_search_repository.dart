@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:joem/core/database/app_database.dart';
-import 'package:joem/core/services/auth_service.dart' show JobExperience;
+import 'package:joem/core/services/auth_service.dart'
+    show Certification, Formation, JobExperience, PortfolioProject, ProfessionalLink, User;
 
 /// Type de recherche de compte — distingue les historiques recruteur
 /// (recherche de candidats) et candidat (recherche d'entreprises) dans
@@ -30,6 +31,12 @@ class CandidateSearchResult {
     this.photo,
     this.skills = const [],
     this.experiences = const [],
+    this.portfolioProjects = const [],
+    this.objectifs,
+    this.formations = const [],
+    this.certifications = const [],
+    this.professionalLinks = const [],
+    this.portfolioThemeColor,
   });
 
   final String userId;
@@ -42,13 +49,68 @@ class CandidateSearchResult {
   final Uint8List? photo;
   final List<String> skills;
 
+  /// Clé du `PortfolioHeroTheme` choisi par ce candidat pour son Portfolio
+  /// (`job_seeker_profiles.portfolio_theme_color`) — `null` = thème violet
+  /// par défaut. Permet à `CandidateFullPortfolioScreen` d'afficher le même
+  /// dégradé "hero" côté recruteur que celui choisi par le candidat.
+  final String? portfolioThemeColor;
+
   /// Expériences professionnelles réellement saisies par ce candidat
   /// (`job_seeker_experiences`) — affichées en lecture seule sur
   /// `CandidateProfileViewScreen`, le profil qu'un recruteur consulte
   /// depuis `CandidateSearchScreen`.
   final List<JobExperience> experiences;
 
+  /// Réalisations réellement ajoutées par ce candidat depuis
+  /// `PortfolioProjectsScreen` (`job_seeker_portfolio_projects`) — affichées
+  /// en lecture seule sur `CandidateProfileViewScreen`.
+  final List<PortfolioProject> portfolioProjects;
+
+  /// Bloc "Mes objectifs" (`job_seeker_profiles.objectifs`), affiché en
+  /// lecture seule sur `CandidateProfileViewScreen`.
+  final String? objectifs;
+
+  /// Formations réellement ajoutées par ce candidat (`job_seeker_formations`)
+  /// — affichées en lecture seule sur `CandidateProfileViewScreen`.
+  final List<Formation> formations;
+
+  /// Certifications réellement ajoutées par ce candidat
+  /// (`job_seeker_certifications`) — affichées en lecture seule sur
+  /// `CandidateProfileViewScreen`.
+  final List<Certification> certifications;
+
+  /// Liens professionnels réellement ajoutés par ce candidat
+  /// (`job_seeker_professional_links`) — affichés en lecture seule sur
+  /// `CandidateProfileViewScreen`.
+  final List<ProfessionalLink> professionalLinks;
+
   String get fullName => '$firstName $lastName'.trim();
+
+  /// Construit le même modèle qu'une recherche recruteur, mais à partir du
+  /// [User] actuellement connecté — permet au candidat de prévisualiser son
+  /// propre portfolio exactement comme un recruteur le verrait
+  /// (`CandidateFullPortfolioScreen` depuis `PortfolioScreen`), sans requête
+  /// supplémentaire puisque [User] porte déjà toutes ces données.
+  factory CandidateSearchResult.fromUser(User user) {
+    return CandidateSearchResult(
+      userId: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      position: user.position,
+      localisation: user.localisation,
+      telephone: user.telephone,
+      presentation: user.presentation,
+      photo: user.photoBytes,
+      skills: user.skills,
+      experiences: user.experiences,
+      portfolioProjects: user.portfolioProjects,
+      objectifs: user.objectifs,
+      formations: user.formations,
+      certifications: user.certifications,
+      professionalLinks: user.professionalLinks,
+      portfolioThemeColor: user.portfolioThemeColor,
+    );
+  }
 }
 
 /// Une entreprise déjà inscrite (`employer_profiles`), trouvée par
@@ -127,9 +189,28 @@ class AccountSearchRepository {
     return _fetchJobSeekers(whereClause: '', whereArgs: const []);
   }
 
+  /// Profil complet (portfolio compris) d'un candidat précis — utilisé par
+  /// `CandidateApplicationDetailScreen` pour montrer au recruteur le
+  /// portfolio de quelqu'un qui a postulé à l'une de ses offres. Ignore
+  /// volontairement `profil_visible` : masquer son profil de la recherche
+  /// n'empêche pas le recruteur à qui l'on a soi-même envoyé sa candidature
+  /// de le consulter. `null` si aucun compte réel ne correspond (comptes de
+  /// démo, id négatif sans ligne `users`).
+  Future<CandidateSearchResult?> fetchJobSeekerById(String userId) async {
+    final id = int.tryParse(userId);
+    if (id == null) return null;
+    final results = await _fetchJobSeekers(
+      whereClause: 'AND u.id = ?',
+      whereArgs: [id],
+      onlyVisible: false,
+    );
+    return results.isEmpty ? null : results.first;
+  }
+
   Future<List<CandidateSearchResult>> _fetchJobSeekers({
     required String whereClause,
     required List<Object?> whereArgs,
+    bool onlyVisible = true,
   }) async {
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
@@ -142,12 +223,14 @@ class AccountSearchRepository {
         jsp.localisation AS localisation,
         jsp.telephone AS telephone,
         jsp.presentation AS presentation,
+        jsp.objectifs AS objectifs,
+        jsp.portfolio_theme_color AS portfolio_theme_color,
         jsp.photo AS photo
       FROM users u
       INNER JOIN job_seeker_profiles jsp ON jsp.user_id = u.id
       LEFT JOIN job_seeker_skills jss ON jss.user_id = u.id
       WHERE u.role = 'job_seeker'
-        AND jsp.profil_visible = 1
+        ${onlyVisible ? 'AND jsp.profil_visible = 1' : ''}
         $whereClause
       ORDER BY jsp.prenom ASC
       ''',
@@ -187,6 +270,51 @@ class AccountSearchRepository {
       ));
     }
 
+    final portfolioRows = await db.query(
+      'job_seeker_portfolio_projects',
+      where: 'user_id IN ($placeholders)',
+      whereArgs: userIds,
+      orderBy: 'created_at DESC',
+    );
+    final portfolioByUserId = <int, List<PortfolioProject>>{};
+    for (final row in portfolioRows) {
+      final userId = row['user_id'] as int;
+      (portfolioByUserId[userId] ??= []).add(PortfolioProject.fromRow(row));
+    }
+
+    final formationRows = await db.query(
+      'job_seeker_formations',
+      where: 'user_id IN ($placeholders)',
+      whereArgs: userIds,
+    );
+    final formationsByUserId = <int, List<Formation>>{};
+    for (final row in formationRows) {
+      final userId = row['user_id'] as int;
+      (formationsByUserId[userId] ??= []).add(Formation.fromRow(row));
+    }
+
+    final certificationRows = await db.query(
+      'job_seeker_certifications',
+      where: 'user_id IN ($placeholders)',
+      whereArgs: userIds,
+    );
+    final certificationsByUserId = <int, List<Certification>>{};
+    for (final row in certificationRows) {
+      final userId = row['user_id'] as int;
+      (certificationsByUserId[userId] ??= []).add(Certification.fromRow(row));
+    }
+
+    final linkRows = await db.query(
+      'job_seeker_professional_links',
+      where: 'user_id IN ($placeholders)',
+      whereArgs: userIds,
+    );
+    final linksByUserId = <int, List<ProfessionalLink>>{};
+    for (final row in linkRows) {
+      final userId = row['user_id'] as int;
+      (linksByUserId[userId] ??= []).add(ProfessionalLink.fromRow(row));
+    }
+
     return rows.map((row) {
       final userId = row['user_id'] as int;
       return CandidateSearchResult(
@@ -197,9 +325,15 @@ class AccountSearchRepository {
         localisation: row['localisation'] as String?,
         telephone: row['telephone'] as String?,
         presentation: row['presentation'] as String?,
+        objectifs: row['objectifs'] as String?,
+        portfolioThemeColor: row['portfolio_theme_color'] as String?,
         photo: row['photo'] as Uint8List?,
         skills: skillsByUserId[userId] ?? const [],
         experiences: experiencesByUserId[userId] ?? const [],
+        portfolioProjects: portfolioByUserId[userId] ?? const [],
+        formations: formationsByUserId[userId] ?? const [],
+        certifications: certificationsByUserId[userId] ?? const [],
+        professionalLinks: linksByUserId[userId] ?? const [],
       );
     }).toList();
   }

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/services/auth_service.dart';
-import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
-import 'package:joem/core/widgets/glass_button.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/features/dashboard/presentation/widgets/soft_ui.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Changement de mot de passe du compte connecté, ouvert depuis
 /// `JobSeekerSettingsScreen`. Vérifie d'abord le mot de passe actuel
@@ -89,32 +87,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: colors.surface,
-      appBar: AppBar(
-        backgroundColor: colors.surface,
-        elevation: 0,
-        foregroundColor: colors.textPrimary,
-        title: Text(
-          'Changer le mot de passe',
-          style: colors.dashboardTitle.copyWith(fontSize: 18),
-        ),
-      ),
+      backgroundColor: SoftUi.pageBackground(colors),
+      appBar: const SoftAppBar(title: 'Changer le mot de passe'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.safeAreaHorizontal),
           physics: const BouncingScrollPhysics(),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.cardPadding),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: AppRadius.cardRadius,
-              boxShadow: AppShadows.cardShadow,
-            ),
+          child: SoftCard(
+            radius: 28,
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: staggered([
                 LightTextField(
+                  accentColor: DashboardColors.accent,
                   label: 'Mot de passe actuel',
                   hint: '••••••••',
                   icon: Icons.lock_outline_rounded,
@@ -124,6 +110,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 ),
                 const SizedBox(height: 18),
                 LightTextField(
+                  accentColor: DashboardColors.accent,
                   label: 'Nouveau mot de passe',
                   hint: '••••••••',
                   icon: Icons.lock_reset_rounded,
@@ -133,6 +120,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 ),
                 const SizedBox(height: 18),
                 LightTextField(
+                  accentColor: DashboardColors.accent,
                   label: 'Confirmer le nouveau mot de passe',
                   hint: '••••••••',
                   icon: Icons.lock_reset_rounded,
@@ -140,15 +128,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   obscurable: true,
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: GlassButton(
-                    label: _isSubmitting ? 'Mise à jour...' : 'Mettre à jour le mot de passe',
-                    onTap: _isSubmitting ? null : _onSubmit,
-                    color: OnboardingColors.violet,
-                  ),
+                SoftPrimaryButton(
+                  label: 'Mettre à jour le mot de passe',
+                  icon: Icons.lock_reset_rounded,
+                  loading: _isSubmitting,
+                  onPressed: _onSubmit,
                 ),
-              ],
+              ]),
             ),
           ),
         ),

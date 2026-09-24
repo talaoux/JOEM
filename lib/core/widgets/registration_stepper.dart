@@ -6,7 +6,7 @@ import '../theme/app_durations.dart';
 import '../theme/app_typography.dart';
 
 /// Custom horizontal stepper for multi-step registration wizards: one
-/// 44px circle per step, linked by a line that fills violet as steps
+/// 44px circle per step, linked by a line that fills blue as steps
 /// complete. Styled for a white background. This is a bespoke widget —
 /// it does NOT use Flutter's built-in [Stepper].
 class RegistrationStepper extends StatelessWidget {
@@ -70,29 +70,23 @@ class _StepNode extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isHighlighted ? OnboardingColors.violet : Colors.white,
+              // Nouveau design : teinte pâle + bordure bleue plutôt qu'un
+              // disque plein ; étape à venir = blanc à fine bordure grise.
+              color: isHighlighted ? OnboardingColors.tint : Colors.white,
               border: Border.all(
-                color: isHighlighted ? OnboardingColors.violet : const Color(0xFFD8D8E2),
+                color: isActive
+                    ? OnboardingColors.accent
+                    : (isCompleted ? OnboardingColors.tint : const Color(0xFFE2E8F0)),
                 width: 1.5,
               ),
-              boxShadow: isActive
-                  ? [
-                      BoxShadow(
-                        color: OnboardingColors.violet.withValues(alpha: 0.35),
-                        blurRadius: 16,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 6),
-                      ),
-                    ]
-                  : null,
             ),
             alignment: Alignment.center,
             child: isCompleted
-                ? const Icon(Icons.check_rounded, color: Colors.white, size: 22)
+                ? const Icon(Icons.check_rounded, color: OnboardingColors.ink, size: 22)
                 : Text(
                     '${index + 1}',
                     style: AppTypography.stepperNumber.copyWith(
-                      color: isActive ? Colors.white : const Color(0xFF9A9AAE),
+                      color: isActive ? OnboardingColors.ink : const Color(0xFF94A3B8),
                     ),
                   ),
           ),
@@ -132,7 +126,7 @@ class _StepLine extends StatelessWidget {
                 return FractionallySizedBox(
                   widthFactor: value,
                   alignment: Alignment.centerLeft,
-                  child: Container(color: OnboardingColors.violet),
+                  child: Container(color: OnboardingColors.accent),
                 );
               },
             ),

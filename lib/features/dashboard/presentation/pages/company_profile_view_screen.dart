@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../data/account_search_repository.dart';
+import '../widgets/soft_ui.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Profil d'une entreprise trouvée via `JobSearchScreen` (recherche
 /// candidat) — même identité visuelle que `EmployerProfileScreen` (le
@@ -26,13 +24,13 @@ class CompanyProfileViewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: colors.surface,
+      backgroundColor: SoftUi.pageBackground(colors),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: staggered([
               _buildBannerAndLogo(context, colors),
               const SizedBox(height: AppSpacing.sectionSpacing),
               Padding(
@@ -54,7 +52,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
                       title: 'À propos de l\'entreprise',
                       child: _buildAbout(colors),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.md),
                     _buildSectionCard(
                       colors,
                       title: 'Coordonnées',
@@ -64,7 +62,7 @@ class CompanyProfileViewScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
+            ]),
           ),
         ),
       ),
@@ -79,21 +77,23 @@ class CompanyProfileViewScreen extends StatelessWidget {
         Container(
           height: _bannerHeight,
           width: double.infinity,
-          decoration: BoxDecoration(color: colors.divider),
+          decoration: BoxDecoration(
+            color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(colors) ? 0.22 : 0.12),
+          ),
         ),
         Positioned(
           top: AppSpacing.sm,
           left: AppSpacing.sm,
-          child: CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.white.withValues(alpha: 0.85),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: AppColors.textPrimary,
-                size: 18,
+          child: Material(
+            color: colors.background.withValues(alpha: 0.9),
+            shape: CircleBorder(side: BorderSide(color: colors.divider)),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.pop(context),
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: Icon(Icons.arrow_back_rounded, color: colors.textPrimary, size: 18),
               ),
             ),
           ),
@@ -103,17 +103,15 @@ class CompanyProfileViewScreen extends StatelessWidget {
           top: _bannerHeight + _avatarOverflow - _avatarBoxSize,
           child: Container(
             padding: const EdgeInsets.all(4),
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: SoftUi.pageBackground(colors),
               shape: BoxShape.circle,
             ),
-            child: CircleAvatar(
-              radius: 45,
-              backgroundColor: AppColors.primaryLightest,
-              backgroundImage: company.logo != null ? MemoryImage(company.logo!) : null,
-              child: company.logo == null
-                  ? const Icon(Icons.business_rounded, color: AppColors.primary, size: 40)
-                  : null,
+            child: SoftAvatar(
+              name: company.companyName,
+              size: 90,
+              icon: Icons.business_rounded,
+              photo: company.logo != null ? MemoryImage(company.logo!) : null,
             ),
           ),
         ),
@@ -131,7 +129,11 @@ class CompanyProfileViewScreen extends StatelessWidget {
       children: [
         Text(
           companyName,
-          style: colors.dashboardTitle.copyWith(fontSize: 20),
+          style: AppTypography.frauncesBold.copyWith(
+            fontSize: 26,
+            color: colors.textPrimary,
+            height: 1.15,
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
@@ -167,6 +169,9 @@ class CompanyProfileViewScreen extends StatelessWidget {
 
   Widget _buildAbout(AppSurfaceColors colors) {
     final description = company.description?.trim() ?? '';
+    if (description.isEmpty) {
+      return _buildEmptyPlaceholder(colors, "Cette entreprise n'a pas encore ajouté de description.");
+    }
     return Text(
       description.isNotEmpty ? description : "Cette entreprise n'a pas encore ajouté de description.",
       style: AppTypography.interRegular.copyWith(
@@ -201,8 +206,16 @@ class CompanyProfileViewScreen extends StatelessWidget {
   Widget _buildContactRow(AppSurfaceColors colors, IconData icon, String value) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: OnboardingColors.violet),
-        const SizedBox(width: AppSpacing.sm),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: SoftUi.tint(colors, DashboardColors.accent),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 17, color: SoftUi.brandInk(colors)),
+        ),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(
             value,
@@ -221,33 +234,13 @@ class CompanyProfileViewScreen extends StatelessWidget {
     required String title,
     required Widget child,
   }) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: colors.sectionTitle),
-          const SizedBox(height: AppSpacing.md),
-          child,
-        ],
-      ),
+      child: SoftSection(title: title, child: child),
     );
   }
 
   Widget _buildEmptyPlaceholder(AppSurfaceColors colors, String message) {
-    return Text(
-      message,
-      style: AppTypography.interRegular.copyWith(
-        fontSize: 13,
-        fontStyle: FontStyle.italic,
-        color: colors.textTertiary,
-      ),
-    );
+    return SoftEmptyState(text: message);
   }
 }

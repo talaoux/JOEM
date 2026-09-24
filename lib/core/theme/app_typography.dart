@@ -46,6 +46,12 @@ class AppTypography {
     fontWeight: FontWeight.w700,
   );
 
+  // Fraunces Bold - Serif d'affichage (gros chiffres, titres de cartes du
+  // dashboard recruteur, d'après la maquette `nouveau_design.jpeg`)
+  static TextStyle get frauncesBold => GoogleFonts.fraunces(
+    fontWeight: FontWeight.w700,
+  );
+
   // ===== STYLES DU DASHBOARD =====
 
   // Titre principal du dashboard
@@ -150,7 +156,7 @@ class AppTypography {
   // Bouton secondaire
   static TextStyle get secondaryButton => interSemiBold.copyWith(
     fontSize: 14,
-    color: const Color(0xFFA855F7),
+    color: const Color(0xFF1D4ED8),
     height: 1.3,
   );
 
@@ -196,7 +202,7 @@ class AppTypography {
 
   static TextStyle get navLabelActive => interSemiBold.copyWith(
     fontSize: 12,
-    color: const Color(0xFFA855F7),
+    color: const Color(0xFF3B82F6),
     height: 1.3,
   );
 
@@ -210,7 +216,7 @@ class AppTypography {
 
   static TextStyle get stepperLabelActive => interSemiBold.copyWith(
     fontSize: 13,
-    color: AppColors.primaryLight,
+    color: const Color(0xFF1D4ED8),
   );
 
   // Numéro à l'intérieur d'un cercle du stepper

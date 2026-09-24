@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
+import 'soft_ui.dart';
 
 class SearchBarWidget extends StatelessWidget {
   final TextEditingController controller;
@@ -102,7 +102,7 @@ class SearchBarWidget extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: DashboardColors.accent,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(

@@ -1,15 +1,14 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
+import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écrans de détail derrière les cartes chiffrées du recruteur — le
 /// "Tableau de bord" (`EmployerDashboard._buildStatisticsSection`) et le
@@ -56,23 +55,13 @@ class _StatScaffold extends StatelessWidget {
     final colors = AppSurfaceColors.of(context);
     Widget body;
     if (loading) {
-      body = const Center(child: CircularProgressIndicator());
+      body = Center(child: CircularProgressIndicator(color: SoftUi.brandInk(colors)));
     } else if (isEmpty) {
-      body = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(emptyIcon, size: 48, color: colors.textTertiary),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                emptyMessage,
-                textAlign: TextAlign.center,
-                style: colors.cardDescription.copyWith(fontSize: 14),
-              ),
-            ],
-          ),
+      body = Padding(
+        padding: const EdgeInsets.all(AppSpacing.safeAreaHorizontal),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SoftEmptyState(icon: emptyIcon, text: emptyMessage),
         ),
       );
     } else {
@@ -80,13 +69,8 @@ class _StatScaffold extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        backgroundColor: colors.background,
-        elevation: 0,
-        foregroundColor: colors.textPrimary,
-        title: Text(title, style: colors.sectionTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(colors),
+      appBar: SoftAppBar(title: title),
       body: SafeArea(
         child: onRefresh != null && !loading && !isEmpty
             ? RefreshIndicator(onRefresh: onRefresh!, child: body)
@@ -96,37 +80,23 @@ class _StatScaffold extends StatelessWidget {
   }
 }
 
-class _Separator extends StatelessWidget {
-  const _Separator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      indent: AppSpacing.safeAreaHorizontal,
-      endIndent: AppSpacing.safeAreaHorizontal,
-      color: AppSurfaceColors.of(context).divider,
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({this.bytes, required this.icon});
-
-  final Uint8List? bytes;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 22,
-      backgroundColor: OnboardingColors.lavender,
-      backgroundImage: bytes != null ? MemoryImage(bytes!) : null,
-      child: bytes == null
-          ? Icon(icon, color: OnboardingColors.violet, size: 20)
-          : null,
-    );
-  }
+/// Liste de cartes espacées, marges de page — commune aux deux écrans.
+ListView _cardList({required int itemCount, required IndexedWidgetBuilder itemBuilder}) {
+  return ListView.separated(
+    physics: const AlwaysScrollableScrollPhysics(),
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.safeAreaHorizontal,
+      AppSpacing.sm,
+      AppSpacing.safeAreaHorizontal,
+      AppSpacing.xl,
+    ),
+    itemCount: itemCount,
+    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+    itemBuilder: (context, index) => FadeSlideIn(
+      delay: staggerDelayFor(index),
+      child: itemBuilder(context, index),
+    ),
+  );
 }
 
 // ===========================================================================
@@ -210,13 +180,12 @@ class _EmployerInterviewsScreenState extends State<EmployerInterviewsScreen> {
       emptyMessage:
           "Aucun entretien planifié. Ouvrez une candidature reçue pour en planifier un.",
       onRefresh: _load,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
+      child: _cardList(
         itemCount: _interviews.length,
-        separatorBuilder: (_, _) => const _Separator(),
         itemBuilder: (context, index) {
           final interview = _interviews[index];
-          final isPast = interview.scheduledDateTime.isBefore(now);
+          // Date à définir : jamais "passé", l'entretien reste à organiser.
+          final isPast = interview.scheduledDateTime?.isBefore(now) ?? false;
           return _InterviewTile(
             interview: interview,
             isPast: isPast,
@@ -245,94 +214,63 @@ class _InterviewTile extends StatelessWidget {
     final name = interview.candidateName.trim().isNotEmpty
         ? interview.candidateName.trim()
         : 'Candidat';
-    return InkWell(
+    const amber = Color(0xFFC2780E);
+    final amberInk = SoftUi.accentInk(colors, amber);
+    return SoftCard(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.safeAreaHorizontal,
-          vertical: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: OnboardingColors.violet.withValues(alpha: 0.12),
-              child: Icon(
-                interview.isVisio
-                    ? Icons.videocam_rounded
-                    : Icons.event_available_rounded,
-                color: OnboardingColors.violet,
-                size: 20,
-              ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: SoftUi.tint(colors, isPast ? colors.textTertiary : amber),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          name,
-                          style: colors.cardTitle.copyWith(fontSize: 15),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (isPast) ...[
-                        const SizedBox(width: 6),
-                        _Badge(text: 'Passé', color: colors.textTertiary),
-                      ] else if (interview.isModified) ...[
-                        const SizedBox(width: 6),
-                        const _Badge(text: 'Modifié', color: Color(0xFFB45309)),
-                      ],
-                    ],
-                  ),
-                  if (interview.offerTitle.trim().isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      interview.offerTitle.trim(),
-                      style: colors.cardDescription.copyWith(fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 4),
+            child: Icon(
+              interview.isVisio ? Icons.videocam_rounded : Icons.event_available_rounded,
+              color: isPast ? colors.textTertiary : amberInk,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: colors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (interview.offerTitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    '${interview.dateLabel} · ${interview.time} · ${interview.locationLabel}',
-                    style: colors.jobInfo.copyWith(fontSize: 12),
+                    interview.offerTitle.trim(),
+                    style: colors.cardDescription.copyWith(fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  '${interview.whenLabel} · ${interview.locationLabel}',
+                  style: colors.jobInfo.copyWith(fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (isPast || interview.isModified) ...[
+                  const SizedBox(height: 8),
+                  isPast
+                      ? SoftDotBadge(label: 'Passé', color: colors.textTertiary)
+                      : const SoftDotBadge(label: 'Modifié', color: Color(0xFFB45309)),
+                ],
+              ],
             ),
-            Icon(Icons.chevron_right_rounded, color: colors.textTertiary),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: AppTypography.interSemiBold.copyWith(fontSize: 10, color: color),
+          ),
+          Icon(Icons.chevron_right_rounded, color: colors.textTertiary),
+        ],
       ),
     );
   }
@@ -383,10 +321,8 @@ class _EmployerOfferViewsScreenState extends State<EmployerOfferViewsScreen> {
       emptyIcon: Icons.visibility_outlined,
       emptyMessage: "Aucun candidat n'a encore consulté vos offres.",
       onRefresh: _load,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
+      child: _cardList(
         itemCount: _views.length,
-        separatorBuilder: (_, _) => const _Separator(),
         itemBuilder: (context, index) => _OfferViewTile(view: _views[index]),
       ),
     );
@@ -405,14 +341,13 @@ class _OfferViewTile extends StatelessWidget {
       if (view.viewerPosition != null && view.viewerPosition!.isNotEmpty)
         view.viewerPosition!,
     ];
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.safeAreaHorizontal,
-        vertical: AppSpacing.md,
-      ),
+    return SoftCard(
       child: Row(
         children: [
-          _Avatar(bytes: view.viewerPhoto, icon: Icons.person_rounded),
+          SoftAvatar(
+            name: view.viewerName,
+            photo: view.viewerPhoto != null ? MemoryImage(view.viewerPhoto!) : null,
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -420,7 +355,7 @@ class _OfferViewTile extends StatelessWidget {
               children: [
                 Text(
                   view.viewerName,
-                  style: colors.cardTitle.copyWith(fontSize: 15),
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: colors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

@@ -1,8 +1,10 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// One "compétence" row: a skill name plus a 1-5 star rating.
 class SkillEntry {
@@ -40,13 +42,14 @@ class StepThreeProfessionalProfile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Profil professionnel',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+            color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -72,10 +75,10 @@ class StepThreeProfessionalProfile extends StatelessWidget {
 
         TextButton.icon(
           onPressed: onAddSkill,
-          icon: const Icon(Icons.add_rounded, color: OnboardingColors.violet, size: 20),
+          icon: const Icon(Icons.add_rounded, color: OnboardingColors.accent, size: 20),
           label: const Text(
             'Ajouter une compétence',
-            style: TextStyle(color: OnboardingColors.violet, fontWeight: FontWeight.w600),
+            style: TextStyle(color: OnboardingColors.accent, fontWeight: FontWeight.w600),
           ),
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
@@ -96,7 +99,7 @@ class StepThreeProfessionalProfile extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         _CvDropZone(fileName: cvFileName, onTap: onCvTap),
-      ],
+      ]),
     );
   }
 }
@@ -195,7 +198,7 @@ class _CvDropZone extends StatelessWidget {
               children: [
                 Icon(
                   selected ? Icons.check_circle_rounded : Icons.upload_file_rounded,
-                  color: OnboardingColors.violet,
+                  color: OnboardingColors.accent,
                   size: 26,
                 ),
                 const SizedBox(height: 6),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:joem/core/navigation/app_route_observer.dart';
+import 'package:joem/core/navigation/fade_through_page_transitions_builder.dart';
 import 'package:joem/core/services/display_preferences_controller.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/features/splash/presentation/splash_screen.dart';
@@ -40,7 +42,12 @@ class _JOEMAppState extends State<JOEMApp> {
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFA855F7),
+        // Bleu océan (`DashboardColors.accent`) : couleur des espaces
+        // candidat et recruteur. Ne colore que les éléments Material par
+        // défaut (boutons de dialogue, sélecteurs de date/heure,
+        // indicateurs de chargement...) ; l'accueil, la connexion et les
+        // wizards posent leur violet explicitement et n'en dépendent pas.
+        seedColor: const Color(0xFF3B82F6),
         brightness: Brightness.dark,
       ),
       splashColor: Colors.transparent,
@@ -60,6 +67,20 @@ class _JOEMAppState extends State<JOEMApp> {
         ),
       ),
       extensions: [surfaceColors],
+      // Applique un fondu enchaîné + léger glissement à *toute* navigation
+      // `Navigator.push`/`pushReplacement` de l'app (toutes plateformes),
+      // sans avoir à toucher chacun des appels dans les écrans — voir
+      // `FadeThroughPageTransitionsBuilder`.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeThroughPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeThroughPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeThroughPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeThroughPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeThroughPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: FadeThroughPageTransitionsBuilder(),
+        },
+      ),
     );
   }
 
@@ -68,6 +89,7 @@ class _JOEMAppState extends State<JOEMApp> {
     return MaterialApp(
       title: 'JOEM - Job Offer & Employment Madagascar',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [appRouteObserver],
       themeMode: _displayPreferences.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: _buildTheme(AppSurfaceColors.light),
       darkTheme: _buildTheme(AppSurfaceColors.dark),

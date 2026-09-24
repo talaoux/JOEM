@@ -16,6 +16,7 @@ import 'package:joem/features/dashboard/presentation/pages/employer_dashboard.da
 import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/features/welcome/presentation/welcome_screen.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran "Connexion" : pas de wizard, un simple formulaire email + mot
 /// de passe (ou Google) sur fond dégradé façon onboarding, même identité visuelle que les
@@ -224,7 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                 child: Column(
-                  children: [
+                  children: staggered([
                     const SizedBox(height: 48),
                     const JoemGradientLogo(),
                     const SizedBox(height: 36),
@@ -232,12 +233,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     FormSurface(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        children: staggered([
                           Text(
                             'Connexion',
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
+                            style: GoogleFonts.fraunces(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w700,
                               color: OnboardingColors.navy,
                             ),
                           ),
@@ -267,30 +268,43 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          Row(
+                          // `Wrap` plutôt qu'une `Row` + `Spacer` : sur un écran
+                          // étroit (ou avec "Texte agrandi"), "Mot de passe
+                          // oublié ?" passe à la ligne au lieu de déborder.
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 12,
+                            runSpacing: 10,
                             children: [
                               GestureDetector(
                                 onTap: () => setState(() => _rememberMe = !_rememberMe),
                                 child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Container(
+                                    AnimatedContainer(
+                                      duration: Motion.of(const Duration(milliseconds: 180)),
+                                      curve: Curves.easeOut,
                                       width: 20,
                                       height: 20,
                                       decoration: BoxDecoration(
                                         color: _rememberMe
-                                            ? OnboardingColors.violet
+                                            ? OnboardingColors.accent
                                             : Colors.transparent,
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
                                           color: _rememberMe
-                                              ? OnboardingColors.violet
+                                              ? OnboardingColors.accent
                                               : const Color(0xFFD8D8E2),
                                           width: 1.5,
                                         ),
                                       ),
-                                      child: _rememberMe
-                                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
-                                          : null,
+                                      child: AnimatedScale(
+                                        scale: _rememberMe ? 1 : 0,
+                                        duration: Motion.of(const Duration(milliseconds: 200)),
+                                        curve: Curves.easeOutBack,
+                                        child: const Icon(Icons.check_rounded, color: Colors.white, size: 14),
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     const Text(
@@ -300,7 +314,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ],
                                 ),
                               ),
-                              const Spacer(),
                               GestureDetector(
                                 onTap: _onForgotPassword,
                                 child: const Text(
@@ -308,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: OnboardingColors.violet,
+                                    color: OnboardingColors.accent,
                                   ),
                                 ),
                               ),
@@ -321,7 +334,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: GlassButton(
                               label: _isLoading ? 'Connexion...' : 'Se connecter',
                               onTap: _isLoading ? null : _onSubmit,
-                              color: OnboardingColors.violet,
+                              color: OnboardingColors.accent,
                             ),
                           ),
 
@@ -349,11 +362,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ],
-                        ],
+                        ]),
                       ),
                     ),
                     const SizedBox(height: 32),
-                  ],
+                  ]),
                 ),
               ),
             ),

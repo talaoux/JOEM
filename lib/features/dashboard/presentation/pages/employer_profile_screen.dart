@@ -1,14 +1,18 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
+import '../../data/job_offer_repository.dart';
+import '../widgets/bottom_navigation.dart';
+import '../widgets/soft_ui.dart';
+import 'candidate_search_screen.dart';
 import 'edit_employer_profile_screen.dart';
+import 'employer_notifications_screen.dart';
+import 'job_offer_publish_screen.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Profil entreprise — équivalent recruteur de `JobProfileScreen`, mais le
 /// contenu tourne autour de l'entreprise (logo, description, coordonnées)
@@ -23,6 +27,80 @@ class EmployerProfileScreen extends StatefulWidget {
 class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
+  final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+
+  /// Pastille de la nav basse — même calcul que sur le dashboard.
+  int _notificationCount = 0;
+
+  /// Compteurs réels affichés sous l'identité (offres publiées et vues sur
+  /// ces offres, `job_offers`/`job_offer_views`) — remplacent les anciens
+  /// "12 offres publiées · 340 vues du profil" codés en dur. `null` tant
+  /// que non chargés.
+  int? _offersCount;
+  int? _offerViewsCount;
+
+  AppSurfaceColors get _colors => AppSurfaceColors.of(context);
+
+  int? get _employerUserId => int.tryParse(_authService.currentUser?.id ?? '');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationCount();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) return;
+    final offers = await _jobOfferRepository.fetchByEmployer(employerUserId);
+    final views = await _jobOfferRepository.countOfferViewsForEmployer(employerUserId);
+    if (!mounted) return;
+    setState(() {
+      _offersCount = offers.length;
+      _offerViewsCount = views;
+    });
+  }
+
+  Future<void> _loadNotificationCount() async {
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) return;
+    if (_authService.currentUser?.notificationsEnabled == false) {
+      if (!mounted) return;
+      setState(() => _notificationCount = 0);
+      return;
+    }
+    final count = await _jobOfferRepository
+        .countUnreadApplicationNotificationsForEmployer(employerUserId);
+    if (!mounted) return;
+    setState(() => _notificationCount = count);
+  }
+
+  /// Navigation de la barre basse : remplace l'écran courant par l'écran
+  /// cible (comportement d'onglets, pas d'empilement) ou revient au
+  /// dashboard ("Accueil", toujours la racine de la pile de navigation
+  /// après connexion).
+  void _onNavTap(int index) {
+    if (index == 4) return;
+    if (index == 0) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    late final Widget screen;
+    switch (index) {
+      case 1:
+        screen = const CandidateSearchScreen();
+        break;
+      case 2:
+        screen = const JobOfferPublishScreen();
+        break;
+      default:
+        screen = const EmployerNotificationsScreen();
+    }
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => screen));
+  }
 
   Uint8List? get _coverImageBytes => _authService.currentUser?.coverPhotoBytes;
 
@@ -77,13 +155,13 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: SoftUi.pageBackground(_colors),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: staggered([
               _buildBannerAndLogo(),
               const SizedBox(height: 52),
               Padding(
@@ -92,7 +170,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 ),
                 child: _buildIdentitySection(),
               ),
-              const SizedBox(height: AppSpacing.sectionSpacing),
+              const SizedBox(height: AppSpacing.lg),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.safeAreaHorizontal,
@@ -101,24 +179,25 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildCompletionCard(),
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildSectionCard(
+                    const SizedBox(height: AppSpacing.md),
+                    SoftSection(
                       title: 'À propos de l\'entreprise',
-                      child: Text(
-                        _about ??
-                            "Vous n'avez pas encore décrit votre entreprise.",
-                        style: AppTypography.interRegular.copyWith(
-                          fontSize: 14,
-                          fontStyle: _about == null
-                              ? FontStyle.italic
-                              : FontStyle.normal,
-                          color: const Color(0xFF6B7280),
-                          height: 1.5,
-                        ),
-                      ),
+                      child: _about != null
+                          ? Text(
+                              _about!,
+                              style: AppTypography.interRegular.copyWith(
+                                fontSize: 14,
+                                color: _colors.textSecondary,
+                                height: 1.5,
+                              ),
+                            )
+                          : const SoftEmptyState(
+                              icon: Icons.edit_note_rounded,
+                              text: "Vous n'avez pas encore décrit votre entreprise.",
+                            ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _buildSectionCard(
+                    const SizedBox(height: AppSpacing.md),
+                    SoftSection(
                       title: 'Coordonnées',
                       child: _buildContactInfo(),
                     ),
@@ -126,9 +205,18 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                   ],
                 ),
               ),
-            ],
+            ]),
           ),
         ),
+      ),
+      bottomNavigationBar: BottomNavigation(
+        currentIndex: 4,
+        onTap: _onNavTap,
+        secondItemIcon: Icons.search_rounded,
+        secondItemLabel: 'Recherche',
+        notificationCount: _notificationCount,
+        accentColor: DashboardColors.accent,
+        softHomeButton: true,
       ),
     );
   }
@@ -140,10 +228,12 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         Container(
           height: 130,
           width: double.infinity,
-          // Pas de photo de couverture choisie : fond gris uni façon
-          // Facebook plutôt que le dégradé violet de la marque.
+          // Pas de photo de couverture choisie : fond violet très pâle (au
+          // lieu de l'ancien gris "Facebook") pour rester dans la palette.
           decoration: BoxDecoration(
-            color: _coverImageBytes == null ? const Color(0xFFE4E6EB) : null,
+            color: _coverImageBytes == null
+                ? DashboardColors.accent.withValues(alpha: SoftUi.isDark(_colors) ? 0.22 : 0.12)
+                : null,
             image: _coverImageBytes != null
                 ? DecorationImage(
                     image: MemoryImage(_coverImageBytes!),
@@ -155,18 +245,9 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         Positioned(
           top: AppSpacing.sm,
           left: AppSpacing.sm,
-          child: CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.white.withValues(alpha: 0.85),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: AppColors.textPrimary,
-                size: 18,
-              ),
-            ),
+          child: _roundIconButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: () => Navigator.pop(context),
           ),
         ),
         Positioned(
@@ -175,13 +256,13 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
           child: GestureDetector(
             onTap: _pickCoverImage,
             child: Container(
-              width: 32,
-              height: 32,
-              padding: const EdgeInsets.all(6),
+              width: 34,
+              height: 34,
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _colors.background,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                border: Border.all(color: _colors.divider, width: 1),
               ),
               child: Image.asset(
                 'assets/images/appareil-photo-reflex-numerique.png',
@@ -197,23 +278,15 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
             onTap: _showLogoOptions,
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: SoftUi.pageBackground(_colors),
                 shape: BoxShape.circle,
               ),
-              child: CircleAvatar(
-                radius: 45,
-                backgroundColor: AppColors.primaryLightest,
-                backgroundImage: _currentLogoBytes != null
-                    ? MemoryImage(_currentLogoBytes!) as ImageProvider
-                    : null,
-                child: _currentLogoBytes == null
-                    ? const Icon(
-                        Icons.business_rounded,
-                        color: AppColors.primary,
-                        size: 40,
-                      )
-                    : null,
+              child: SoftAvatar(
+                name: 'Entreprise',
+                size: 90,
+                icon: Icons.business_rounded,
+                photo: _currentLogoBytes != null ? MemoryImage(_currentLogoBytes!) : null,
               ),
             ),
           ),
@@ -222,12 +295,28 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
     );
   }
 
+  Widget _roundIconButton({required IconData icon, required VoidCallback onTap}) {
+    return Material(
+      color: _colors.background.withValues(alpha: 0.9),
+      shape: CircleBorder(side: BorderSide(color: _colors.divider)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: _colors.textPrimary, size: 18),
+        ),
+      ),
+    );
+  }
+
   void _showLogoOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.background,
+      backgroundColor: _colors.background,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         return SafeArea(
@@ -239,35 +328,35 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: _colors.divider,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.visibility_outlined,
-                  color: AppColors.textPrimary,
+                  color: _colors.textPrimary,
                 ),
                 title: Text(
                   'Voir le logo',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: _colors.textPrimary,
                   ),
                 ),
                 onTap: () => Navigator.pop(context),
               ),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.photo_library_outlined,
-                  color: AppColors.textPrimary,
+                  color: _colors.textPrimary,
                 ),
                 title: Text(
                   'Changer le logo',
                   style: AppTypography.interRegular.copyWith(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: _colors.textPrimary,
                   ),
                 ),
                 onTap: () {
@@ -298,78 +387,73 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
                 companyName,
-                style: AppTypography.dashboardTitle.copyWith(fontSize: 20),
+                style: AppTypography.frauncesBold.copyWith(
+                  fontSize: 26,
+                  color: _colors.textPrimary,
+                  height: 1.15,
+                ),
               ),
             ),
-            IconButton(
+            const SizedBox(width: AppSpacing.sm),
+            SoftPillButton(
+              label: 'Modifier',
+              icon: Icons.edit_outlined,
+              compact: true,
               onPressed: _openEditProfile,
-              icon: Image.asset(
-                'assets/images/stylo.png',
-                width: 20,
-                height: 20,
-              ),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xs),
+        const SizedBox(height: 6),
         Text(
           recruiterName.isNotEmpty
               ? 'Géré par $recruiterName'
               : 'Espace recruteur',
           style: AppTypography.interRegular.copyWith(
             fontSize: 14,
-            color: const Color(0xFF6B7280),
+            color: _colors.textSecondary,
           ),
         ),
         if (location != null && location.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.location_on_outlined,
                 size: 16,
-                color: Color(0xFF9CA3AF),
+                color: _colors.textTertiary,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 location,
                 style: AppTypography.interRegular.copyWith(
                   fontSize: 13,
-                  color: const Color(0xFF9CA3AF),
+                  color: _colors.textTertiary,
                 ),
               ),
             ],
           ),
         ],
         const SizedBox(height: AppSpacing.md),
-        // Simulation en attendant un vrai suivi des offres publiées et des
-        // vues du profil entreprise (aucun compteur persistant n'existe
-        // encore) — même traitement que "128 vues du profil" côté candidat.
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            Text(
-              '12 offres publiées',
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: OnboardingColors.violet,
-                fontWeight: FontWeight.w600,
-              ),
+            SoftDotBadge(
+              label: _offersCount == null
+                  ? 'Offres publiées'
+                  : '$_offersCount offre${_offersCount == 1 ? '' : 's'} publiée${_offersCount == 1 ? '' : 's'}',
+              color: DashboardColors.accentStrong,
             ),
-            const SizedBox(width: AppSpacing.sm),
-            const Text('·', style: TextStyle(color: Color(0xFF9CA3AF))),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              '340 vues du profil',
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: OnboardingColors.violet,
-                fontWeight: FontWeight.w600,
-              ),
+            SoftDotBadge(
+              label: _offerViewsCount == null
+                  ? 'Vues sur vos offres'
+                  : '$_offerViewsCount vue${_offerViewsCount == 1 ? '' : 's'} sur vos offres',
+              color: const Color(0xFFD1366E),
             ),
           ],
         ),
@@ -377,48 +461,68 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
     );
   }
 
-  /// Rouge sous 40%, jaune entre 40% et 74%, vert à partir de 75% — même
-  /// seuils que côté candidat.
+  /// Rouge sous 40%, ambre entre 40% et 74%, vert à partir de 75% — même
+  /// seuils que côté candidat (teintes foncées de la maquette).
   Color _completionColor(double ratio) {
-    if (ratio < 0.4) return AppColors.error;
-    if (ratio < 0.75) return AppColors.warning;
-    return AppColors.success;
+    if (ratio < 0.4) return const Color(0xFFD1366E);
+    if (ratio < 0.75) return const Color(0xFFC2780E);
+    return const Color(0xFF0F8A6E);
   }
 
+  /// Bloc teinté façon "48 messages reçus · objectif 500" de la maquette :
+  /// gros pourcentage serif, barre de progression, puis ce qu'il reste à
+  /// renseigner.
   Widget _buildCompletionCard() {
     final user = _authService.currentUser;
     final ratio = (user?.employerProfileCompletion ?? 0.0).clamp(0.0, 1.0);
     final percent = (ratio * 100).round();
-    final color = _completionColor(ratio);
+    final color = SoftUi.accentInk(_colors, _completionColor(ratio));
     final missingFields = user?.missingEmployerFieldLabels ?? const <String>[];
     final suggestions = missingFields.take(3).toList();
 
     return Material(
-      color: AppColors.background,
-      borderRadius: AppRadius.cardRadius,
+      color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(_colors) ? 0.16 : 0.08),
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: _openEditProfile,
-        borderRadius: AppRadius.cardRadius,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.cardPadding),
-          decoration: BoxDecoration(
-            borderRadius: AppRadius.cardRadius,
-            boxShadow: AppShadows.cardShadow,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Profil complété', style: AppTypography.sectionTitle),
                   Text(
-                    '$percent%',
-                    style: AppTypography.interRegular.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: color,
+                    '$percent %',
+                    style: AppTypography.frauncesBold.copyWith(
+                      fontSize: 38,
+                      color: _colors.textPrimary,
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'profil complété',
+                        style: AppTypography.interRegular.copyWith(
+                          fontSize: 14,
+                          color: _colors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'objectif 100 %',
+                      style: AppTypography.interRegular.copyWith(
+                        fontSize: 12.5,
+                        color: _colors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -429,32 +533,48 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 child: LinearProgressIndicator(
                   value: ratio,
                   minHeight: 8,
-                  backgroundColor: color.withValues(alpha: 0.15),
+                  backgroundColor: _colors.background,
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.md),
               if (suggestions.isEmpty)
                 Text(
                   'Votre profil est complet, bravo !',
                   style: AppTypography.interRegular.copyWith(
-                    fontSize: 12,
-                    color: const Color(0xFF9CA3AF),
+                    fontSize: 12.5,
+                    color: _colors.textSecondary,
                   ),
                 )
               else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     for (final suggestion in suggestions)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '• $suggestion',
-                          style: AppTypography.interRegular.copyWith(
-                            fontSize: 12,
-                            color: const Color(0xFF9CA3AF),
-                          ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _colors.background,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              suggestion,
+                              style: AppTypography.interMedium.copyWith(
+                                fontSize: 11.5,
+                                color: _colors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                   ],
@@ -474,13 +594,9 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
     final hasLocalisation = localisation != null && localisation.isNotEmpty;
 
     if (!hasTelephone && !hasLocalisation) {
-      return Text(
-        "Aucune coordonnée renseignée pour le moment.",
-        style: AppTypography.interRegular.copyWith(
-          fontSize: 13,
-          fontStyle: FontStyle.italic,
-          color: const Color(0xFF9CA3AF),
-        ),
+      return const SoftEmptyState(
+        icon: Icons.contact_phone_outlined,
+        text: 'Aucune coordonnée renseignée pour le moment.',
       );
     }
 
@@ -500,38 +616,26 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   Widget _buildContactRow(IconData icon, String value) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: OnboardingColors.violet),
-        const SizedBox(width: AppSpacing.sm),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: SoftUi.tint(_colors, DashboardColors.accent),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 17, color: SoftUi.brandInk(_colors)),
+        ),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(
             value,
             style: AppTypography.interRegular.copyWith(
               fontSize: 14,
-              color: AppColors.textPrimary,
+              color: _colors.textPrimary,
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSectionCard({required String title, required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.sectionTitle),
-          const SizedBox(height: AppSpacing.md),
-          child,
-        ],
-      ),
     );
   }
 }

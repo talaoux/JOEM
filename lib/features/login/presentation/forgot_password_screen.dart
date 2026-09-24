@@ -7,6 +7,7 @@ import 'package:joem/core/widgets/joem_gradient_logo.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Réinitialisation locale du mot de passe (`AuthService.resetPassword`) —
 /// aucun serveur mail : pas d'envoi de lien, l'utilisateur saisit
@@ -106,18 +107,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                         child: Column(
-                          children: [
+                          children: staggered([
                             const JoemGradientLogo(),
                             const SizedBox(height: 36),
                             FormSurface(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                                children: staggered([
                                   Text(
                                     'Mot de passe oublié',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
+                                    style: GoogleFonts.fraunces(
+                                      fontSize: 23,
+                                      fontWeight: FontWeight.w700,
                                       color: OnboardingColors.navy,
                                     ),
                                   ),
@@ -164,14 +165,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           ? 'Réinitialisation...'
                                           : 'Réinitialiser le mot de passe',
                                       onTap: _isSubmitting ? null : _onSubmit,
-                                      color: OnboardingColors.violet,
+                                      color: OnboardingColors.accent,
                                     ),
                                   ),
-                                ],
+                                ]),
                               ),
                             ),
                             const SizedBox(height: 32),
-                          ],
+                          ]),
                         ),
                       ),
                     ),

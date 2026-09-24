@@ -1,6 +1,8 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Étape 3 — "Validation" : relecture des informations saisies aux
 /// étapes précédentes avant la création du compte.
@@ -34,13 +36,14 @@ class StepThreeValidation extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Vérifiez vos informations',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+            color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -86,7 +89,7 @@ class StepThreeValidation extends StatelessWidget {
             ),
           ],
         ),
-      ],
+      ]),
     );
   }
 }
@@ -142,7 +145,7 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: OnboardingColors.violet, size: 18),
+        Icon(icon, color: OnboardingColors.accent, size: 18),
         const SizedBox(width: 10),
         Expanded(
           child: Column(

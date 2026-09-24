@@ -13,6 +13,7 @@ class LightDropdown extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.icon,
+    this.accentColor,
   });
 
   final String label;
@@ -21,6 +22,10 @@ class LightDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String> onChanged;
   final IconData? icon;
+
+  /// Couleur d'accent (icône, option choisie) — mauve `AppColors.primary`
+  /// par défaut ; les dashboards passent leur bleu océan.
+  final Color? accentColor;
 
   Future<void> _openPicker(BuildContext context) async {
     final selected = await showModalBottomSheet<String>(
@@ -69,12 +74,12 @@ class LightDropdown extends StatelessWidget {
                         option,
                         style: TextStyle(
                           fontSize: 15,
-                          color: isSelected ? AppColors.primary : const Color(0xFF1C1C26),
+                          color: isSelected ? (accentColor ?? AppColors.primary) : const Color(0xFF1C1C26),
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
                       trailing: isSelected
-                          ? Icon(Icons.check_rounded, color: AppColors.primary)
+                          ? Icon(Icons.check_rounded, color: accentColor ?? AppColors.primary)
                           : null,
                       onTap: () => Navigator.of(sheetContext).pop(option),
                     );
@@ -120,7 +125,7 @@ class LightDropdown extends StatelessWidget {
             child: Row(
               children: [
                 if (icon != null) ...[
-                  Icon(icon, color: AppColors.primary, size: 20),
+                  Icon(icon, color: accentColor ?? AppColors.primary, size: 20),
                   const SizedBox(width: 12),
                 ],
                 Expanded(

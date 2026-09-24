@@ -1,30 +1,28 @@
 import 'package:flutter/material.dart';
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
-import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_surface_colors.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../data/account_search_repository.dart';
 import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/job_seeker_header.dart';
 import 'profile_stats_screens.dart';
-import 'category_offers_screen.dart';
 import 'job_categories_screen.dart';
 import 'job_search_screen.dart';
-import 'job_publish_screen.dart';
+import 'portfolio_screen.dart';
 import 'job_notifications_screen.dart';
 import 'job_profile_screen.dart';
 import 'job_offer_detail_screen.dart';
 import 'job_seeker_settings_screen.dart';
-import '../widgets/hero_card.dart';
-import '../widgets/category_card.dart';
 import '../widgets/job_offer_post_card.dart';
-import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
+import '../widgets/soft_ui.dart';
 import '../widgets/profile_side_panel.dart';
 import '../../../../features/login/presentation/login_screen.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
 
 class JobSeekerDashboard extends StatefulWidget {
   const JobSeekerDashboard({super.key});
@@ -34,23 +32,11 @@ class JobSeekerDashboard extends StatefulWidget {
 }
 
 class _JobSeekerDashboardState extends State<JobSeekerDashboard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   final TextEditingController _searchController = TextEditingController();
   final AuthService _authService = AuthService();
   int _currentNavIndex = 0;
   int _notificationCount = 0;
-
-  // Données mockées
-  final List<Map<String, dynamic>> _categories = [
-    {'title': 'Informatique', 'icon': Icons.computer_rounded},
-    {'title': 'Commerce', 'icon': Icons.shopping_bag_rounded},
-    {'title': 'Santé', 'icon': Icons.medical_services_rounded},
-    {'title': 'BTP', 'icon': Icons.construction_rounded},
-    {'title': 'Finance', 'icon': Icons.account_balance_rounded},
-    {'title': 'Marketing', 'icon': Icons.campaign_rounded},
-    {'title': 'Education', 'icon': Icons.school_rounded},
-    {'title': 'Industrie', 'icon': Icons.precision_manufacturing_rounded},
-  ];
 
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -69,6 +55,11 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   List<JobOffer> _offers = [];
   bool _loadingOffers = true;
 
+  /// Nombre maximum d'offres affichées sur l'accueil. Au-delà, un bouton
+  /// "Voir plus d'offres" ouvre `JobCategoriesScreen` pour parcourir le
+  /// reste par secteur.
+  static const int _maxHomeOffers = 100;
+
   /// Ids des offres auxquelles le candidat connecté a déjà postulé
   /// (`job_applications`) — bascule chaque carte sur "Candidature envoyée"
   /// sans re-fetch de toute la liste.
@@ -81,38 +72,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
 
   late AnimationController _animationController;
   late AnimationController _profilePanelController;
-
-  // ===== RESPONSIVE HELPERS =====
-  // Ces méthodes adaptent les tailles selon la largeur de l'écran
-  // pour éviter les overflow sur tous les appareils
-
-  /// Retourne true si l'écran est petit (< 360px)
-  bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width < 360;
-  }
-
-  /// Retourne true si l'écran est moyen (360-390px)
-  bool _isMediumScreen(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    return width >= 360 && width < 390;
-  }
-
-  /// Retourne true si l'écran est large (>= 390px)
-  bool _isLargeScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width >= 390;
-  }
-
-  /// Calcule le childAspectRatio optimal pour le GridView des Catégories
-  double _getCategoryCardAspectRatio(BuildContext context) {
-    // Ratio = width / height
-    if (_isSmallScreen(context)) {
-      return 0.75;
-    } else if (_isMediumScreen(context)) {
-      return 0.8;
-    } else {
-      return 0.85;
-    }
-  }
 
   /// Padding inférieur para éviter le contenu caché derrière BottomNavigationBar
   /// Problème: Le contenu pouvait être caché derrière la barre de navigation
@@ -226,11 +185,17 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     final userId = _jobSeekerUserId;
     if (userId == null || !_appliedOfferIds.contains(offer.id)) return;
 
-    await _jobOfferRepository.withdrawApplication(
+    final withdrawn = await _jobOfferRepository.withdrawApplication(
       jobOfferId: offer.id,
       jobSeekerUserId: userId,
     );
     if (!mounted) return;
+    if (!withdrawn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cette candidature a déjà été traitée par le recruteur : elle ne peut plus être annulée.")),
+      );
+      return;
+    }
     setState(() => _appliedOfferIds = {..._appliedOfferIds}..remove(offer.id));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Candidature annulée pour "${offer.title}".')),
@@ -297,18 +262,38 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
         : await _jobOfferRepository.countUnreadNotificationsForJobSeeker(userId);
     final interviewCount =
         await _interviewRepository.countUnreadNotificationsForJobSeeker(userId);
+    final decisionCount =
+        await _jobOfferRepository.countUnreadDecisionNotificationsForJobSeeker(userId);
     if (!mounted) return;
     setState(() {
-      _notificationCount = offerCount + interviewCount;
+      _notificationCount = offerCount + interviewCount + decisionCount;
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    appRouteObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _searchController.dispose();
     _animationController.dispose();
     _profilePanelController.dispose();
     super.dispose();
+  }
+
+  /// Redevient visible après la fermeture d'un sous-écran de la nav basse
+  /// (Catégorie, Publier, Notifications, Profil) — même quand le retour a
+  /// sauté par plusieurs remplacements d'onglets plutôt qu'un simple `pop`
+  /// direct (voir `BottomNavigation`/`_onNavTap` des sous-écrans).
+  @override
+  void didPopNext() {
+    _loadOffers();
+    _loadNotificationCount();
+    _loadStats();
   }
 
   /// Durée d'ouverture/fermeture du panneau de profil, relue à chaque
@@ -331,6 +316,30 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   }
 
   Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Se déconnecter'),
+        content: const Text(
+          'Voulez-vous vraiment vous déconnecter de votre compte ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              'Se déconnecter',
+              style: TextStyle(color: DashboardColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     await _authService.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -345,7 +354,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: colors.background,
+          backgroundColor: SoftUi.pageBackground(colors),
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -382,41 +391,10 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
 
                   const SizedBox(height: AppSpacing.sm),
 
-                  // Offres recommandées
+                  // Offres recommandées : l'accueil ne contient plus que les
+                  // offres (hero, catégories et conseil retirés ; le conseil
+                  // vit désormais dans le panneau latéral).
                   _buildRecommendedJobsSection(),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing),
-
-                  // Carte Hero
-                  FadeTransition(
-                    opacity: _animationController,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                        CurvedAnimation(
-                          parent: _animationController,
-                          curve: AppDurations.easeOutCubic,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.safeAreaHorizontal,
-                        ),
-                        child: HeroCard(onFindJobTap: () {}),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing),
-
-                  // Catégories
-                  _buildCategoriesSection(),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing),
-
-                  // Conseil du jour
-                  _buildAdviceSection(),
-
-                  const SizedBox(height: AppSpacing.sectionSpacing * 2),
 
                   // Padding inférieur pour éviter le contenu caché derrière BottomNavigationBar
                   SizedBox(height: _getBottomPadding(context)),
@@ -436,7 +414,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                     MaterialPageRoute(
                       builder: (_) {
                         if (index == 1) return const JobCategoriesScreen();
-                        if (index == 2) return const JobPublishScreen();
+                        if (index == 2) return const PortfolioScreen();
                         if (index == 3) return const JobNotificationsScreen();
                         return const JobProfileScreen();
                       },
@@ -455,7 +433,10 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                 });
               },
               notificationCount: _notificationCount,
-              accentColor: OnboardingColors.violet,
+              accentColor: DashboardColors.accent,
+              softHomeButton: true,
+              thirdItemIcon: Icons.collections_bookmark_rounded,
+              thirdItemLabel: 'Portfolio',
             ),
           ),
         ),
@@ -495,6 +476,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
       avatarBytes: user?.photoBytes,
       skills: position ?? "Développeur Flutter . Chercheur d'emploi",
       profileCompletion: user?.profileCompletion ?? 0.0,
+      advice: _careerAdvice(),
       onProfileCompletionTap: () {
         _closeProfilePanel();
         Navigator.push(
@@ -507,28 +489,28 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           'title': 'Candidatures envoyées',
           'value': statValue(_applicationsCount),
           'icon': Icons.send_rounded,
-          'iconColor': const Color(0xFF3B82F6),
+          'iconColor': const Color(0xFF0F8A6E),
           'onTap': () { _openStatScreen(const MyApplicationsScreen()); },
         },
         {
           'title': 'Entretiens',
           'value': statValue(_interviewsCount),
           'icon': Icons.calendar_today_rounded,
-          'iconColor': const Color(0xFF10B981),
+          'iconColor': const Color(0xFFC2780E),
           'onTap': () { _openStatScreen(const MyInterviewsScreen()); },
         },
         {
           'title': 'Favoris',
           'value': _loadingOffers ? '…' : '${_savedOfferIds.length}',
           'icon': Icons.favorite_rounded,
-          'iconColor': const Color(0xFFEF4444),
+          'iconColor': const Color(0xFFD1366E),
           'onTap': () { _openStatScreen(const MySavedOffersScreen()); },
         },
         {
           'title': 'Vues du profil',
           'value': statValue(_profileViewsCount),
           'icon': Icons.visibility_rounded,
-          'iconColor': const Color(0xFFF59E0B),
+          'iconColor': DashboardColors.accentStrong,
           'onTap': () { _openStatScreen(const ProfileViewersScreen()); },
         },
       ],
@@ -547,78 +529,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
     _loadStats();
   }
 
-  Widget _buildCategoriesSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final colors = AppSurfaceColors.of(context);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Catégories populaires',
-                    style: colors.sectionTitle,
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const JobCategoriesScreen()),
-                      );
-                    },
-                    child: Text(
-                      'Voir tout',
-                      style: AppTypography.secondaryButton.copyWith(
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.safeAreaHorizontal,
-              ),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 4,
-                // childAspectRatio dynamique selon la taille d'écran
-                childAspectRatio: _getCategoryCardAspectRatio(context),
-                crossAxisSpacing: AppSpacing.md,
-                mainAxisSpacing: AppSpacing.md,
-                children: _categories.map((category) {
-                  return CategoryCard(
-                    title: category['title'],
-                    icon: category['icon'],
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CategoryOffersScreen(category: category['title'] as String),
-                        ),
-                      );
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildRecommendedJobsSection() {
-    final colors = AppSurfaceColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -626,31 +537,32 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.safeAreaHorizontal,
           ),
-          child: Text(
-            'Recommandées pour vous',
-            style: colors.sectionTitle,
-          ),
+          child: const SerifSectionTitle('Recommandées pour vous'),
         ),
         const SizedBox(height: AppSpacing.md),
-        if (!_loadingOffers && _offers.isEmpty)
+        if (_loadingOffers)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: SkeletonCardList(
+              count: 2,
+              cardBuilder: (context, index) => const JobOfferCardSkeleton(),
+            ),
+          )
+        else if (_offers.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.safeAreaHorizontal,
             ),
-            child: Text(
-              "Aucune offre publiée pour le moment. Revenez bientôt !",
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-                color: colors.textTertiary,
-              ),
+            child: const SoftEmptyState(
+              icon: Icons.work_outline_rounded,
+              text: 'Aucune offre publiée pour le moment. Revenez bientôt !',
             ),
           )
         else
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _offers.length,
+            itemCount: _offers.length.clamp(0, _maxHomeOffers),
             itemBuilder: (context, index) {
               final offer = _offers[index];
               return Padding(
@@ -659,65 +571,118 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
                   left: AppSpacing.safeAreaHorizontal,
                   right: AppSpacing.safeAreaHorizontal,
                 ),
-                child: JobOfferPostCard(
-                  companyName: offer.companyName,
-                  companyLogo: offer.companyLogo,
-                  publishedLabel: offer.publishedLabel,
-                  jobTitle: offer.title,
-                  location: offer.location,
-                  salary: offer.salary,
-                  contractType: offer.contractType,
-                  description: offer.description,
-                  posterImage: offer.posterImage,
-                  isSaved: _savedOfferIds.contains(offer.id),
-                  hasApplied: _appliedOfferIds.contains(offer.id),
-                  onToggleSave: () => _toggleSaveOffer(offer),
-                  onDismiss: () => _dismissOffer(offer),
-                  onApply: () => _applyToOffer(offer),
-                  onWithdraw: () => _withdrawApplication(offer),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => JobOfferDetailScreen(offer: offer),
-                      ),
-                    );
-                    _refreshAppliedOfferIds();
-                  },
+                child: FadeSlideIn(
+                  key: ValueKey(offer.id),
+                  delay: staggerDelayFor(index),
+                  child: JobOfferPostCard(
+                    companyName: offer.companyName,
+                    companyLogo: offer.companyLogo,
+                    publishedLabel: offer.publishedLabel,
+                    jobTitle: offer.title,
+                    location: offer.location,
+                    salary: offer.salary,
+                    contractType: offer.contractType,
+                    otherSector: offer.otherSector,
+                    description: offer.description,
+                    posterImage: offer.posterImage,
+                    isSaved: _savedOfferIds.contains(offer.id),
+                    hasApplied: _appliedOfferIds.contains(offer.id),
+                    onToggleSave: () => _toggleSaveOffer(offer),
+                    onDismiss: () => _dismissOffer(offer),
+                    onApply: () => _applyToOffer(offer),
+                    onWithdraw: () => _withdrawApplication(offer),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => JobOfferDetailScreen(offer: offer),
+                        ),
+                      );
+                      _refreshAppliedOfferIds();
+                    },
+                  ),
                 ),
               );
             },
           ),
-        Center(
-          child: TextButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const JobCategoriesScreen(),
-                ),
-              );
-            },
-            child: Text(
-              'Voir plus',
-              style: AppTypography.secondaryButton.copyWith(fontSize: 13),
+        if (_offers.length > _maxHomeOffers) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Center(
+            child: SoftPillButton(
+              label: "Voir plus d'offres",
+              icon: Icons.arrow_forward_rounded,
+              compact: true,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const JobCategoriesScreen()),
+                );
+              },
             ),
           ),
-        ),
+        ],
       ],
     );
   }
 
-  Widget _buildAdviceSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.safeAreaHorizontal,
-      ),
-      child: AdviceCard(
-        title: 'Conseil carrière',
+  /// Conseil "réel" : dérivé de l'état effectif du profil et de l'activité
+  /// du candidat (complétude du profil, candidatures envoyées, favoris,
+  /// entretiens obtenus) plutôt qu'un texte fixe — le plus actionnable en
+  /// premier. Une fois tout à jour, une petite rotation de conseils
+  /// génériques change selon le jour, pour ne pas figer sur un seul texte.
+  ({String title, String text}) _careerAdvice() {
+    final user = _authService.currentUser;
+    final missing = user?.missingJobSeekerFieldLabels ?? const [];
+
+    if (missing.isNotEmpty) {
+      final extra = missing.length - 1;
+      return (
+        title: 'Complétez votre profil',
+        text: extra > 0
+            ? '${missing.first} — et $extra autre${extra > 1 ? 's' : ''} élément${extra > 1 ? 's' : ''} à renseigner pour être mieux repéré par les recruteurs.'
+            : '${missing.first} pour être mieux repéré par les recruteurs.',
+      );
+    }
+
+    final applicationsCount = _applicationsCount ?? 0;
+    if (applicationsCount == 0) {
+      return (
+        title: "Passez à l'action",
+        text: _offers.isNotEmpty
+            ? 'Votre profil est complet : postulez à "${_offers.first.title}" ou une autre offre recommandée pour décrocher votre premier entretien.'
+            : 'Votre profil est complet : les recruteurs peuvent désormais vous trouver plus facilement.',
+      );
+    }
+
+    if (_savedOfferIds.isEmpty && _offers.isNotEmpty) {
+      return (
+        title: 'Gardez une trace des offres qui vous intéressent',
+        text: "Appuyez sur le cœur d'une offre pour l'enregistrer et la retrouver facilement dans vos favoris.",
+      );
+    }
+
+    if ((_interviewsCount ?? 0) == 0) {
+      return (
+        title: 'Restez actif',
         text:
-            'Mettez à jour votre CV régulièrement et personnalisez votre lettre de motivation pour chaque candidature.',
+            'Vous avez $applicationsCount candidature${applicationsCount > 1 ? 's' : ''} envoyée${applicationsCount > 1 ? 's' : ''} : continuez à postuler pour multiplier vos chances d\'entretien.',
+      );
+    }
+
+    const tips = [
+      (
+        title: 'Conseil carrière',
+        text: 'Mettez à jour votre CV régulièrement et personnalisez votre lettre de motivation pour chaque candidature.',
       ),
-    );
+      (
+        title: 'Préparez vos entretiens',
+        text: "Relisez l'offre et renseignez-vous sur l'entreprise avant chaque entretien planifié.",
+      ),
+      (
+        title: 'Soignez votre profil',
+        text: 'Une présentation claire et des compétences à jour augmentent vos chances d\'être contacté directement.',
+      ),
+    ];
+    return tips[DateTime.now().day % tips.length];
   }
 }

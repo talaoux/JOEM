@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/job_offer_post_card.dart';
 import 'job_offer_detail_screen.dart';
+import '../widgets/soft_ui.dart';
 
-/// Offres réellement publiées dont l'entreprise appartient à [category]
-/// (`employer_profiles.categorie`, choisie à l'inscription recruteur) —
-/// ouvert en tapant une catégorie dans `JobCategoriesScreen` ou la grille
-/// "Catégories populaires" du dashboard candidat. Aucune donnée mockée :
-/// "Aucune offre" si aucun recruteur de ce secteur n'a encore publié.
+/// Offres réellement publiées rangées dans [category] — catégories choisies
+/// par le recruteur à la publication (une offre peut en avoir plusieurs),
+/// ou catégorie de l'entreprise pour les offres plus anciennes (voir
+/// `JobOfferRepository.fetchByCategory`). Ouvert en tapant une catégorie
+/// dans `JobCategoriesScreen` ou la grille "Catégories populaires" du
+/// dashboard candidat. "Aucune offre" si rien n'a encore été publié ici.
 class CategoryOffersScreen extends StatefulWidget {
   const CategoryOffersScreen({super.key, required this.category});
 
@@ -90,8 +93,14 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
     final userId = _jobSeekerUserId;
     if (userId == null || !_appliedOfferIds.contains(offer.id)) return;
 
-    await _repository.withdrawApplication(jobOfferId: offer.id, jobSeekerUserId: userId);
+    final withdrawn = await _repository.withdrawApplication(jobOfferId: offer.id, jobSeekerUserId: userId);
     if (!mounted) return;
+    if (!withdrawn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cette candidature a déjà été traitée par le recruteur : elle ne peut plus être annulée.")),
+      );
+      return;
+    }
     setState(() => _appliedOfferIds = {..._appliedOfferIds}..remove(offer.id));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Candidature annulée pour "${offer.title}".')),
@@ -136,7 +145,7 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: colors.background,
+      backgroundColor: SoftUi.pageBackground(colors),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,13 +164,7 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
                       color: colors.textPrimary,
                     ),
                   ),
-                  Expanded(
-                    child: Text(
-                      widget.category,
-                      style: colors.sectionTitle,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  Expanded(child: SerifSectionTitle(widget.category)),
                 ],
               ),
             ),
@@ -174,28 +177,25 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
 
   Widget _buildBody(AppSurfaceColors colors) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+        child: SkeletonCardList(
+          count: 3,
+          cardBuilder: (context, index) => const JobOfferCardSkeleton(),
+        ),
+      );
     }
     if (_offers.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.work_off_outlined, size: 48, color: colors.textTertiary),
-              const SizedBox(height: AppSpacing.md),
-              Text('Aucune offre', style: colors.sectionTitle),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                "Aucun recruteur de la catégorie \"${widget.category}\" n'a encore publié d'offre.",
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 13,
-                  color: colors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.safeAreaHorizontal,
+          vertical: AppSpacing.sm,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SoftEmptyState(
+            icon: Icons.work_off_outlined,
+            text: "Aucune offre — aucune offre n'a encore été publiée dans la catégorie \"${widget.category}\".",
           ),
         ),
       );
@@ -208,29 +208,34 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
         final offer = _offers[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: JobOfferPostCard(
-            companyName: offer.companyName,
-            companyLogo: offer.companyLogo,
-            publishedLabel: offer.publishedLabel,
-            jobTitle: offer.title,
-            location: offer.location,
-            salary: offer.salary,
-            contractType: offer.contractType,
-            description: offer.description,
-            posterImage: offer.posterImage,
-            isSaved: _savedOfferIds.contains(offer.id),
-            hasApplied: _appliedOfferIds.contains(offer.id),
-            onToggleSave: () => _toggleSaveOffer(offer),
-            onDismiss: () => _dismissOffer(offer),
-            onApply: () => _applyToOffer(offer),
-            onWithdraw: () => _withdrawApplication(offer),
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => JobOfferDetailScreen(offer: offer)),
-              );
-              _refreshAppliedOfferIds();
-            },
+          child: FadeSlideIn(
+            key: ValueKey(offer.id),
+            delay: staggerDelayFor(index),
+            child: JobOfferPostCard(
+              companyName: offer.companyName,
+              companyLogo: offer.companyLogo,
+              publishedLabel: offer.publishedLabel,
+              jobTitle: offer.title,
+              location: offer.location,
+              salary: offer.salary,
+              contractType: offer.contractType,
+              otherSector: offer.otherSector,
+              description: offer.description,
+              posterImage: offer.posterImage,
+              isSaved: _savedOfferIds.contains(offer.id),
+              hasApplied: _appliedOfferIds.contains(offer.id),
+              onToggleSave: () => _toggleSaveOffer(offer),
+              onDismiss: () => _dismissOffer(offer),
+              onApply: () => _applyToOffer(offer),
+              onWithdraw: () => _withdrawApplication(offer),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => JobOfferDetailScreen(offer: offer)),
+                );
+                _refreshAppliedOfferIds();
+              },
+            ),
           ),
         );
       },

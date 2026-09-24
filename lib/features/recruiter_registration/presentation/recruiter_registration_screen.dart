@@ -18,6 +18,7 @@ import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import '../data/recruiter_repository.dart';
 import 'widgets/step_three_validation.dart';
 import 'widgets/step_two_personal_info.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran "Inscription Recruteur" : un wizard à 3 étapes (Compte, Info,
 /// Validation) sur fond dégradé façon onboarding, qui reste sur une seule page — les
@@ -35,6 +36,10 @@ class _RecruiterRegistrationScreenState
   static const int _totalSteps = 3;
 
   int _currentStep = 0;
+
+  /// Sens de la dernière navigation entre étapes (1 = suivante, -1 =
+  /// précédente) — oriente le glissement de la transition.
+  int _stepDirection = 1;
 
   // Étape 1 — Compte
   final _emailController = TextEditingController();
@@ -133,7 +138,10 @@ class _RecruiterRegistrationScreenState
       Navigator.of(context).pop();
       return;
     }
-    setState(() => _currentStep -= 1);
+    setState(() {
+      _stepDirection = -1;
+      _currentStep -= 1;
+    });
   }
 
   void _goToNextStep() {
@@ -141,7 +149,10 @@ class _RecruiterRegistrationScreenState
       _submitRegistration();
       return;
     }
-    setState(() => _currentStep += 1);
+    setState(() {
+      _stepDirection = 1;
+      _currentStep += 1;
+    });
   }
 
   /// Persiste les données saisies dans les 2 étapes précédentes (voir
@@ -306,7 +317,7 @@ class _RecruiterRegistrationScreenState
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                 child: Column(
-                  children: [
+                  children: staggered([
                     const SizedBox(height: 32),
                     const JoemGradientLogo(),
                     const SizedBox(height: 36),
@@ -321,24 +332,38 @@ class _RecruiterRegistrationScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AnimatedSwitcher(
-                            duration: AppDurations.stepTransition,
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeOutCubic,
-                            transitionBuilder: (child, animation) {
-                              final slide = Tween<Offset>(
-                                begin: const Offset(0.06, 0),
-                                end: Offset.zero,
-                              ).animate(animation);
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: slide,
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: _buildStepContent(_currentStep),
+                          // Étape suivante : arrive par la droite ; étape
+                          // précédente : par la gauche. La hauteur de la carte
+                          // s'ajuste en douceur d'une étape à l'autre.
+                          AnimatedSize(
+                            duration: Motion.of(AppDurations.stepTransition),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            child: AnimatedSwitcher(
+                              duration: Motion.of(AppDurations.stepTransition),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder: (current, previous) => Stack(
+                                alignment: Alignment.topLeft,
+                                children: [...previous, if (current != null) current],
+                              ),
+                              transitionBuilder: (child, animation) {
+                                final isIncoming = child.key == ValueKey(_currentStep);
+                                final dx = (isIncoming ? 0.08 : -0.08) * _stepDirection;
+                                final slide = Tween<Offset>(
+                                  begin: Offset(dx, 0),
+                                  end: Offset.zero,
+                                ).animate(animation);
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(position: slide, child: child),
+                                );
+                              },
+                              child: KeyedSubtree(
+                                key: ValueKey(_currentStep),
+                                child: _buildStepContent(_currentStep),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 28),
                           WizardNavigation(
@@ -353,7 +378,7 @@ class _RecruiterRegistrationScreenState
                       ),
                     ),
                     const SizedBox(height: 32),
-                  ],
+                  ]),
                 ),
               ),
             ),

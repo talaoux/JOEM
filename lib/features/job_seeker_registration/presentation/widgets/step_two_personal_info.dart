@@ -1,3 +1,4 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/location_autocomplete_field.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Étape 2 — "Info personnelle" : photo de profil, identité et
 /// présentation du candidat.
@@ -35,13 +37,14 @@ class StepTwoPersonalInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Informations personnelles',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+            color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -96,7 +99,7 @@ class StepTwoPersonalInfo extends StatelessWidget {
           controller: presentationController,
           maxLines: 4,
         ),
-      ],
+      ]),
     );
   }
 }
@@ -166,7 +169,7 @@ class _ProfilePhotoPicker extends StatelessWidget {
                   ? Image.memory(photoBytes!, fit: BoxFit.cover)
                   : Icon(
                       Icons.person_outline_rounded,
-                      color: OnboardingColors.violet,
+                      color: OnboardingColors.accent,
                       size: 36,
                     ),
             ),
@@ -178,7 +181,7 @@ class _ProfilePhotoPicker extends StatelessWidget {
                 height: 30,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: OnboardingColors.violet,
+                  color: OnboardingColors.accent,
                 ),
                 child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 15),
               ),

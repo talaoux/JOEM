@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 /// Reusable glassmorphism surface used by every premium card/button in
-/// JOEM: a blurred, semi-transparent panel with a soft violet glow and a
+/// JOEM: a blurred, semi-transparent panel with a soft blue glow and a
 /// hairline border. Reuse this instead of a plain [Container] whenever a
 /// screen needs the "frosted glass" look on top of the background photo.
 class GlassContainer extends StatelessWidget {

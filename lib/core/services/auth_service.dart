@@ -31,6 +31,168 @@ class JobExperience {
   final String? description;
 }
 
+/// Une réalisation ajoutée par le candidat à son portfolio depuis
+/// `PortfolioProjectsScreen` (`job_seeker_portfolio_projects`) — remplace
+/// l'ancien onglet "Publier" (composeur de post social, jamais persisté).
+/// Affichée en lecture seule aux recruteurs sur `CandidateProfileViewScreen`.
+/// [id] reste `null` tant que l'entrée n'a pas été persistée (compte de
+/// démo, id négatif : jamais persistée, comme [JobExperience]). [role]/
+/// [technologies]/[features]/[githubLink]/[demoLink] alimentent l'écran
+/// "Détail d'un projet" (`PortfolioProjectDetailScreen`) — tous facultatifs,
+/// [link] reste le lien générique historique (utilisé par la carte de la
+/// liste quand [demoLink] est absent).
+class PortfolioProject {
+  const PortfolioProject({
+    this.id,
+    required this.title,
+    this.description,
+    this.link,
+    this.imageBytes,
+    required this.createdAt,
+    this.role,
+    this.technologies = const [],
+    this.features = const [],
+    this.githubLink,
+    this.demoLink,
+  });
+
+  final int? id;
+  final String title;
+  final String? description;
+  final String? link;
+  final Uint8List? imageBytes;
+  final DateTime createdAt;
+  final String? role;
+  final List<String> technologies;
+  final List<String> features;
+  final String? githubLink;
+  final String? demoLink;
+
+  /// Reconstruit un [PortfolioProject] depuis une ligne
+  /// `job_seeker_portfolio_projects` — partagé par `AuthService` et
+  /// `AccountSearchRepository` (recherche recruteur), qui lisent tous deux
+  /// cette table. [technologies]/[features] sont stockées comme du texte
+  /// (virgules / retours à la ligne) plutôt que dans des tables dédiées.
+  static PortfolioProject fromRow(Map<String, Object?> row) {
+    String? asText(Object? value) {
+      final text = value as String?;
+      if (text == null || text.trim().isEmpty) return null;
+      return text;
+    }
+
+    return PortfolioProject(
+      id: row['id'] as int,
+      title: row['title'] as String,
+      description: row['description'] as String?,
+      link: row['link'] as String?,
+      imageBytes: row['image'] as Uint8List?,
+      createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
+      role: asText(row['role']),
+      technologies: _splitList(row['technologies'] as String?, separator: ','),
+      features: _splitList(row['features'] as String?, separator: '\n'),
+      githubLink: asText(row['github_link']),
+      demoLink: asText(row['demo_link']),
+    );
+  }
+}
+
+/// Découpe un texte stocké (virgules ou retours à la ligne selon
+/// [separator]) en une liste d'entrées non vides — utilisé par
+/// [PortfolioProject.fromRow] pour `technologies`/`features`.
+List<String> _splitList(String? raw, {required String separator}) {
+  if (raw == null || raw.trim().isEmpty) return const [];
+  return raw
+      .split(separator)
+      .map((entry) => entry.trim())
+      .where((entry) => entry.isNotEmpty)
+      .toList();
+}
+
+/// Une formation ajoutée par le candidat depuis `PortfolioExperienceScreen`
+/// (section "Parcours", `job_seeker_formations`) — l'inscription ne collecte
+/// aucune formation. [id] reste `null` tant que l'entrée n'a pas été
+/// persistée (compte de démo, id négatif), comme [JobExperience].
+class Formation {
+  const Formation({
+    this.id,
+    required this.etablissement,
+    this.filiere,
+    required this.dateDebut,
+    this.dateFin,
+  });
+
+  final int? id;
+  final String etablissement;
+  final String? filiere;
+  final String dateDebut;
+  final String? dateFin;
+
+  static Formation fromRow(Map<String, Object?> row) {
+    return Formation(
+      id: row['id'] as int,
+      etablissement: row['etablissement'] as String,
+      filiere: row['filiere'] as String?,
+      dateDebut: row['date_debut'] as String,
+      dateFin: row['date_fin'] as String?,
+    );
+  }
+}
+
+/// Une certification ajoutée par le candidat depuis
+/// `PortfolioCertificationsScreen` (`job_seeker_certifications`). [id] reste
+/// `null` tant que l'entrée n'a pas été persistée (compte de démo, id
+/// négatif), comme [JobExperience].
+class Certification {
+  const Certification({
+    this.id,
+    required this.name,
+    this.organism,
+    this.date,
+    this.imageBytes,
+    this.verificationLink,
+  });
+
+  final int? id;
+  final String name;
+  final String? organism;
+  final String? date;
+  final Uint8List? imageBytes;
+  final String? verificationLink;
+
+  static Certification fromRow(Map<String, Object?> row) {
+    return Certification(
+      id: row['id'] as int,
+      name: row['name'] as String,
+      organism: row['organism'] as String?,
+      date: row['date'] as String?,
+      imageBytes: row['image'] as Uint8List?,
+      verificationLink: row['verification_link'] as String?,
+    );
+  }
+}
+
+/// Un lien professionnel ajouté par le candidat depuis
+/// `PortfolioAboutScreen` (section "Mes liens", `job_seeker_professional_links`)
+/// — GitHub, LinkedIn, site personnel... L'icône affichée est déduite du
+/// domaine de [url] à l'affichage, aucun type n'est stocké. [id] reste
+/// `null` tant que l'entrée n'a pas été persistée (compte de démo, id
+/// négatif), comme [JobExperience].
+class ProfessionalLink {
+  const ProfessionalLink({this.id, required this.label, required this.url});
+
+  final int? id;
+  final String label;
+  final String url;
+
+  static ProfessionalLink fromRow(Map<String, Object?> row) {
+    return ProfessionalLink(
+      id: row['id'] as int,
+      label: row['label'] as String,
+      url: row['url'] as String,
+    );
+  }
+}
+
 /// Modèle d'utilisateur
 class User {
   final String id;
@@ -75,6 +237,20 @@ class User {
   final String? localisation;
   final String? presentation;
 
+  /// Bloc "Mes objectifs" de `PortfolioAboutScreen` (`job_seeker_profiles
+  /// .objectifs`) — ce que le candidat recherche professionnellement.
+  /// Toujours `null` pour un employeur.
+  final String? objectifs;
+
+  /// Clé du thème choisi pour le dégradé "hero" du Portfolio
+  /// (`PortfolioHeroTheme.resolve`), modifiable depuis
+  /// `CandidateFullPortfolioScreen` (icône palette, en mode aperçu candidat
+  /// uniquement) — `null` = thème violet par défaut. Persisté et donc visible
+  /// à l'identique par un recruteur consultant le même écran (voir
+  /// `CandidateSearchResult.portfolioThemeColor`). Toujours `null` pour un
+  /// employeur.
+  final String? portfolioThemeColor;
+
   /// Chemin absolu du fichier CV (PDF ou image) sur le disque — écrit par
   /// `saveCvFile` (`lib/core/utils/cv_storage.dart`) plutôt que stocké en
   /// BLOB dans SQLite, pour ne jamais dépasser la limite d'un
@@ -99,6 +275,26 @@ class User {
   /// Expériences professionnelles réellement ajoutées depuis
   /// `JobProfileScreen` (`job_seeker_experiences`) — liste vide si aucune.
   final List<JobExperience> experiences;
+
+  /// Réalisations réellement ajoutées depuis `PortfolioProjectsScreen`
+  /// (`job_seeker_portfolio_projects`) — liste vide si aucune, toujours
+  /// vide pour un employeur.
+  final List<PortfolioProject> portfolioProjects;
+
+  /// Formations réellement ajoutées depuis `PortfolioExperienceScreen`
+  /// (`job_seeker_formations`) — liste vide si aucune, toujours vide pour un
+  /// employeur.
+  final List<Formation> formations;
+
+  /// Certifications réellement ajoutées depuis
+  /// `PortfolioCertificationsScreen` (`job_seeker_certifications`) — liste
+  /// vide si aucune, toujours vide pour un employeur.
+  final List<Certification> certifications;
+
+  /// Liens professionnels réellement ajoutés depuis `PortfolioAboutScreen`
+  /// (`job_seeker_professional_links`) — liste vide si aucun, toujours vide
+  /// pour un employeur.
+  final List<ProfessionalLink> professionalLinks;
 
   /// `false` si le candidat a désactivé "Profil visible par les
   /// recruteurs" (`JobSeekerSettingsScreen`) — exclut alors son profil de
@@ -161,6 +357,8 @@ class User {
     this.telephone,
     this.localisation,
     this.presentation,
+    this.objectifs,
+    this.portfolioThemeColor,
     this.cvPath,
     this.cvFileName,
     this.tarifJournalier,
@@ -168,6 +366,10 @@ class User {
     this.skills = const [],
     this.workModes = const [],
     this.experiences = const [],
+    this.portfolioProjects = const [],
+    this.formations = const [],
+    this.certifications = const [],
+    this.professionalLinks = const [],
     this.profilVisible = true,
     this.notificationsEnabled = true,
     this.adsPersonalized = true,
@@ -190,6 +392,10 @@ class User {
     String? cvFileName,
     bool clearCv = false,
     List<JobExperience>? experiences,
+    List<PortfolioProject>? portfolioProjects,
+    List<Formation>? formations,
+    List<Certification>? certifications,
+    List<ProfessionalLink>? professionalLinks,
     bool? profilVisible,
     bool? notificationsEnabled,
     bool? adsPersonalized,
@@ -197,6 +403,7 @@ class User {
     bool? darkModeEnabled,
     bool? largeTextEnabled,
     bool? reducedAnimationsEnabled,
+    String? portfolioThemeColor,
   }) {
     return User(
       id: id,
@@ -212,6 +419,8 @@ class User {
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
+      objectifs: objectifs,
+      portfolioThemeColor: portfolioThemeColor ?? this.portfolioThemeColor,
       cvPath: clearCv ? null : (cvPath ?? this.cvPath),
       cvFileName: clearCv ? null : (cvFileName ?? this.cvFileName),
       tarifJournalier: tarifJournalier,
@@ -219,6 +428,10 @@ class User {
       skills: skills,
       workModes: workModes,
       experiences: experiences ?? this.experiences,
+      portfolioProjects: portfolioProjects ?? this.portfolioProjects,
+      formations: formations ?? this.formations,
+      certifications: certifications ?? this.certifications,
+      professionalLinks: professionalLinks ?? this.professionalLinks,
       profilVisible: profilVisible ?? this.profilVisible,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       adsPersonalized: adsPersonalized ?? this.adsPersonalized,
@@ -272,6 +485,29 @@ class User {
       if (workModes.isEmpty) 'Précisez vos modes de travail préférés',
       if (experiences.isEmpty) 'Ajoutez une expérience professionnelle',
     ];
+  }
+
+  /// Les 6 sections affichées par `PortfolioScreen` ("Aperçu de mon
+  /// portfolio"), dans l'ordre d'affichage, avec leur état rempli/vide —
+  /// alimente à la fois la barre "Votre portfolio est complété à N %" et sa
+  /// checklist. Toujours vide pour un employeur (le Portfolio n'existe que
+  /// côté candidat).
+  List<(String label, bool filled)> get portfolioSections => [
+        ('Présentation', (presentation ?? '').trim().isNotEmpty),
+        ('Compétences', skills.isNotEmpty),
+        ('Expériences', experiences.isNotEmpty),
+        ('Projets', portfolioProjects.isNotEmpty),
+        ('Certifications', certifications.isNotEmpty),
+        ('Liens professionnels', professionalLinks.isNotEmpty),
+      ];
+
+  /// Part des 6 sections de [portfolioSections] qui sont renseignées — la
+  /// barre de progression de `PortfolioScreen`. `0.0` si aucune section
+  /// n'est remplie (déclenche l'état vide/onboarding du Portfolio).
+  double get portfolioCompletion {
+    final sections = portfolioSections;
+    final filledCount = sections.where((section) => section.$2).length;
+    return filledCount / sections.length;
   }
 
   /// Part des champs du profil recruteur qui sont renseignés (les 2 étapes
@@ -490,10 +726,10 @@ class AuthService extends ChangeNotifier {
         'job_seeker_profiles',
         columns: [
           'prenom', 'nom', 'telephone', 'localisation', 'titre_professionnel',
-          'presentation', 'photo', 'cover_photo', 'cv_path', 'cv_file_name',
+          'presentation', 'objectifs', 'photo', 'cover_photo', 'cv_path', 'cv_file_name',
           'tarif_journalier', 'disponibilite', 'profil_visible',
           'notifications_actives', 'publicite_personnalisee', 'communications_marketing',
-          'mode_nuit', 'texte_agrandi', 'animations_reduites',
+          'mode_nuit', 'texte_agrandi', 'animations_reduites', 'portfolio_theme_color',
         ],
         where: 'user_id = ?',
         whereArgs: [userId],
@@ -516,6 +752,27 @@ class AuthService extends ChangeNotifier {
         where: 'user_id = ?',
         whereArgs: [userId],
       );
+      final portfolioRows = await db.query(
+        'job_seeker_portfolio_projects',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+        orderBy: 'created_at DESC',
+      );
+      final formationRows = await db.query(
+        'job_seeker_formations',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+      final certificationRows = await db.query(
+        'job_seeker_certifications',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+      final linkRows = await db.query(
+        'job_seeker_professional_links',
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
 
       return User(
         id: userId.toString(),
@@ -529,6 +786,8 @@ class AuthService extends ChangeNotifier {
         telephone: profile?['telephone'] as String?,
         localisation: profile?['localisation'] as String?,
         presentation: profile?['presentation'] as String?,
+        objectifs: profile?['objectifs'] as String?,
+        portfolioThemeColor: profile?['portfolio_theme_color'] as String?,
         cvPath: profile?['cv_path'] as String?,
         cvFileName: profile?['cv_file_name'] as String?,
         tarifJournalier: profile?['tarif_journalier'] as String?,
@@ -553,6 +812,10 @@ class AuthService extends ChangeNotifier {
                   description: row['description'] as String?,
                 ))
             .toList(),
+        portfolioProjects: portfolioRows.map(PortfolioProject.fromRow).toList(),
+        formations: formationRows.map(Formation.fromRow).toList(),
+        certifications: certificationRows.map(Certification.fromRow).toList(),
+        professionalLinks: linkRows.map(ProfessionalLink.fromRow).toList(),
       );
     }
 
@@ -994,6 +1257,7 @@ class AuthService extends ChangeNotifier {
     required String? telephone,
     required String? localisation,
     required String? presentation,
+    String? objectifs,
     required String? tarifJournalier,
     required String? disponibilite,
     required List<String> skills,
@@ -1015,6 +1279,7 @@ class AuthService extends ChangeNotifier {
       telephone: telephone,
       localisation: localisation,
       presentation: presentation,
+      objectifs: objectifs,
       cvPath: user.cvPath,
       cvFileName: user.cvFileName,
       tarifJournalier: tarifJournalier,
@@ -1022,6 +1287,10 @@ class AuthService extends ChangeNotifier {
       skills: skills,
       workModes: workModes,
       experiences: user.experiences,
+      portfolioProjects: user.portfolioProjects,
+      formations: user.formations,
+      certifications: user.certifications,
+      professionalLinks: user.professionalLinks,
       profilVisible: user.profilVisible,
       notificationsEnabled: user.notificationsEnabled,
       adsPersonalized: user.adsPersonalized,
@@ -1045,6 +1314,7 @@ class AuthService extends ChangeNotifier {
         'localisation': localisation,
         'titre_professionnel': position ?? '',
         'presentation': presentation,
+        'objectifs': objectifs,
         'tarif_journalier': tarifJournalier,
         'disponibilite': disponibilite,
       },
@@ -1191,6 +1461,277 @@ class AuthService extends ChangeNotifier {
       final db = await AppDatabase.instance.database;
       await db.delete('job_seeker_experiences', where: 'id = ?', whereArgs: [experience.id]);
     }
+  }
+
+  /// Ajoute une réalisation au portfolio du candidat connecté, depuis
+  /// `PortfolioScreen` — persistée (`job_seeker_portfolio_projects`) pour un
+  /// compte inscrit via le wizard, gardée en mémoire pour un compte de démo
+  /// (id négatif), comme [addExperience].
+  Future<void> addPortfolioProject({
+    required String title,
+    String? description,
+    String? link,
+    Uint8List? imageBytes,
+    String? role,
+    List<String> technologies = const [],
+    List<String> features = const [],
+    String? githubLink,
+    String? demoLink,
+  }) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    final createdAt = DateTime.now();
+    final technologiesText = technologies.isEmpty ? null : technologies.join(',');
+    final featuresText = features.isEmpty ? null : features.join('\n');
+    int? id;
+    final userId = int.tryParse(user.id);
+    if (userId != null && userId > 0) {
+      final db = await AppDatabase.instance.database;
+      id = await db.insert('job_seeker_portfolio_projects', {
+        'user_id': userId,
+        'title': title,
+        'description': description,
+        'link': link,
+        'image': imageBytes,
+        'created_at': createdAt.toIso8601String(),
+        'role': role,
+        'technologies': technologiesText,
+        'features': featuresText,
+        'github_link': githubLink,
+        'demo_link': demoLink,
+      });
+    }
+
+    final project = PortfolioProject(
+      id: id,
+      title: title,
+      description: description,
+      link: link,
+      imageBytes: imageBytes,
+      createdAt: createdAt,
+      role: role,
+      technologies: technologies,
+      features: features,
+      githubLink: githubLink,
+      demoLink: demoLink,
+    );
+    _currentUser = user.copyWith(
+      portfolioProjects: [project, ...user.portfolioProjects],
+    );
+    notifyListeners();
+  }
+
+  /// Supprime le projet à [index] (ordre d'affichage de `PortfolioScreen`)
+  /// du portfolio du candidat connecté.
+  Future<void> deletePortfolioProjectAt(int index) async {
+    final user = _currentUser;
+    if (user == null) return;
+    if (index < 0 || index >= user.portfolioProjects.length) return;
+
+    final project = user.portfolioProjects[index];
+    final updated = List<PortfolioProject>.from(user.portfolioProjects)..removeAt(index);
+    _currentUser = user.copyWith(portfolioProjects: updated);
+    notifyListeners();
+
+    if (project.id != null) {
+      final db = await AppDatabase.instance.database;
+      await db.delete(
+        'job_seeker_portfolio_projects',
+        where: 'id = ?',
+        whereArgs: [project.id],
+      );
+    }
+  }
+
+  /// Ajoute une formation au portfolio du candidat connecté, depuis
+  /// `PortfolioExperienceScreen` (section "Parcours") — persistée
+  /// (`job_seeker_formations`) pour un compte inscrit via le wizard, gardée
+  /// en mémoire pour un compte de démo (id négatif), comme [addExperience].
+  Future<void> addFormation({
+    required String etablissement,
+    String? filiere,
+    required String dateDebut,
+    String? dateFin,
+  }) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    int? id;
+    final userId = int.tryParse(user.id);
+    if (userId != null && userId > 0) {
+      final db = await AppDatabase.instance.database;
+      id = await db.insert('job_seeker_formations', {
+        'user_id': userId,
+        'etablissement': etablissement,
+        'filiere': filiere,
+        'date_debut': dateDebut,
+        'date_fin': dateFin,
+      });
+    }
+
+    final formation = Formation(
+      id: id,
+      etablissement: etablissement,
+      filiere: filiere,
+      dateDebut: dateDebut,
+      dateFin: dateFin,
+    );
+    _currentUser = user.copyWith(formations: [...user.formations, formation]);
+    notifyListeners();
+  }
+
+  /// Supprime la formation à [index] (ordre d'affichage de
+  /// `PortfolioExperienceScreen`) du profil connecté.
+  Future<void> deleteFormationAt(int index) async {
+    final user = _currentUser;
+    if (user == null) return;
+    if (index < 0 || index >= user.formations.length) return;
+
+    final formation = user.formations[index];
+    final updated = List<Formation>.from(user.formations)..removeAt(index);
+    _currentUser = user.copyWith(formations: updated);
+    notifyListeners();
+
+    if (formation.id != null) {
+      final db = await AppDatabase.instance.database;
+      await db.delete('job_seeker_formations', where: 'id = ?', whereArgs: [formation.id]);
+    }
+  }
+
+  /// Ajoute une certification au portfolio du candidat connecté, depuis
+  /// `PortfolioCertificationsScreen` — persistée (`job_seeker_certifications`)
+  /// pour un compte inscrit via le wizard, gardée en mémoire pour un compte
+  /// de démo (id négatif), comme [addExperience].
+  Future<void> addCertification({
+    required String name,
+    String? organism,
+    String? date,
+    Uint8List? imageBytes,
+    String? verificationLink,
+  }) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    int? id;
+    final userId = int.tryParse(user.id);
+    if (userId != null && userId > 0) {
+      final db = await AppDatabase.instance.database;
+      id = await db.insert('job_seeker_certifications', {
+        'user_id': userId,
+        'name': name,
+        'organism': organism,
+        'date': date,
+        'image': imageBytes,
+        'verification_link': verificationLink,
+      });
+    }
+
+    final certification = Certification(
+      id: id,
+      name: name,
+      organism: organism,
+      date: date,
+      imageBytes: imageBytes,
+      verificationLink: verificationLink,
+    );
+    _currentUser = user.copyWith(certifications: [...user.certifications, certification]);
+    notifyListeners();
+  }
+
+  /// Supprime la certification à [index] (ordre d'affichage de
+  /// `PortfolioCertificationsScreen`) du profil connecté.
+  Future<void> deleteCertificationAt(int index) async {
+    final user = _currentUser;
+    if (user == null) return;
+    if (index < 0 || index >= user.certifications.length) return;
+
+    final certification = user.certifications[index];
+    final updated = List<Certification>.from(user.certifications)..removeAt(index);
+    _currentUser = user.copyWith(certifications: updated);
+    notifyListeners();
+
+    if (certification.id != null) {
+      final db = await AppDatabase.instance.database;
+      await db.delete(
+        'job_seeker_certifications',
+        where: 'id = ?',
+        whereArgs: [certification.id],
+      );
+    }
+  }
+
+  /// Ajoute un lien professionnel au portfolio du candidat connecté, depuis
+  /// `PortfolioAboutScreen` (section "Mes liens") — persisté
+  /// (`job_seeker_professional_links`) pour un compte inscrit via le
+  /// wizard, gardé en mémoire pour un compte de démo (id négatif), comme
+  /// [addExperience].
+  Future<void> addProfessionalLink({required String label, required String url}) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    int? id;
+    final userId = int.tryParse(user.id);
+    if (userId != null && userId > 0) {
+      final db = await AppDatabase.instance.database;
+      id = await db.insert('job_seeker_professional_links', {
+        'user_id': userId,
+        'label': label,
+        'url': url,
+      });
+    }
+
+    final link = ProfessionalLink(id: id, label: label, url: url);
+    _currentUser = user.copyWith(professionalLinks: [...user.professionalLinks, link]);
+    notifyListeners();
+  }
+
+  /// Supprime le lien professionnel à [index] (ordre d'affichage de
+  /// `PortfolioAboutScreen`) du profil connecté.
+  Future<void> deleteProfessionalLinkAt(int index) async {
+    final user = _currentUser;
+    if (user == null) return;
+    if (index < 0 || index >= user.professionalLinks.length) return;
+
+    final link = user.professionalLinks[index];
+    final updated = List<ProfessionalLink>.from(user.professionalLinks)..removeAt(index);
+    _currentUser = user.copyWith(professionalLinks: updated);
+    notifyListeners();
+
+    if (link.id != null) {
+      final db = await AppDatabase.instance.database;
+      await db.delete(
+        'job_seeker_professional_links',
+        where: 'id = ?',
+        whereArgs: [link.id],
+      );
+    }
+  }
+
+  /// Change la couleur du thème du Portfolio (dégradé "hero" de
+  /// `CandidateFullPortfolioScreen` + accents de `PortfolioScreen`) du
+  /// candidat connecté et la persiste (`job_seeker_profiles
+  /// .portfolio_theme_color`) — [colorKey] est la clé d'un
+  /// `PortfolioHeroTheme` (voir ce fichier). Comme les autres champs de
+  /// portfolio, gardée en mémoire seulement pour un compte de démo (id
+  /// négatif, jamais persistée).
+  Future<void> updatePortfolioThemeColor(String colorKey) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = user.copyWith(portfolioThemeColor: colorKey);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_seeker_profiles',
+      {'portfolio_theme_color': colorKey},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
   }
 
   /// Vérifier si l'utilisateur est un employeur

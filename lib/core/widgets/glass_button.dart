@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_shadows.dart';
 import '../theme/app_typography.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 enum GlassButtonVariant { filled, outline }
 
 /// The two navigation buttons ("Retour" / "Suivant" / "Créer mon compte")
-/// used across the registration wizard: a violet filled pill with a glow,
-/// or a transparent outline pill with a violet-tinted hairline border
+/// used across the registration wizard: a pale-tinted pill with dark accent
+/// text ("filled"), or a white pill with a grey hairline border ("outline")
 /// (kept subtle enough to read on both light and dark surfaces).
 class GlassButton extends StatelessWidget {
   const GlassButton({
@@ -28,62 +28,68 @@ class GlassButton extends StatelessWidget {
   final IconData? trailingIcon;
 
   /// Overrides the default [AppColors.primary] tint, e.g. to match a
-  /// specific screen's palette (login follows the onboarding violet).
+  /// specific screen's palette (login follows the onboarding ocean blue).
   final Color? color;
 
   bool get _isFilled => variant == GlassButtonVariant.filled;
 
   @override
   Widget build(BuildContext context) {
+    // "Nouveau design" : plus de pilule pleine lumineuse — la variante
+    // pleine devient une pilule à teinte pâle + texte foncé de la couleur
+    // d'accent (comme le bouton "Envoyer" de la maquette), la variante
+    // contour une pilule blanche à fine bordure grise.
     final accent = color ?? AppColors.primary;
-    final foreground = _isFilled ? Colors.white : (color ?? AppColors.primaryLight);
+    final ink = Color.lerp(accent, Colors.black, 0.28)!;
     final isDisabled = onTap == null;
+    final foreground = isDisabled
+        ? const Color(0xFF94A3B8)
+        : (_isFilled ? ink : accent);
+    final background = isDisabled
+        ? const Color(0xFFE9EDF3)
+        : (_isFilled ? accent.withValues(alpha: 0.12) : Colors.white);
 
-    return Opacity(
-      opacity: isDisabled ? 0.5 : 1,
-      child: Container(
-        height: 56,
-        decoration: BoxDecoration(
-          color: _isFilled ? accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: _isFilled
-              ? null
-              : Border.all(color: accent.withValues(alpha: 0.5), width: 1.5),
-          boxShadow: _isFilled && !isDisabled ? AppShadows.glowShadow : null,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (leadingIcon != null) ...[
-                    Icon(leadingIcon, color: foreground, size: 20),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: Text(
-                      label,
-                      style: AppTypography.buttonLabel.copyWith(color: foreground),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (trailingIcon != null) ...[
-                    const SizedBox(width: 8),
-                    Icon(trailingIcon, color: foreground, size: 20),
-                  ],
+    return PressableScale(enabled: !isDisabled, child: Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: _isFilled || isDisabled
+            ? null
+            : Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (leadingIcon != null) ...[
+                  Icon(leadingIcon, color: foreground, size: 20),
+                  const SizedBox(width: 8),
                 ],
-              ),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTypography.buttonLabel.copyWith(color: foreground),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (trailingIcon != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(trailingIcon, color: foreground, size: 20),
+                ],
+              ],
             ),
           ),
         ),
       ),
-    );
+    ));
   }
 }

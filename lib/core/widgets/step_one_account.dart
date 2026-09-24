@@ -1,3 +1,4 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -7,6 +8,7 @@ import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'google_sign_in_button.dart';
 import 'light_text_field.dart';
 import 'or_divider.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 final RegExp _emailFormat = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -80,13 +82,14 @@ class _StepOneAccountState extends State<StepOneAccount> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Créer votre compte',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
             color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -136,7 +139,7 @@ class _StepOneAccountState extends State<StepOneAccount> {
               ? 'Les mots de passe ne correspondent pas'
               : null,
         ),
-      ],
+      ]),
     );
   }
 }

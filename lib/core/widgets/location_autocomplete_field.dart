@@ -14,6 +14,7 @@ class LocationAutocompleteField extends StatefulWidget {
     required this.controller,
     required this.options,
     this.errorText,
+    this.accentColor,
   });
 
   final String label;
@@ -24,6 +25,10 @@ class LocationAutocompleteField extends StatefulWidget {
 
   /// Message affiché sous le champ, en rouge, avec la bordure assortie.
   final String? errorText;
+
+  /// Couleur d'accent — bleu de l'onboarding par défaut ; les dashboards
+  /// passent leur bleu océan.
+  final Color? accentColor;
 
   @override
   State<LocationAutocompleteField> createState() => _LocationAutocompleteFieldState();
@@ -90,13 +95,13 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
                         border: Border.all(
                           color: hasError
                               ? _errorColor
-                              : (focused ? OnboardingColors.violet : const Color(0xFFE3E3EC)),
+                              : (focused ? (widget.accentColor ?? OnboardingColors.accent) : const Color(0xFFE3E3EC)),
                           width: focused || hasError ? 1.5 : 1,
                         ),
                       ),
                       child: Row(
                         children: [
-                          Icon(icon, color: OnboardingColors.violet, size: 20),
+                          Icon(icon, color: (widget.accentColor ?? OnboardingColors.accent), size: 20),
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
@@ -104,7 +109,7 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
                               focusNode: focusNode,
                               onSubmitted: (_) => onFieldSubmitted(),
                               style: const TextStyle(fontSize: 15, color: Color(0xFF1C1C26)),
-                              cursorColor: OnboardingColors.violet,
+                              cursorColor: (widget.accentColor ?? OnboardingColors.accent),
                               decoration: InputDecoration(
                                 hintText: hint,
                                 hintStyle: const TextStyle(fontSize: 15, color: Color(0xFFA6A6B4)),
@@ -138,9 +143,9 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
                             final city = viewOptions.elementAt(index);
                             return ListTile(
                               dense: true,
-                              leading: const Icon(
+                              leading: Icon(
                                 Icons.location_on_outlined,
-                                color: OnboardingColors.violet,
+                                color: (widget.accentColor ?? OnboardingColors.accent),
                                 size: 18,
                               ),
                               title: Text(

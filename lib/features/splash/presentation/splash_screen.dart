@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,14 +11,15 @@ import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 
-/// Écran de démarrage : reprend exactement le bloc marque du
-/// [WelcomeScreen] — wordmark "JOEM" en dégradé ([JoemGradientLogo]),
-/// grilles de points de part et d'autre, baseline "Job • Offres • Emploi
-/// Madagascar" — dans une simple animation d'apparition (fondu + zoom).
-/// Redirige automatiquement, une fois affiché, vers le dashboard d'une
-/// session déjà ouverte (retour matériel accidentel ayant quitté l'app,
-/// par ex.) — voir `AuthService.restoreSession` — ou vers [WelcomeScreen]
-/// à défaut.
+/// Écran de démarrage : reprend le bloc marque du [WelcomeScreen] — wordmark
+/// "JOEM" en dégradé ([JoemGradientLogo]), grilles de points de part et
+/// d'autre, baseline "Job • Offres • Emploi Madagascar" — avec une entrée
+/// séquencée (logo → grilles de points → baseline → indicateur de
+/// chargement) plutôt qu'un simple fondu global, pour une sensation de
+/// démarrage plus proche d'une vraie application. Redirige automatiquement,
+/// une fois la séquence jouée, vers le dashboard d'une session déjà ouverte
+/// (retour matériel accidentel ayant quitté l'app, par ex.) — voir
+/// `AuthService.restoreSession` — ou vers [WelcomeScreen] à défaut.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -26,15 +28,60 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  /// Pilote toute la séquence d'entrée : logo (0 → 62%), grilles de points
+  /// (35% → 75%), baseline (60% → 100%) — des segments qui se chevauchent
+  /// légèrement plutôt qu'un enchaînement strict, pour un mouvement continu
+  /// au lieu d'à-coups.
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 800),
+    duration: const Duration(milliseconds: 1100),
   )..forward();
 
-  late final Animation<double> _scale = CurvedAnimation(
+  /// Boucle indépendante pour les trois points de chargement en bas de
+  /// l'écran, une fois le bloc marque en place — un repère de progression
+  /// discret pendant le court instant où l'app restaure la session.
+  late final AnimationController _loadingController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  late final Animation<double> _logoScale = Tween<double>(
+    begin: 0.6,
+    end: 1.0,
+  ).animate(
+    CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.62, curve: Curves.easeOutBack),
+    ),
+  );
+
+  late final Animation<double> _logoOpacity = CurvedAnimation(
     parent: _controller,
-    curve: Curves.easeOutCubic,
+    curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+  );
+
+  late final Animation<double> _dotsOpacity = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.35, 0.75, curve: Curves.easeOut),
+  );
+
+  late final Animation<double> _baselineOpacity = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+  );
+
+  late final Animation<Offset> _baselineSlide =
+      Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.6, 1.0, curve: Curves.easeOutCubic),
+        ),
+      );
+
+  late final Animation<double> _loadingOpacity = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.78, 1.0, curve: Curves.easeOut),
   );
 
   Timer? _redirectTimer;
@@ -43,13 +90,17 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _redirectTimer = Timer(const Duration(milliseconds: 1800), _redirect);
+    // Laisse la séquence d'entrée se jouer entièrement (≈1.1s) puis les
+    // points de chargement pulser un court instant avant de rediriger —
+    // sinon la redirection coupe l'animation en plein milieu.
+    _redirectTimer = Timer(const Duration(milliseconds: 2300), _redirect);
   }
 
   @override
   void dispose() {
     _redirectTimer?.cancel();
     _controller.dispose();
+    _loadingController.dispose();
     super.dispose();
   }
 
@@ -89,12 +140,25 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: FadeTransition(
-          opacity: _controller,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.85, end: 1.0).animate(_scale),
-            child: const _SplashBrand(),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SplashBrand(
+              logoScale: _logoScale,
+              logoOpacity: _logoOpacity,
+              dotsOpacity: _dotsOpacity,
+              baselineOpacity: _baselineOpacity,
+              baselineSlide: _baselineSlide,
+            ),
+            const SizedBox(height: 88),
+            FadeTransition(
+              opacity: _loadingOpacity,
+              child: _LoadingDots(
+                repeat: _loadingController,
+                color: OnboardingColors.accent,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -102,9 +166,22 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 /// Reproduit le bloc marque du welcome screen : deux grilles de points
-/// encadrant le wordmark "JOEM", puis la baseline en dessous.
+/// encadrant le wordmark "JOEM", puis la baseline en dessous — chaque
+/// partie anime son entrée séparément (voir les `Animation` reçues).
 class _SplashBrand extends StatelessWidget {
-  const _SplashBrand();
+  final Animation<double> logoScale;
+  final Animation<double> logoOpacity;
+  final Animation<double> dotsOpacity;
+  final Animation<double> baselineOpacity;
+  final Animation<Offset> baselineSlide;
+
+  const _SplashBrand({
+    required this.logoScale,
+    required this.logoOpacity,
+    required this.dotsOpacity,
+    required this.baselineOpacity,
+    required this.baselineSlide,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,14 +192,40 @@ class _SplashBrand extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (showDots) const Positioned(left: 8, child: _SplashDotGrid()),
-          if (showDots) const Positioned(right: 8, child: _SplashDotGrid()),
+          if (showDots)
+            Positioned(
+              left: 8,
+              child: FadeTransition(
+                opacity: dotsOpacity,
+                child: const _SplashDotGrid(),
+              ),
+            ),
+          if (showDots)
+            Positioned(
+              right: 8,
+              child: FadeTransition(
+                opacity: dotsOpacity,
+                child: const _SplashDotGrid(),
+              ),
+            ),
           Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              JoemGradientLogo(fontSize: 56),
-              SizedBox(height: 10),
-              _SplashBaselineText(),
+            children: [
+              ScaleTransition(
+                scale: logoScale,
+                child: FadeTransition(
+                  opacity: logoOpacity,
+                  child: const JoemGradientLogo(fontSize: 56),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FadeTransition(
+                opacity: baselineOpacity,
+                child: SlideTransition(
+                  position: baselineSlide,
+                  child: const _SplashBaselineText(),
+                ),
+              ),
             ],
           ),
         ],
@@ -157,7 +260,7 @@ class _SplashDotGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = OnboardingColors.violetLight.withValues(alpha: 0.15);
+      ..color = OnboardingColors.accentLight.withValues(alpha: 0.15);
 
     for (var col = 0; col < _SplashDotGrid._columns; col++) {
       for (var row = 0; row < _SplashDotGrid._rows; row++) {
@@ -190,7 +293,7 @@ class _SplashBaselineText extends StatelessWidget {
       color: OnboardingColors.baseline,
     );
     final bulletStyle = textStyle.copyWith(
-      color: OnboardingColors.violetLight,
+      color: OnboardingColors.accentLight,
       fontWeight: FontWeight.w600,
     );
 
@@ -206,6 +309,54 @@ class _SplashBaselineText extends StatelessWidget {
           const TextSpan(text: ' Emploi Madagascar'),
         ],
       ),
+    );
+  }
+}
+
+/// Trois points qui pulsent en boucle, décalés dans le temps — l'indicateur
+/// de chargement discret affiché sous le bloc marque pendant que l'app
+/// restaure une éventuelle session (`AuthService.restoreSession`). Piloté
+/// à la main (`sin` sur la valeur du controller, déphasée par point) plutôt
+/// qu'avec trois `AnimationController` séparés : un seul ticker à gérer.
+class _LoadingDots extends StatelessWidget {
+  final Animation<double> repeat;
+  final Color color;
+
+  const _LoadingDots({required this.repeat, required this.color});
+
+  static const int _dotCount = 3;
+  static const double _dotDiameter = 8;
+  static const double _staggerFraction = 0.22;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: repeat,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(_dotCount, (index) {
+            final phase = (repeat.value + index * _staggerFraction) % 1.0;
+            // sin(0) = sin(π) = 0, sin(π/2) = 1 : chaque point grandit puis
+            // rétrécit sur son propre cycle, jamais un simple clignotement.
+            final pulse = math.sin(phase * math.pi).clamp(0.0, 1.0);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Opacity(
+                opacity: 0.35 + 0.65 * pulse,
+                child: Transform.scale(
+                  scale: 0.55 + 0.45 * pulse,
+                  child: Container(
+                    width: _dotDiameter,
+                    height: _dotDiameter,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

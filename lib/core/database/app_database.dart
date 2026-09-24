@@ -55,7 +55,7 @@ class AppDatabase {
 
     return openDatabase(
       dbPath,
-      version: 24,
+      version: 30,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -543,6 +543,172 @@ class AppDatabase {
             )
           ''');
         }
+        // v24 -> v25 : ajout de `job_seeker_portfolio_projects` — remplace
+        // l'ancien onglet "Publier" (composeur de post social mocké, jamais
+        // persisté) par un vrai portfolio de réalisations, ajouté depuis
+        // `PortfolioScreen` et affiché en lecture seule aux recruteurs
+        // (`CandidateProfileViewScreen`) — voir `AuthService.addPortfolioProject`.
+        if (oldVersion < 25) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_seeker_portfolio_projects (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              title TEXT NOT NULL,
+              description TEXT,
+              link TEXT,
+              image BLOB,
+              created_at TEXT NOT NULL
+            )
+          ''');
+        }
+        // v25 -> v26 : refonte du Portfolio candidat en plusieurs sous-écrans
+        // (écran principal + À propos/Compétences/Expériences/Projets/
+        // Certifications dédiés). Ajoute les données qui n'avaient encore
+        // aucune table : `job_seeker_formations` (section "Parcours" de
+        // l'écran Expériences), `job_seeker_certifications` (nom, organisme,
+        // date, image, lien de vérification) et
+        // `job_seeker_professional_links` (GitHub, LinkedIn, site
+        // personnel... — l'icône est déduite du domaine de l'URL à
+        // l'affichage, pas d'un type stocké). `job_seeker_profiles.objectifs`
+        // porte le nouveau bloc "Mes objectifs" de l'écran À propos.
+        // `job_seeker_portfolio_projects` gagne des colonnes facultatives
+        // pour l'écran "Détail d'un projet" : `role` (rôle du candidat sur
+        // le projet), `technologies` (liste séparée par des virgules),
+        // `features` (fonctionnalités principales, une par ligne),
+        // `github_link`/`demo_link` (liens distincts du lien générique
+        // existant). Pas de table de galerie multi-images : une seule image
+        // de couverture par projet, comme avant.
+        if (oldVersion < 26) {
+          final profileColumns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final profileColumnNames = profileColumns.map((c) => c['name'] as String).toSet();
+          if (!profileColumnNames.contains('objectifs')) {
+            await db.execute('ALTER TABLE job_seeker_profiles ADD COLUMN objectifs TEXT');
+          }
+
+          final projectColumns =
+              await db.rawQuery('PRAGMA table_info(job_seeker_portfolio_projects)');
+          final projectColumnNames = projectColumns.map((c) => c['name'] as String).toSet();
+          if (!projectColumnNames.contains('role')) {
+            await db.execute('ALTER TABLE job_seeker_portfolio_projects ADD COLUMN role TEXT');
+          }
+          if (!projectColumnNames.contains('technologies')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_portfolio_projects ADD COLUMN technologies TEXT',
+            );
+          }
+          if (!projectColumnNames.contains('features')) {
+            await db.execute('ALTER TABLE job_seeker_portfolio_projects ADD COLUMN features TEXT');
+          }
+          if (!projectColumnNames.contains('github_link')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_portfolio_projects ADD COLUMN github_link TEXT',
+            );
+          }
+          if (!projectColumnNames.contains('demo_link')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_portfolio_projects ADD COLUMN demo_link TEXT',
+            );
+          }
+
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_seeker_formations (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              etablissement TEXT NOT NULL,
+              filiere TEXT,
+              date_debut TEXT NOT NULL,
+              date_fin TEXT
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_seeker_certifications (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              name TEXT NOT NULL,
+              organism TEXT,
+              date TEXT,
+              image BLOB,
+              verification_link TEXT
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_seeker_professional_links (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              label TEXT NOT NULL,
+              url TEXT NOT NULL
+            )
+          ''');
+        }
+        // v26 -> v27 : couleur du thème du Portfolio (`PortfolioHeroTheme`),
+        // choisie par le candidat sur le dégradé "hero" de
+        // `CandidateFullPortfolioScreen` (icône palette, visible seulement
+        // en mode aperçu candidat) — persistée pour que le recruteur qui
+        // consulte le même écran voie la même couleur (`AccountSearchRepository`
+        // la lit aussi). `NULL` = thème violet par défaut
+        // (`PortfolioHeroTheme.resolve` gère l'absence de valeur).
+        if (oldVersion < 27) {
+          final profileColumns = await db.rawQuery('PRAGMA table_info(job_seeker_profiles)');
+          final profileColumnNames = profileColumns.map((c) => c['name'] as String).toSet();
+          if (!profileColumnNames.contains('portfolio_theme_color')) {
+            await db.execute(
+              'ALTER TABLE job_seeker_profiles ADD COLUMN portfolio_theme_color TEXT',
+            );
+          }
+        }
+        // v27 -> v28 : `job_offer_categories` — une offre peut appartenir à
+        // plusieurs catégories (`kJobCategories`), choisies par le recruteur
+        // dans `JobOfferPublishScreen`. Une ligne par (offre, catégorie).
+        // Les offres publiées avant cette migration n'ont aucune ligne ici :
+        // `JobOfferRepository.fetchByCategory` retombe alors sur la catégorie
+        // de l'entreprise (`employer_profiles.categorie`), comme avant.
+        if (oldVersion < 28) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS job_offer_categories (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_offer_id INTEGER NOT NULL REFERENCES job_offers(id) ON DELETE CASCADE,
+              category TEXT NOT NULL,
+              UNIQUE(job_offer_id, category)
+            )
+          ''');
+        }
+        // v28 -> v29 : `job_offers.other_sector` — secteur précisé par le
+        // recruteur quand il range son offre dans la catégorie "Autres"
+        // (`kOtherJobCategory`, aucun secteur de `kJobCategories` ne
+        // correspond). `NULL` si l'offre n'est pas dans "Autres".
+        if (oldVersion < 29) {
+          final offerColumns = await db.rawQuery('PRAGMA table_info(job_offers)');
+          final offerColumnNames = offerColumns.map((c) => c['name'] as String).toSet();
+          if (!offerColumnNames.contains('other_sector')) {
+            await db.execute('ALTER TABLE job_offers ADD COLUMN other_sector TEXT');
+          }
+        }
+        // v29 -> v30 : décision du recruteur sur une candidature reçue.
+        // `status` = 'pending' (défaut) ou 'rejected' (bouton "Rejeter" de
+        // `CandidateApplicationDetailScreen`), `rejection_message` = mot
+        // facultatif au candidat, `decided_at` = date du rejet. Un rejet est
+        // aussi une notification pour le candidat ("Candidature non
+        // retenue") : `seeker_read`/`seeker_deleted` portent son état
+        // lu/supprimé, comme `interviews.seeker_read`/`seeker_deleted`.
+        if (oldVersion < 30) {
+          final applicationColumns = await db.rawQuery('PRAGMA table_info(job_applications)');
+          final applicationColumnNames =
+              applicationColumns.map((c) => c['name'] as String).toSet();
+          const newColumns = {
+            'status': "TEXT NOT NULL DEFAULT 'pending'",
+            'rejection_message': 'TEXT',
+            'decided_at': 'TEXT',
+            'seeker_read': 'INTEGER NOT NULL DEFAULT 0',
+            'seeker_deleted': 'INTEGER NOT NULL DEFAULT 0',
+          };
+          for (final entry in newColumns.entries) {
+            if (!applicationColumnNames.contains(entry.key)) {
+              await db.execute(
+                'ALTER TABLE job_applications ADD COLUMN ${entry.key} ${entry.value}',
+              );
+            }
+          }
+        }
       },
       onDowngrade: onDatabaseDowngradeDelete,
       onCreate: (db, version) async {
@@ -580,7 +746,9 @@ class AppDatabase {
             communications_marketing INTEGER NOT NULL DEFAULT 0,
             mode_nuit INTEGER NOT NULL DEFAULT 0,
             texte_agrandi INTEGER NOT NULL DEFAULT 0,
-            animations_reduites INTEGER NOT NULL DEFAULT 0
+            animations_reduites INTEGER NOT NULL DEFAULT 0,
+            objectifs TEXT,
+            portfolio_theme_color TEXT
           )
         ''');
 
@@ -641,7 +809,8 @@ class AppDatabase {
             salary TEXT,
             contract_type TEXT,
             poster_image BLOB,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            other_sector TEXT
           )
         ''');
 
@@ -684,6 +853,11 @@ class AppDatabase {
             candidate_name TEXT NOT NULL DEFAULT '',
             candidate_position TEXT,
             applied_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            rejection_message TEXT,
+            decided_at TEXT,
+            seeker_read INTEGER NOT NULL DEFAULT 0,
+            seeker_deleted INTEGER NOT NULL DEFAULT 0,
             UNIQUE(job_offer_id, job_seeker_user_id)
           )
         ''');
@@ -732,12 +906,70 @@ class AppDatabase {
         ''');
 
         await db.execute('''
+          CREATE TABLE job_offer_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_offer_id INTEGER NOT NULL REFERENCES job_offers(id) ON DELETE CASCADE,
+            category TEXT NOT NULL,
+            UNIQUE(job_offer_id, category)
+          )
+        ''');
+
+        await db.execute('''
           CREATE TABLE job_seeker_profile_views (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             profile_user_id TEXT NOT NULL,
             viewer_user_id TEXT NOT NULL,
             viewed_at TEXT NOT NULL,
             UNIQUE(profile_user_id, viewer_user_id)
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_seeker_portfolio_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            description TEXT,
+            link TEXT,
+            image BLOB,
+            created_at TEXT NOT NULL,
+            role TEXT,
+            technologies TEXT,
+            features TEXT,
+            github_link TEXT,
+            demo_link TEXT
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_seeker_formations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            etablissement TEXT NOT NULL,
+            filiere TEXT,
+            date_debut TEXT NOT NULL,
+            date_fin TEXT
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_seeker_certifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            organism TEXT,
+            date TEXT,
+            image BLOB,
+            verification_link TEXT
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE job_seeker_professional_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            label TEXT NOT NULL,
+            url TEXT NOT NULL
           )
         ''');
 

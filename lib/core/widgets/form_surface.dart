@@ -14,11 +14,13 @@ class FormSurface extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
+        // Nouveau design : grands coins, fine bordure, ombre bleutée légère.
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.07),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),

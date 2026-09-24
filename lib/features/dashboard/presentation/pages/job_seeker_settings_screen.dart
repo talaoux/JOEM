@@ -4,17 +4,17 @@ import 'package:flutter/material.dart';
 
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
+import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/features/login/presentation/login_screen.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 import '../../data/account_search_repository.dart';
 import '../../data/job_offer_repository.dart';
 import 'change_password_screen.dart';
 import 'edit_job_seeker_profile_screen.dart';
+import '../widgets/soft_ui.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran "Paramètres" du chercheur d'emploi, ouvert depuis l'item
 /// "Paramètres" de `ProfileSidePanel`. Regroupe les seuls réglages
@@ -214,7 +214,7 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text('Se déconnecter', style: TextStyle(color: OnboardingColors.violet)),
+            child: Text('Se déconnecter', style: TextStyle(color: DashboardColors.accent)),
           ),
         ],
       ),
@@ -277,13 +277,8 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
     final colors = AppSurfaceColors.of(context);
 
     return Scaffold(
-      backgroundColor: colors.surface,
-      appBar: AppBar(
-        backgroundColor: colors.surface,
-        elevation: 0,
-        foregroundColor: colors.textPrimary,
-        title: Text('Paramètres', style: colors.dashboardTitle.copyWith(fontSize: 18)),
-      ),
+      backgroundColor: SoftUi.pageBackground(colors),
+      appBar: const SoftAppBar(title: 'Paramètres'),
       body: SafeArea(
         child: AbsorbPointer(
           absorbing: _isProcessing,
@@ -292,7 +287,7 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
             physics: const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: staggered([
                 _buildAccountSummary(colors, fullName, user?.email ?? '', user?.photoBytes),
                 const SizedBox(height: AppSpacing.lg),
                 _buildSection(
@@ -444,7 +439,7 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
                     ),
                   ],
                 ),
-              ],
+              ]),
             ),
           ),
         ),
@@ -458,23 +453,15 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
     String email,
     Uint8List? photoBytes,
   ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
+    return SoftCard(
+      padding: const EdgeInsets.all(18),
+      radius: 28,
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: OnboardingColors.lavender,
-            backgroundImage: photoBytes != null ? MemoryImage(photoBytes) : null,
-            child: photoBytes == null
-                ? Icon(Icons.person_rounded, color: OnboardingColors.violet, size: 28)
-                : null,
+          SoftAvatar(
+            name: fullName,
+            size: 56,
+            photo: photoBytes != null ? MemoryImage(photoBytes) : null,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -483,7 +470,10 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
               children: [
                 Text(
                   fullName,
-                  style: colors.cardTitle,
+                  style: AppTypography.frauncesBold.copyWith(
+                    fontSize: 19,
+                    color: colors.textPrimary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -512,25 +502,47 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm),
-          child: Text(title, style: colors.sectionTitle),
+          child: SerifSectionTitle(title, fontSize: 18),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: colors.background,
-            borderRadius: AppRadius.cardRadius,
-            boxShadow: AppShadows.cardShadow,
-          ),
+        SoftCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             children: [
               for (var i = 0; i < children.length; i++) ...[
                 children[i],
                 if (i != children.length - 1)
-                  Divider(height: 1, indent: 56, color: colors.divider),
+                  Divider(height: 1, indent: 64, endIndent: 16, color: colors.divider),
               ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Pastille ronde teintée derrière l'icône d'une ligne de réglage.
+class _TileIcon extends StatelessWidget {
+  const _TileIcon({required this.icon, required this.color, this.enabled = true});
+
+  final IconData icon;
+  final Color color;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final ink = !enabled
+        ? colors.textTertiary
+        : (color == DashboardColors.accent ? SoftUi.brandInk(colors) : SoftUi.accentInk(colors, color));
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: SoftUi.tint(colors, enabled ? color : colors.textTertiary),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 18, color: ink),
     );
   }
 }
@@ -561,7 +573,11 @@ class _SettingsTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: enabled ? (destructive ? AppColors.error : OnboardingColors.violet) : color),
+      leading: _TileIcon(
+        icon: icon,
+        color: destructive ? AppColors.error : DashboardColors.accent,
+        enabled: enabled,
+      ),
       title: Text(label, style: colors.cardTitle.copyWith(fontSize: 15, color: color)),
       subtitle: subtitle != null
           ? Text(subtitle!, style: colors.cardDescription.copyWith(fontSize: 12))
@@ -595,8 +611,9 @@ class _SettingsSwitchTile extends StatelessWidget {
     return SwitchListTile(
       value: value,
       onChanged: onChanged,
-      activeThumbColor: OnboardingColors.violet,
-      secondary: Icon(icon, color: OnboardingColors.violet),
+      activeThumbColor: SoftUi.brandInk(colors),
+      activeTrackColor: SoftUi.tint(colors, DashboardColors.accent),
+      secondary: _TileIcon(icon: icon, color: DashboardColors.accent),
       title: Text(label, style: colors.cardTitle.copyWith(fontSize: 15)),
       subtitle: subtitle != null
           ? Text(subtitle!, style: colors.cardDescription.copyWith(fontSize: 12))

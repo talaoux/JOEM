@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
-/// Wordmark "JOEM" au dégradé navy → violet, même identité que le bloc
+/// Wordmark "JOEM" au dégradé bleu nuit → bleu océan, même identité que le bloc
 /// de marque du [WelcomeScreen], réutilisé en en-tête des écrans de
 /// connexion et d'inscription (sans la grille de points ni la baseline,
 /// trop chargées pour l'en-tête d'un formulaire).
@@ -18,9 +18,9 @@ class JoemGradientLogo extends StatelessWidget {
       shaderCallback: (rect) => const LinearGradient(
         colors: [
           OnboardingColors.navy,
-          Color(0xFF2D1B69),
-          OnboardingColors.violetDeep,
-          OnboardingColors.violetLight,
+          Color(0xFF172554),
+          OnboardingColors.accentDeep,
+          OnboardingColors.accentLight,
         ],
         stops: [0.0, 0.38, 0.65, 1.0],
       ).createShader(rect),

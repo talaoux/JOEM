@@ -2,11 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/core/theme/app_shadows.dart';
+import 'soft_ui.dart';
 
 class JobCard extends StatelessWidget {
   final String jobTitle;
@@ -76,7 +76,7 @@ class JobCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: OnboardingColors.violet.withOpacity(0.1),
+                  color: DashboardColors.accent.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                   image: companyLogo != null
                       ? DecorationImage(
@@ -88,7 +88,7 @@ class JobCard extends StatelessWidget {
                 child: companyLogo == null
                     ? Icon(
                         Icons.business_rounded,
-                        color: OnboardingColors.violet,
+                        color: DashboardColors.accent,
                         size: 24,
                       )
                     : null,
@@ -119,7 +119,7 @@ class JobCard extends StatelessWidget {
                               vertical: AppSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: OnboardingColors.violet,
+                              color: DashboardColors.accent,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -236,7 +236,7 @@ class JobCard extends StatelessWidget {
               onPressed: hasApplied ? null : onApply,
               style: ElevatedButton.styleFrom(
                 backgroundColor:
-                    hasApplied ? const Color(0xFFE5E7EB) : OnboardingColors.violet,
+                    hasApplied ? const Color(0xFFE5E7EB) : DashboardColors.accent,
                 foregroundColor:
                     hasApplied ? const Color(0xFF6B7280) : Colors.white,
                 disabledBackgroundColor: const Color(0xFFE5E7EB),

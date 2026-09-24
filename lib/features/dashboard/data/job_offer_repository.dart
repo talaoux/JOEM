@@ -52,6 +52,7 @@ class JobOffer {
     required this.contractType,
     this.posterImage,
     required this.createdAt,
+    this.otherSector,
   });
 
   final int id;
@@ -69,6 +70,11 @@ class JobOffer {
   /// candidat. `null` si le recruteur n'en a pas ajouté.
   final Uint8List? posterImage;
   final DateTime createdAt;
+
+  /// Secteur précisé par le recruteur quand l'offre est rangée dans
+  /// "Autres" (`kOtherJobCategory`) — `null` sinon. Affiché au candidat
+  /// (`offerCategoryLabel`, puce sur `JobOfferPostCard`).
+  final String? otherSector;
 
   /// Heure/date de publication lisible : "À l'instant", "Il y a 12 min",
   /// "Aujourd'hui à 14:32", "Hier à 09:10", ou "12 Juil à 16:05" au-delà.
@@ -93,6 +99,18 @@ class JobOfferNotification {
       '${offer.location.isNotEmpty ? ' à ${offer.location}' : ''}.';
 }
 
+/// Statut d'une candidature (`job_applications.status`) — décidé par le
+/// recruteur depuis `CandidateApplicationDetailScreen`.
+abstract final class ApplicationStatus {
+  static const String pending = 'pending';
+  static const String accepted = 'accepted';
+  static const String rejected = 'rejected';
+
+  /// Statuts qui constituent une décision du recruteur (notifiée au
+  /// candidat, et qui empêche le candidat de retirer sa candidature).
+  static const List<String> decided = [accepted, rejected];
+}
+
 /// Une candidature reçue (`job_applications`), vue comme notification pour
 /// le recruteur propriétaire de l'offre — même principe que
 /// [JobOfferNotification] côté candidat : pas de ligne de notification
@@ -107,6 +125,9 @@ class JobApplicationNotification {
     this.candidatePosition,
     required this.appliedAt,
     required this.isRead,
+    this.status = ApplicationStatus.pending,
+    this.decisionMessage,
+    this.decidedAt,
   });
 
   final int applicationId;
@@ -122,6 +143,34 @@ class JobApplicationNotification {
   final DateTime appliedAt;
   final bool isRead;
 
+  /// [ApplicationStatus.pending], [ApplicationStatus.accepted] ou
+  /// [ApplicationStatus.rejected].
+  final String status;
+
+  /// Mot facultatif laissé au candidat avec la décision (acceptation ou
+  /// rejet) — colonne `job_applications.rejection_message`, nom historique
+  /// antérieur au statut "acceptée".
+  final String? decisionMessage;
+
+  /// Date de la décision — `null` tant que la candidature est en attente.
+  final DateTime? decidedAt;
+
+  bool get isRejected => status == ApplicationStatus.rejected;
+  bool get isAccepted => status == ApplicationStatus.accepted;
+
+  JobApplicationNotification copyWith({bool? isRead}) => JobApplicationNotification(
+        applicationId: applicationId,
+        jobSeekerUserId: jobSeekerUserId,
+        offer: offer,
+        candidateName: candidateName,
+        candidatePosition: candidatePosition,
+        appliedAt: appliedAt,
+        isRead: isRead ?? this.isRead,
+        status: status,
+        decisionMessage: decisionMessage,
+        decidedAt: decidedAt,
+      );
+
   String get title => 'Nouvelle candidature reçue';
 
   String get message {
@@ -133,6 +182,42 @@ class JobApplicationNotification {
   }
 
   String get timeLabel => _relativeTimeLabel(appliedAt);
+}
+
+/// Une décision du recruteur sur une candidature (acceptée ou rejetée), vue
+/// comme notification pour le candidat concerné — "Candidature acceptée" /
+/// "Candidature non retenue". Même principe que [JobApplicationNotification]
+/// côté recruteur : pas de ligne dédiée, l'état lu/supprimé vit sur
+/// `job_applications.seeker_read`/`seeker_deleted`.
+class ApplicationDecisionNotification {
+  const ApplicationDecisionNotification({
+    required this.applicationId,
+    required this.offer,
+    required this.status,
+    this.decisionMessage,
+    required this.decidedAt,
+    required this.isRead,
+  });
+
+  final int applicationId;
+  final JobOffer offer;
+
+  /// [ApplicationStatus.accepted] ou [ApplicationStatus.rejected].
+  final String status;
+  final String? decisionMessage;
+  final DateTime decidedAt;
+  final bool isRead;
+
+  bool get isAccepted => status == ApplicationStatus.accepted;
+
+  String get title => isAccepted ? 'Candidature acceptée' : 'Candidature non retenue';
+
+  String get message => isAccepted
+      ? "Bonne nouvelle ! ${offer.companyName} a accepté votre candidature pour « ${offer.title} » "
+          "et vous propose un entretien."
+      : "${offer.companyName} n'a pas retenu votre candidature pour « ${offer.title} ».";
+
+  String get timeLabel => _relativeTimeLabel(decidedAt);
 }
 
 /// Une vue enregistrée sur une offre du recruteur (`job_offer_views`) —
@@ -236,21 +321,33 @@ class JobOfferRepository {
     required String salary,
     required String contractType,
     Uint8List? posterImage,
+    List<String> categories = const [],
+    String? otherSector,
   }) async {
     final db = await AppDatabase.instance.database;
     final createdAt = DateTime.now();
 
-    final id = await db.insert('job_offers', {
-      'employer_user_id': employerUserId,
-      'company_name': companyName,
-      'company_logo': companyLogo,
-      'title': title,
-      'description': description,
-      'location': location,
-      'salary': salary,
-      'contract_type': contractType,
-      'poster_image': posterImage,
-      'created_at': createdAt.toIso8601String(),
+    final id = await db.transaction((txn) async {
+      final offerId = await txn.insert('job_offers', {
+        'employer_user_id': employerUserId,
+        'company_name': companyName,
+        'company_logo': companyLogo,
+        'title': title,
+        'description': description,
+        'location': location,
+        'salary': salary,
+        'contract_type': contractType,
+        'poster_image': posterImage,
+        'created_at': createdAt.toIso8601String(),
+        'other_sector': otherSector,
+      });
+      for (final category in categories.toSet()) {
+        await txn.insert('job_offer_categories', {
+          'job_offer_id': offerId,
+          'category': category,
+        });
+      }
+      return offerId;
     });
 
     return JobOffer(
@@ -265,6 +362,7 @@ class JobOfferRepository {
       contractType: contractType,
       posterImage: posterImage,
       createdAt: createdAt,
+      otherSector: otherSector,
     );
   }
 
@@ -293,26 +391,151 @@ class JobOfferRepository {
     return offers.where((offer) => !dismissedIds.contains(offer.id)).toList();
   }
 
-  /// Offres publiées par des recruteurs dont l'entreprise appartient à
-  /// [category] (`employer_profiles.categorie`, choisie à l'inscription
-  /// recruteur, `kJobCategories`) — c'est ce que voit un candidat qui tape
-  /// sur une catégorie dans `JobCategoriesScreen`/la grille "Catégories
-  /// populaires" du dashboard. Les comptes de démo (id négatif, aucune
-  /// ligne `employer_profiles`) n'ont pas de catégorie et n'apparaissent
-  /// donc dans aucun filtre, comme le reste de la recherche de comptes
-  /// (voir `AccountSearchRepository`).
+  /// Offres rangées dans [category] — c'est ce que voit un candidat qui
+  /// tape sur une catégorie dans `JobCategoriesScreen`/la grille
+  /// "Catégories populaires" du dashboard. Une offre peut appartenir à
+  /// plusieurs catégories (`job_offer_categories`, choisies par le
+  /// recruteur dans `JobOfferPublishScreen`) et apparaît alors dans
+  /// chacune. Une offre sans aucune catégorie propre (publiée avant la
+  /// migration v28) retombe sur la catégorie de l'entreprise
+  /// (`employer_profiles.categorie`) ; les comptes de démo n'ont pas de
+  /// ligne `employer_profiles`, leurs anciennes offres n'apparaissent donc
+  /// dans aucun filtre.
   Future<List<JobOffer>> fetchByCategory(String category) async {
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
       SELECT jo.* FROM job_offers jo
-      INNER JOIN employer_profiles ep ON ep.user_id = jo.employer_user_id
-      WHERE ep.categorie = ?
+      LEFT JOIN employer_profiles ep ON ep.user_id = jo.employer_user_id
+      WHERE EXISTS (
+          SELECT 1 FROM job_offer_categories joc
+          WHERE joc.job_offer_id = jo.id AND joc.category = ?
+        )
+        OR (
+          NOT EXISTS (SELECT 1 FROM job_offer_categories joc WHERE joc.job_offer_id = jo.id)
+          AND ep.categorie = ?
+        )
       ORDER BY jo.created_at DESC
       ''',
-      [category],
+      [category, category],
     );
     return rows.map(_fromRow).toList();
+  }
+
+  /// Catégories propres à une offre (`job_offer_categories`), dans l'ordre
+  /// de `kJobCategories` côté appelant — vide pour une offre publiée avant
+  /// la migration v28.
+  Future<List<String>> fetchCategoriesForOffer(int jobOfferId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.query(
+      'job_offer_categories',
+      columns: ['category'],
+      where: 'job_offer_id = ?',
+      whereArgs: [jobOfferId],
+      orderBy: 'id',
+    );
+    return rows.map((row) => row['category'] as String).toList();
+  }
+
+  /// Catégories propres de chaque offre de ce recruteur, en une seule
+  /// requête — affichées sur les cartes de "Mes offres d'emploi". Une offre
+  /// sans catégorie propre (antérieure à v28) est absente de la map.
+  Future<Map<int, List<String>>> fetchCategoriesByOffer(int employerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT joc.job_offer_id AS offer_id, joc.category AS category
+      FROM job_offer_categories joc
+      INNER JOIN job_offers jo ON jo.id = joc.job_offer_id
+      WHERE jo.employer_user_id = ?
+      ORDER BY joc.id
+      ''',
+      [employerUserId],
+    );
+    final result = <int, List<String>>{};
+    for (final row in rows) {
+      result.putIfAbsent(row['offer_id'] as int, () => []).add(row['category'] as String);
+    }
+    return result;
+  }
+
+  /// Modification complète d'une offre déjà publiée — menu "Modifier
+  /// l'offre" de `EmployerOfferCard`, formulaire `JobOfferPublishScreen` en
+  /// mode édition. Garde l'id, la date de publication, l'entreprise, les
+  /// candidatures, favoris et vues ; ne renvoie pas de nouvelle notification
+  /// aux candidats. Les catégories sont remplacées : l'offre apparaît aussitôt
+  /// dans les nouvelles côté candidat (`fetchByCategory`) et quitte les
+  /// anciennes. Le titre dupliqué sur les entretiens planifiés
+  /// (`interviews.offer_title`, voir migration v18 -> v19) suit le nouveau
+  /// titre.
+  Future<JobOffer> updateOffer({
+    required JobOffer offer,
+    required String title,
+    required String description,
+    required String location,
+    required String salary,
+    required String contractType,
+    Uint8List? posterImage,
+    required List<String> categories,
+    String? otherSector,
+  }) async {
+    final db = await AppDatabase.instance.database;
+    await db.transaction((txn) async {
+      await txn.update(
+        'job_offers',
+        {
+          'title': title,
+          'description': description,
+          'location': location,
+          'salary': salary,
+          'contract_type': contractType,
+          'poster_image': posterImage,
+          'other_sector': otherSector,
+        },
+        where: 'id = ?',
+        whereArgs: [offer.id],
+      );
+      await txn.update(
+        'interviews',
+        {'offer_title': title},
+        where: 'job_offer_id = ?',
+        whereArgs: [offer.id],
+      );
+      await _replaceCategories(txn, offer.id, categories);
+    });
+
+    return JobOffer(
+      id: offer.id,
+      employerUserId: offer.employerUserId,
+      companyName: offer.companyName,
+      companyLogo: offer.companyLogo,
+      title: title,
+      description: description,
+      location: location,
+      salary: salary,
+      contractType: contractType,
+      posterImage: posterImage,
+      createdAt: offer.createdAt,
+      otherSector: otherSector,
+    );
+  }
+
+  Future<void> _replaceCategories(
+    Transaction txn,
+    int jobOfferId,
+    List<String> categories,
+  ) async {
+    await txn.delete(
+      'job_offer_categories',
+      where: 'job_offer_id = ?',
+      whereArgs: [jobOfferId],
+    );
+    for (final category in categories.toSet()) {
+      await txn.insert('job_offer_categories', {
+        'job_offer_id': jobOfferId,
+        'category': category,
+      });
+    }
   }
 
   /// [fetchByCategory], sans les offres que ce candidat a masquées de son
@@ -433,16 +656,188 @@ class JobOfferRepository {
   /// Retire la candidature du candidat connecté pour cette offre — permet
   /// d'annuler un "Postuler" envoyé par erreur. Supprime aussi la
   /// notification associée côté recruteur (`job_application_notification_reads`,
-  /// `ON DELETE CASCADE` sur `job_application_id`).
-  Future<void> withdrawApplication({
+  /// `ON DELETE CASCADE` sur `job_application_id`). Refusé (renvoie `false`)
+  /// une fois que le recruteur a pris une décision (acceptée ou rejetée) :
+  /// sans ça, le candidat pourrait retirer puis renvoyer sa candidature pour
+  /// effacer un rejet.
+  Future<bool> withdrawApplication({
     required int jobOfferId,
     required String jobSeekerUserId,
   }) async {
     final db = await AppDatabase.instance.database;
-    await db.delete(
+    final deleted = await db.delete(
       'job_applications',
+      where: 'job_offer_id = ? AND job_seeker_user_id = ? AND status = ?',
+      whereArgs: [jobOfferId, jobSeekerUserId, ApplicationStatus.pending],
+    );
+    return deleted > 0;
+  }
+
+  /// Statut ([ApplicationStatus]) et message éventuel du recruteur pour la
+  /// candidature de ce candidat à cette offre — `null` s'il n'a pas postulé.
+  /// Affiché par `JobOfferDetailScreen`.
+  Future<({String status, String? decisionMessage})?> fetchApplicationStatus(
+    int jobOfferId,
+    String jobSeekerUserId,
+  ) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.query(
+      'job_applications',
+      columns: ['status', 'rejection_message'],
       where: 'job_offer_id = ? AND job_seeker_user_id = ?',
       whereArgs: [jobOfferId, jobSeekerUserId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return (
+      status: rows.first['status'] as String? ?? ApplicationStatus.pending,
+      decisionMessage: rows.first['rejection_message'] as String?,
+    );
+  }
+
+  /// Statut de chaque candidature de ce candidat, par id d'offre — badges
+  /// "En attente"/"Acceptée"/"Non retenue" de `MyApplicationsScreen`.
+  Future<Map<int, String>> fetchApplicationStatusesByOffer(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.query(
+      'job_applications',
+      columns: ['job_offer_id', 'status'],
+      where: 'job_seeker_user_id = ?',
+      whereArgs: [jobSeekerUserId],
+    );
+    return {
+      for (final row in rows)
+        row['job_offer_id'] as int: row['status'] as String? ?? ApplicationStatus.pending,
+    };
+  }
+
+  /// Rejette une candidature reçue (bouton "Rejeter" de
+  /// `CandidateApplicationDetailScreen`). [message] est un mot facultatif
+  /// transmis au candidat. Crée une notification "Candidature non retenue"
+  /// non lue côté candidat.
+  Future<void> rejectApplication(int applicationId, {String? message}) =>
+      _decide(applicationId, ApplicationStatus.rejected, message);
+
+  /// Accepte une candidature reçue (bouton "Accepter" de
+  /// `CandidateApplicationDetailScreen`). [message] est un mot facultatif
+  /// transmis au candidat. Crée une notification "Candidature acceptée"
+  /// non lue côté candidat.
+  Future<void> acceptApplication(int applicationId, {String? message}) =>
+      _decide(applicationId, ApplicationStatus.accepted, message);
+
+  Future<void> _decide(int applicationId, String status, String? message) async {
+    final db = await AppDatabase.instance.database;
+    final trimmed = message?.trim();
+    await db.update(
+      'job_applications',
+      {
+        'status': status,
+        'rejection_message': (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+        'decided_at': DateTime.now().toIso8601String(),
+        'seeker_read': 0,
+        'seeker_deleted': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [applicationId],
+    );
+  }
+
+  /// Annule une décision (acceptation ou rejet) prise par erreur : la
+  /// candidature repasse en attente et la notification disparaît côté
+  /// candidat.
+  Future<void> restoreApplication(int applicationId) async {
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_applications',
+      {
+        'status': ApplicationStatus.pending,
+        'rejection_message': null,
+        'decided_at': null,
+        'seeker_read': 0,
+        'seeker_deleted': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [applicationId],
+    );
+  }
+
+  /// Notifications de décision de ce candidat ("Candidature acceptée" /
+  /// "Candidature non retenue") : ses candidatures décidées qu'il n'a pas
+  /// supprimées de sa liste, la plus récente décision en premier.
+  Future<List<ApplicationDecisionNotification>> fetchDecisionNotificationsForJobSeeker(
+    String jobSeekerUserId,
+  ) async {
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        ja.id AS application_id,
+        ja.status AS status,
+        ja.rejection_message AS rejection_message,
+        ja.decided_at AS decided_at,
+        ja.seeker_read AS seeker_read,
+        jo.*
+      FROM job_applications ja
+      INNER JOIN job_offers jo ON jo.id = ja.job_offer_id
+      WHERE ja.job_seeker_user_id = ? AND ja.status IN (?, ?) AND ja.seeker_deleted = 0
+      ORDER BY ja.decided_at DESC
+      ''',
+      [jobSeekerUserId, ...ApplicationStatus.decided],
+    );
+    return rows
+        .map((row) => ApplicationDecisionNotification(
+              applicationId: row['application_id'] as int,
+              offer: _fromRow(row),
+              status: row['status'] as String,
+              decisionMessage: row['rejection_message'] as String?,
+              decidedAt:
+                  DateTime.tryParse(row['decided_at'] as String? ?? '') ?? DateTime.now(),
+              isRead: (row['seeker_read'] as int? ?? 0) == 1,
+            ))
+        .toList();
+  }
+
+  /// Nombre de décisions non lues — ajouté à la pastille de notifications
+  /// du candidat (header + nav basse).
+  Future<int> countUnreadDecisionNotificationsForJobSeeker(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) FROM job_applications
+      WHERE job_seeker_user_id = ? AND status IN (?, ?) AND seeker_read = 0 AND seeker_deleted = 0
+      ''',
+      [jobSeekerUserId, ...ApplicationStatus.decided],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<void> markDecisionNotificationRead(int applicationId, {bool read = true}) async {
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_applications',
+      {'seeker_read': read ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [applicationId],
+    );
+  }
+
+  Future<void> deleteDecisionNotification(int applicationId) async {
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_applications',
+      {'seeker_deleted': 1},
+      where: 'id = ?',
+      whereArgs: [applicationId],
+    );
+  }
+
+  Future<void> markAllDecisionNotificationsRead(String jobSeekerUserId) async {
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      'job_applications',
+      {'seeker_read': 1},
+      where: 'job_seeker_user_id = ? AND status IN (?, ?)',
+      whereArgs: [jobSeekerUserId, ...ApplicationStatus.decided],
     );
   }
 
@@ -521,6 +916,9 @@ class JobOfferRepository {
         ja.candidate_name AS candidate_name,
         ja.candidate_position AS candidate_position,
         ja.applied_at AS applied_at,
+        ja.status AS status,
+        ja.rejection_message AS rejection_message,
+        ja.decided_at AS decided_at,
         jo.id AS offer_id,
         jo.employer_user_id AS employer_user_id,
         jo.company_name AS company_name,
@@ -531,7 +929,8 @@ class JobOfferRepository {
         jo.salary AS salary,
         jo.contract_type AS contract_type,
         jo.poster_image AS poster_image,
-        jo.created_at AS created_at
+        jo.created_at AS created_at,
+        jo.other_sector AS other_sector
       FROM job_applications ja
       INNER JOIN job_offers jo ON jo.id = ja.job_offer_id
       WHERE jo.employer_user_id = ?
@@ -574,11 +973,15 @@ class JobOfferRepository {
           contractType: row['contract_type'] as String? ?? '',
           posterImage: row['poster_image'] as Uint8List?,
           createdAt: DateTime.parse(row['created_at'] as String),
+          otherSector: row['other_sector'] as String?,
         ),
         candidateName: row['candidate_name'] as String? ?? '',
         candidatePosition: row['candidate_position'] as String?,
         appliedAt: DateTime.parse(row['applied_at'] as String),
         isRead: isRead,
+        status: row['status'] as String? ?? ApplicationStatus.pending,
+        decisionMessage: row['rejection_message'] as String?,
+        decidedAt: DateTime.tryParse(row['decided_at'] as String? ?? ''),
       ));
     }
     return notifications;
@@ -968,6 +1371,9 @@ class JobOfferRepository {
         ja.candidate_name AS candidate_name,
         ja.candidate_position AS candidate_position,
         ja.applied_at AS applied_at,
+        ja.status AS status,
+        ja.rejection_message AS rejection_message,
+        ja.decided_at AS decided_at,
         jo.id AS offer_id,
         jo.employer_user_id AS employer_user_id,
         jo.company_name AS company_name,
@@ -978,7 +1384,8 @@ class JobOfferRepository {
         jo.salary AS salary,
         jo.contract_type AS contract_type,
         jo.poster_image AS poster_image,
-        jo.created_at AS created_at
+        jo.created_at AS created_at,
+        jo.other_sector AS other_sector
       FROM job_applications ja
       INNER JOIN job_offers jo ON jo.id = ja.job_offer_id
       WHERE ja.job_offer_id = ?
@@ -1016,11 +1423,15 @@ class JobOfferRepository {
           'contract_type': row['contract_type'],
           'poster_image': row['poster_image'],
           'created_at': row['created_at'],
+          'other_sector': row['other_sector'],
         }),
         candidateName: row['candidate_name'] as String? ?? '',
         candidatePosition: row['candidate_position'] as String?,
         appliedAt: DateTime.parse(row['applied_at'] as String),
         isRead: readByApplicationId[applicationId] ?? false,
+        status: row['status'] as String? ?? ApplicationStatus.pending,
+        decisionMessage: row['rejection_message'] as String?,
+        decidedAt: DateTime.tryParse(row['decided_at'] as String? ?? ''),
       );
     }).toList();
   }
@@ -1048,6 +1459,7 @@ class JobOfferRepository {
       contractType: row['contract_type'] as String? ?? '',
       posterImage: row['poster_image'] as Uint8List?,
       createdAt: DateTime.parse(row['created_at'] as String),
+      otherSector: row['other_sector'] as String?,
     );
   }
 }

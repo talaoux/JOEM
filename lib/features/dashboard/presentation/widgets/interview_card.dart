@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
-import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 
+import 'soft_ui.dart';
+
+/// Carte d'entretien de l'accueil recruteur — style "nouveau design" (voir
+/// `soft_ui.dart`) : pavé horaire en serif sur fond ambre pâle (même ambre
+/// que la carte "Entretiens" du Tableau de bord), détails puis bouton
+/// pilule doux "Voir", le tout sur une seule ligne.
 class InterviewCard extends StatelessWidget {
   final String company;
   final String date;
@@ -22,128 +25,97 @@ class InterviewCard extends StatelessWidget {
     required this.onViewDetails,
   });
 
+  static const Color _amber = Color(0xFFC2780E);
+
   @override
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: AppRadius.cardRadius,
-        boxShadow: AppShadows.cardShadow,
-      ),
+    final amberInk = SoftUi.accentInk(colors, _amber);
+    return SoftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Entreprise
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 64,
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: OnboardingColors.violet.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: SoftUi.tint(colors, _amber),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(
-                  Icons.business_rounded,
-                  color: OnboardingColors.violet,
-                  size: 20,
+                child: Column(
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        time,
+                        style: AppTypography.frauncesBold.copyWith(
+                          fontSize: 18,
+                          color: amberInk,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(color: amberInk, shape: BoxShape.circle),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: Text(
-                  company,
-                  style: AppTypography.interviewCompany.copyWith(color: colors.textPrimary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      company,
+                      style: AppTypography.interSemiBold
+                          .copyWith(fontSize: 15, color: colors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    _detail(colors, Icons.calendar_today_outlined, date),
+                    const SizedBox(height: 2),
+                    _detail(colors, Icons.location_on_outlined, location),
+                  ],
                 ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              // Bouton sur la même ligne que le contenu (plutôt que
+              // dessous) pour une carte plus basse — libellé court pour
+              // laisser la place au nom/lieu.
+              SoftPillButton(
+                label: 'Voir',
+                icon: Icons.arrow_forward_rounded,
+                compact: true,
+                onPressed: onViewDetails,
               ),
             ],
-          ),
-
-          const SizedBox(height: AppSpacing.md),
-
-          // Date et heure
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 16,
-                color: colors.textTertiary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                date,
-                style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Icon(
-                Icons.access_time_rounded,
-                size: 16,
-                color: colors.textTertiary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                time,
-                style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppSpacing.sm),
-
-          // Lieu
-          Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 16,
-                color: colors.textTertiary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(
-                  location,
-                  style: AppTypography.interviewDetail.copyWith(color: colors.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppSpacing.lg),
-
-          // Bouton Voir
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: onViewDetails,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: OnboardingColors.violet,
-                side: const BorderSide(
-                  color: OnboardingColors.violet,
-                  width: 1.5,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.md,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: Text(
-                'Voir',
-                style: AppTypography.secondaryButton.copyWith(
-                  fontSize: 14,
-                ),
-              ),
-            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _detail(AppSurfaceColors colors, IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: colors.textTertiary),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTypography.interRegular.copyWith(fontSize: 12, color: colors.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

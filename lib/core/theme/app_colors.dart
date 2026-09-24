@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 /// Design System cohérent et réutilisable
 class AppColors {
   // Couleur principale - Mauve doux JOEM
-  static const Color primary = Color(0xFFA855F7);
-  static const Color primaryLight = Color(0xFFC58AF9);
-  static const Color primaryLighter = Color(0xFFD8B4FE);
-  static const Color primaryLightest = Color(0xFFEAD8FF);
-  static const Color primaryDark = Color(0xFF9333EA);
-  static const Color secondary = Color(0xFFC58AF9);
+  static const Color primary = Color(0xFF3B82F6); // bleu océan (ancien mauve 0xFFA855F7)
+  static const Color primaryLight = Color(0xFF60A5FA);
+  static const Color primaryLighter = Color(0xFF93C5FD);
+  static const Color primaryLightest = Color(0xFFDBEAFE);
+  static const Color primaryDark = Color(0xFF2563EB);
+  static const Color secondary = Color(0xFF60A5FA);
 
   // Couleurs de fond (thème clair pour dashboard)
   static const Color background = Color(0xFFFFFFFF); // Blanc pur
@@ -29,8 +29,8 @@ class AppColors {
   // Couleurs de glassmorphism
   static const Color glassBackground = Color(0x1AFFFFFF); // 10% opacity
   static const Color glassBorder = Color(0x33FFFFFF); // 20% opacity
-  static const Color glassShadow = Color(0x406C63FF); // Violet avec 25% opacity
-  static const Color glowPrimary = Color(0x406C63FF); // Violet glow
+  static const Color glassShadow = Color(0x403B82F6); // Bleu avec 25% opacity
+  static const Color glowPrimary = Color(0x403B82F6); // Bleu glow
   static const Color glassFill = Color(0x1AFFFFFF); // 10% opacity
 
   // Couleurs d'état

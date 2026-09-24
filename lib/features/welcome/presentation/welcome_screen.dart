@@ -8,6 +8,7 @@ import 'package:joem/features/job_seeker_registration/presentation/job_seeker_re
 import 'package:joem/features/login/presentation/login_screen.dart';
 import 'package:joem/features/recruiter_registration/presentation/recruiter_registration_screen.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Écran d'accueil / onboarding de JOEM.
 ///
@@ -132,9 +133,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                       SizedBox(
                         height: height * OnboardingLayout.brand,
-                        child: _BrandBlock(
+                        child: FadeSlideIn(
+                          delay: const Duration(milliseconds: 150),
+                          offset: const Offset(0, 0.18),
+                          child: _BrandBlock(
                           animation: _mainAnimation,
                           scale: scale,
+                        ),
                         ),
                       ),
                       SizedBox(
@@ -142,9 +147,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                       SizedBox(
                         height: height * OnboardingLayout.title,
-                        child: _TitleBlock(
+                        child: FadeSlideIn(
+                          delay: const Duration(milliseconds: 260),
+                          offset: const Offset(0, 0.18),
+                          child: _TitleBlock(
                           animation: _mainAnimation,
                           scale: scale,
+                        ),
                         ),
                       ),
                       SizedBox(
@@ -153,24 +162,34 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                       SizedBox(
                         height: height * OnboardingLayout.description,
-                        child: _DescriptionBlock(scale: scale),
+                        child: FadeSlideIn(
+                          delay: const Duration(milliseconds: 360),
+                          offset: const Offset(0, 0.18),
+                          child: _DescriptionBlock(scale: scale),
+                        ),
                       ),
                       SizedBox(height: height * OnboardingLayout.spacerSm),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: SizedBox(
                           height: height * OnboardingLayout.card,
-                          child: _ActionCard(
-                            icon: Icons.work,
-                            title: 'Je suis recruteur',
-                            subtitleLines: const [
-                              'Publier des offres et trouvez',
-                              'les meilleur talent',
-                            ],
-                            onTap: _onRecruiterTap,
-                            animation: _mainAnimation,
-                            scale: scale,
-                            delayIndex: 0,
+                          child: FadeSlideIn(
+                            delay: const Duration(milliseconds: 460),
+                            offset: const Offset(0, 0.25),
+                            child: PressableScale(
+                              child: _ActionCard(
+                                icon: Icons.work,
+                                title: 'Je suis recruteur',
+                                subtitleLines: const [
+                                  'Publier des offres et trouvez',
+                                  'les meilleur talent',
+                                ],
+                                onTap: _onRecruiterTap,
+                                animation: _mainAnimation,
+                                scale: scale,
+                                delayIndex: 0,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -179,17 +198,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: SizedBox(
                           height: height * OnboardingLayout.card,
-                          child: _ActionCard(
-                            icon: Icons.person,
-                            title: 'Je cherche un emploi',
-                            subtitleLines: const [
-                              "Trouvez l'opportunité qui correspond",
-                              'à votre profil',
-                            ],
-                            onTap: _onJobSeekerTap,
-                            animation: _mainAnimation,
-                            scale: scale,
-                            delayIndex: 1,
+                          child: FadeSlideIn(
+                            delay: const Duration(milliseconds: 560),
+                            offset: const Offset(0, 0.25),
+                            child: PressableScale(
+                              child: _ActionCard(
+                                icon: Icons.person,
+                                title: 'Je cherche un emploi',
+                                subtitleLines: const [
+                                  "Trouvez l'opportunité qui correspond",
+                                  'à votre profil',
+                                ],
+                                onTap: _onJobSeekerTap,
+                                animation: _mainAnimation,
+                                scale: scale,
+                                delayIndex: 1,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -201,10 +226,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             top: height * OnboardingLayout.spacerXs,
                             bottom: math.max(16.0, bottomInset),
                           ),
-                          child: _LoginFooter(
-                            onTap: _onLoginTap,
-                            animation: _mainAnimation,
-                            scale: scale,
+                          child: FadeSlideIn(
+                            delay: const Duration(milliseconds: 680),
+                            child: _LoginFooter(
+                              onTap: _onLoginTap,
+                              animation: _mainAnimation,
+                              scale: scale,
+                            ),
                           ),
                         ),
                       ),
@@ -235,10 +263,13 @@ class _HeroSection extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/pexels-tima-miroshnichenko-5439467.jpg',
-            fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.3),
+          // Léger zoom arrière à l'ouverture (la photo "respire").
+          SlowZoomIn(
+            child: Image.asset(
+              'assets/images/pexels-tima-miroshnichenko-5439467.jpg',
+              fit: BoxFit.cover,
+              alignment: const Alignment(0, -0.3),
+            ),
           ),
 
           // Dégradé blanc discret pour adoucir la transition vers la vague.
@@ -312,7 +343,7 @@ class _WavePainter extends CustomPainter {
       ..close();
     canvas.drawPath(
       softPath,
-      Paint()..color = OnboardingColors.violetLight.withValues(alpha: 0.12),
+      Paint()..color = OnboardingColors.accentLight.withValues(alpha: 0.12),
     );
 
     // Vague principale.
@@ -334,8 +365,8 @@ class _WavePainter extends CustomPainter {
       ..strokeWidth = 2.0
       ..shader = LinearGradient(
         colors: [
-          OnboardingColors.violet.withValues(alpha: 0.0),
-          OnboardingColors.violet,
+          OnboardingColors.accent.withValues(alpha: 0.0),
+          OnboardingColors.accent,
         ],
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
@@ -435,10 +466,10 @@ class _BrandBlock extends StatelessWidget {
                   ShaderMask(
                     shaderCallback: (rect) => const LinearGradient(
                       colors: [
-                        Color(0xFF12143A),
-                        Color(0xFF2D1B69),
-                        Color(0xFF5B21B6),
-                        Color(0xFF8B5CF6),
+                        Color(0xFF0F1B3D),
+                        Color(0xFF172554),
+                        Color(0xFF1E3A8A),
+                        Color(0xFF60A5FA),
                       ],
                       stops: [0.0, 0.38, 0.65, 1.0],
                     ).createShader(rect),
@@ -490,7 +521,7 @@ class _DotGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = OnboardingColors.violetLight.withValues(alpha: 0.15);
+      ..color = OnboardingColors.accentLight.withValues(alpha: 0.15);
 
     for (var col = 0; col < _DotGrid._columns; col++) {
       for (var row = 0; row < _DotGrid._rows; row++) {
@@ -524,7 +555,7 @@ class _BaselineText extends StatelessWidget {
       color: OnboardingColors.baseline,
     );
     final bulletStyle = textStyle.copyWith(
-      color: OnboardingColors.violetLight,
+      color: OnboardingColors.accentLight,
       fontWeight: FontWeight.w600,
     );
 
@@ -577,9 +608,9 @@ class _TitleBlock extends StatelessWidget {
                 Text(
                   'Trouvez. Postulez.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 32 * scale,
-                    fontWeight: FontWeight.w800,
+                  style: GoogleFonts.fraunces(
+                    fontSize: 34 * scale,
+                    fontWeight: FontWeight.w700,
                     color: OnboardingColors.navy,
                     height: 1.15,
                   ),
@@ -587,10 +618,10 @@ class _TitleBlock extends StatelessWidget {
                 Text(
                   'Réussissez.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 32 * scale,
-                    fontWeight: FontWeight.w800,
-                    color: OnboardingColors.violet,
+                  style: GoogleFonts.fraunces(
+                    fontSize: 34 * scale,
+                    fontWeight: FontWeight.w700,
+                    color: OnboardingColors.accent,
                     height: 1.15,
                   ),
                 ),
@@ -613,7 +644,7 @@ class _Divider extends StatelessWidget {
         width: 80,
         height: 4,
         decoration: BoxDecoration(
-          color: OnboardingColors.violet,
+          color: OnboardingColors.accent,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -689,15 +720,16 @@ class _ActionCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(26),
           child: Ink(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: OnboardingColors.violet.withValues(alpha: 0.10),
+                  color: OnboardingColors.accent.withValues(alpha: 0.10),
                   blurRadius: 28,
                   spreadRadius: -4,
                   offset: const Offset(0, 10),
@@ -709,11 +741,11 @@ class _ActionCard extends StatelessWidget {
                 Container(
                   width: 56,
                   height: 56,
-                  decoration: BoxDecoration(
-                    color: OnboardingColors.lavender,
-                    borderRadius: BorderRadius.circular(16),
+                  decoration: const BoxDecoration(
+                    color: OnboardingColors.tint,
+                    shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, size: 26, color: OnboardingColors.violet),
+                  child: Icon(icon, size: 26, color: OnboardingColors.ink),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -731,15 +763,24 @@ class _ActionCard extends StatelessWidget {
                           // peut se répartir sur 2 lignes si besoin, ce qui
                           // permet une police bien plus grande qu'en le
                           // forçant sur une seule ligne à côté de l'icône.
-                          child: _AutoFitText(
-                            text: title,
-                            maxLines: 2,
+                          // 1 ligne réduite par FittedBox : le titre serif
+                          // (plus large que l'ancien Poppins) passait sur 2
+                          // lignes et débordait ; _AutoFitText mesurait
+                          // parfois avant le chargement de la police et
+                          // tronquait avec "…" au lieu de réduire.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                            title,
+                            maxLines: 1,
                             textAlign: TextAlign.left,
-                            style: GoogleFonts.poppins(
-                              fontSize: 16 * scale,
+                            style: GoogleFonts.fraunces(
+                              fontSize: 18 * scale,
                               fontWeight: FontWeight.w700,
                               color: OnboardingColors.navy,
                               height: 1.1,
+                            ),
                             ),
                           ),
                         ),
@@ -769,7 +810,7 @@ class _ActionCard extends StatelessWidget {
                 const Icon(
                   Icons.chevron_right,
                   size: 24,
-                  color: OnboardingColors.violet,
+                  color: OnboardingColors.accent,
                 ),
               ],
             ),
@@ -894,9 +935,9 @@ class _LoginFooter extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 14.5 * scale,
                   fontWeight: FontWeight.w600,
-                  color: OnboardingColors.violet,
+                  color: OnboardingColors.accent,
                   decoration: TextDecoration.underline,
-                  decorationColor: OnboardingColors.violet,
+                  decorationColor: OnboardingColors.accent,
                 ),
               ),
             ),
@@ -927,7 +968,7 @@ class _BottomWavesPainter extends CustomPainter {
       ..close();
     canvas.drawPath(
       wave1,
-      Paint()..color = OnboardingColors.violetLight.withValues(alpha: 0.08),
+      Paint()..color = OnboardingColors.accentLight.withValues(alpha: 0.08),
     );
 
     final wave2 = Path()
@@ -938,7 +979,7 @@ class _BottomWavesPainter extends CustomPainter {
       ..close();
     canvas.drawPath(
       wave2,
-      Paint()..color = const Color(0xFFA78BFA).withValues(alpha: 0.12),
+      Paint()..color = const Color(0xFF93C5FD).withValues(alpha: 0.12),
     );
   }
 

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 
 /// A labeled input field styled for a wizard's white card: light grey
-/// fill, grey hairline border that turns violet on focus, dark text.
+/// fill, grey hairline border that turns blue on focus, dark text.
 /// Fixed 52px height (single line) so every field in a form lines up.
 class LightTextField extends StatefulWidget {
   const LightTextField({
@@ -17,6 +17,7 @@ class LightTextField extends StatefulWidget {
     this.maxLines = 1,
     this.suffixText,
     this.errorText,
+    this.accentColor,
   });
 
   final String? label;
@@ -31,6 +32,10 @@ class LightTextField extends StatefulWidget {
   /// Message affiché sous le champ, en rouge, avec la bordure assortie.
   /// `null` (ou vide) laisse le champ dans son état normal.
   final String? errorText;
+
+  /// Couleur d'accent (icône, bordure au focus, curseur) — bleu de
+  /// l'onboarding par défaut ; les dashboards passent leur bleu océan.
+  final Color? accentColor;
 
   @override
   State<LightTextField> createState() => _LightTextFieldState();
@@ -75,7 +80,7 @@ class _LightTextFieldState extends State<LightTextField> {
               border: Border.all(
                 color: hasError
                     ? errorColor
-                    : (_focused ? OnboardingColors.violet : const Color(0xFFE3E3EC)),
+                    : (_focused ? (widget.accentColor ?? OnboardingColors.accent) : const Color(0xFFE3E3EC)),
                 width: _focused || hasError ? 1.5 : 1,
               ),
             ),
@@ -87,7 +92,7 @@ class _LightTextFieldState extends State<LightTextField> {
                 if (widget.icon != null) ...[
                   Padding(
                     padding: EdgeInsets.only(top: isMultiline ? 2 : 0),
-                    child: Icon(widget.icon, color: OnboardingColors.violet, size: 20),
+                    child: Icon(widget.icon, color: widget.accentColor ?? OnboardingColors.accent, size: 20),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -98,7 +103,7 @@ class _LightTextFieldState extends State<LightTextField> {
                     keyboardType: widget.keyboardType,
                     maxLines: isMultiline ? widget.maxLines : 1,
                     style: const TextStyle(fontSize: 15, color: Color(0xFF1C1C26)),
-                    cursorColor: OnboardingColors.violet,
+                    cursorColor: widget.accentColor ?? OnboardingColors.accent,
                     decoration: InputDecoration(
                       hintText: widget.hint,
                       hintStyle: const TextStyle(fontSize: 15, color: Color(0xFFA6A6B4)),

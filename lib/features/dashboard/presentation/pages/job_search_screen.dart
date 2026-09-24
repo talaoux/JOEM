@@ -1,17 +1,16 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../data/account_search_repository.dart';
 import '../widgets/search_bar_widget.dart';
 import 'company_profile_view_screen.dart';
+import '../widgets/soft_ui.dart';
 
 /// Recherche d'entreprises — équivalent candidat de `CandidateSearchScreen`.
 /// Recherche réelle parmi les comptes recruteur inscrits
@@ -139,7 +138,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
     return Scaffold(
-      backgroundColor: colors.background,
+      backgroundColor: SoftUi.pageBackground(colors),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,7 +183,16 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
 
   Widget _buildResults(AppSurfaceColors colors) {
     if (_isSearching) {
-      return const Center(child: CircularProgressIndicator());
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.safeAreaHorizontal,
+          vertical: AppSpacing.sm,
+        ),
+        child: SkeletonCardList(
+          count: 4,
+          cardBuilder: (context, index) => const ListRowSkeleton(),
+        ),
+      );
     }
     if (_results.isEmpty) {
       return _buildEmptyState(
@@ -201,9 +209,13 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
       ),
       itemCount: _results.length,
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) => _CompanyResultCard(
-        company: _results[index],
-        onTap: () => _openCompanyDetail(_results[index]),
+      itemBuilder: (context, index) => FadeSlideIn(
+        key: ValueKey(_results[index].userId),
+        delay: staggerDelayFor(index),
+        child: _CompanyResultCard(
+          company: _results[index],
+          onTap: () => _openCompanyDetail(_results[index]),
+        ),
       ),
     );
   }
@@ -219,14 +231,7 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Historiques',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SerifSectionTitle('Recherches récentes', fontSize: 19),
             ],
           ),
         ),
@@ -239,11 +244,13 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
                   title: 'Aucun historique',
                   message: 'Vos recherches récentes apparaîtront ici.',
                 )
-              : ListView.builder(
+              : ListView.separated(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.safeAreaHorizontal,
+                    vertical: AppSpacing.xs,
                   ),
                   itemCount: _history.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, index) => _buildHistoryItem(colors, index),
                 ),
         ),
@@ -251,43 +258,34 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     );
   }
 
+  /// Recherche récente : pilule blanche à fine bordure.
   Widget _buildHistoryItem(AppSurfaceColors colors, int index) {
     final query = _history[index];
-    return InkWell(
+    return SoftCard(
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       onTap: () => _onHistoryTap(query),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            Icon(
-              Icons.history_rounded,
-              size: 20,
-              color: colors.textTertiary,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                query,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 14,
-                  color: colors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 18, color: colors.textTertiary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              query,
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 14,
+                color: colors.textPrimary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            IconButton(
-              onPressed: () => _removeHistoryItem(index),
-              icon: Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: colors.textTertiary,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            onPressed: () => _removeHistoryItem(index),
+            icon: Icon(Icons.close_rounded, size: 18, color: colors.textTertiary),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
       ),
     );
   }
@@ -298,26 +296,14 @@ class _JobSearchScreenState extends State<JobSearchScreen> {
     required String title,
     required String message,
   }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: colors.textTertiary),
-            const SizedBox(height: AppSpacing.md),
-            Text(title, style: colors.sectionTitle),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              message,
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: colors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.safeAreaHorizontal,
+        vertical: AppSpacing.sm,
+      ),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SoftEmptyState(icon: icon, text: '$title — $message'),
       ),
     );
   }
@@ -332,82 +318,59 @@ class _CompanyResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
+    final name = company.companyName.isEmpty ? 'Entreprise' : company.companyName;
     final location = company.localisation?.trim() ?? '';
     final contact = company.contactName?.trim() ?? '';
 
-    return InkWell(
+    return SoftCard(
       onTap: onTap,
-      borderRadius: AppRadius.cardRadius,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: AppRadius.cardRadius,
-          boxShadow: AppShadows.cardShadow,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Logo(logo: company.logo),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    company.companyName.isEmpty ? 'Entreprise' : company.companyName,
-                    style: colors.jobTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (contact.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(contact, style: colors.companyName),
-                  ],
-                  if (location.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, size: 14, color: colors.textTertiary),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            style: colors.jobInfo,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SoftAvatar(
+            name: name,
+            size: 48,
+            icon: Icons.business_rounded,
+            photo: company.logo != null ? MemoryImage(company.logo!) : null,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: colors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (contact.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(contact, style: colors.companyName),
                 ],
-              ),
+                if (location.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 14, color: colors.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: colors.jobInfo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: colors.textTertiary),
+        ],
       ),
     );
   }
 }
-
-class _Logo extends StatelessWidget {
-  const _Logo({required this.logo});
-
-  final Uint8List? logo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: OnboardingColors.violet.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        image: logo != null ? DecorationImage(image: MemoryImage(logo!), fit: BoxFit.cover) : null,
-      ),
-      child: logo == null ? Icon(Icons.business_rounded, color: OnboardingColors.violet, size: 24) : null,
-    );
-  }
-}
-

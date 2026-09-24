@@ -3,12 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/theme/app_colors.dart';
-import 'package:joem/core/theme/app_radius.dart';
-import 'package:joem/core/theme/app_shadows.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/theme/app_typography.dart';
-import 'package:joem/features/welcome/presentation/welcome_palette.dart';
+
+import 'soft_ui.dart';
 
 /// Carte "Recommandées pour vous" façon publication de réseau social (voir
 /// `pub2.png`) : compte recruteur + heure de publication en en-tête, cœur
@@ -28,6 +27,7 @@ class JobOfferPostCard extends StatefulWidget {
     required this.location,
     required this.salary,
     required this.contractType,
+    this.otherSector,
     required this.description,
     this.posterImage,
     required this.isSaved,
@@ -46,6 +46,10 @@ class JobOfferPostCard extends StatefulWidget {
   final String location;
   final String salary;
   final String contractType;
+
+  /// Secteur précisé par le recruteur pour une offre rangée dans "Autres"
+  /// (`JobOffer.otherSector`) — affiché en puce, `null` sinon.
+  final String? otherSector;
   final String description;
 
   /// Affiche jointe par le recruteur à la publication — `null` si aucune.
@@ -86,44 +90,41 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
   @override
   Widget build(BuildContext context) {
     final colors = AppSurfaceColors.of(context);
-    return InkWell(
+    return SoftCard(
       onTap: widget.onTap,
-      borderRadius: AppRadius.cardRadius,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: AppRadius.cardRadius,
-          boxShadow: AppShadows.cardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(colors),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              widget.jobTitle,
-              style: colors.jobTitle,
+      radius: 26,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(colors),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            widget.jobTitle,
+            style: AppTypography.frauncesBold.copyWith(
+              fontSize: 19,
+              color: colors.textPrimary,
+              height: 1.2,
             ),
-            const SizedBox(height: AppSpacing.xs),
-            _buildInfoRow(colors),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _buildInfoRow(colors),
+          const SizedBox(height: AppSpacing.md),
+          _ExpandableDescription(text: widget.description),
+          if (widget.posterImage != null) ...[
             const SizedBox(height: AppSpacing.md),
-            _ExpandableDescription(text: widget.description),
-            if (widget.posterImage != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.memory(
-                  widget.posterImage!,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.memory(
+                widget.posterImage!,
+                width: double.infinity,
+                fit: BoxFit.cover,
               ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            _buildApplyButton(colors),
+            ),
           ],
-        ),
+          const SizedBox(height: AppSpacing.lg),
+          _buildApplyButton(colors),
+        ],
       ),
     );
   }
@@ -132,26 +133,11 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: OnboardingColors.violet.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            image: widget.companyLogo != null
-                ? DecorationImage(
-                    image: MemoryImage(widget.companyLogo!),
-                    fit: BoxFit.cover,
-                  )
-                : null,
-          ),
-          child: widget.companyLogo == null
-              ? const Icon(
-                  Icons.business_rounded,
-                  color: OnboardingColors.violet,
-                  size: 22,
-                )
-              : null,
+        SoftAvatar(
+          name: widget.companyName,
+          size: 44,
+          icon: Icons.business_rounded,
+          photo: widget.companyLogo != null ? MemoryImage(widget.companyLogo!) : null,
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -187,10 +173,18 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
         // ça.
         IconButton(
           onPressed: widget.onToggleSave,
-          icon: Icon(
-            widget.isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: widget.isSaved ? _favoriteColor : colors.textTertiary,
-            size: 22,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: CurvedAnimation(parent: animation, curve: Curves.elasticOut),
+              child: child,
+            ),
+            child: Icon(
+              widget.isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(widget.isSaved),
+              color: widget.isSaved ? _favoriteColor : colors.textTertiary,
+              size: 22,
+            ),
           ),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -208,8 +202,8 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
 
   Widget _buildInfoRow(AppSurfaceColors colors) {
     return Wrap(
-      spacing: AppSpacing.md,
-      runSpacing: AppSpacing.xs,
+      spacing: 6,
+      runSpacing: 6,
       children: [
         if (widget.location.isNotEmpty)
           _buildInfoItem(colors, Icons.location_on_outlined, widget.location),
@@ -217,50 +211,49 @@ class _JobOfferPostCardState extends State<JobOfferPostCard> {
           _buildInfoItem(colors, Icons.attach_money_rounded, widget.salary),
         if (widget.contractType.isNotEmpty)
           _buildInfoItem(colors, Icons.work_outline_rounded, widget.contractType),
+        if ((widget.otherSector ?? '').trim().isNotEmpty)
+          _buildInfoItem(colors, Icons.category_outlined, widget.otherSector!.trim()),
       ],
     );
   }
 
+  /// Puce pâle neutre (lieu, salaire, contrat).
   Widget _buildInfoItem(AppSurfaceColors colors, IconData icon, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: colors.textTertiary),
-        const SizedBox(width: AppSpacing.xs),
-        Text(label, style: colors.jobInfo),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: SoftUi.tint(colors, DashboardColors.accent),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: SoftUi.brandInk(colors)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppTypography.interMedium.copyWith(fontSize: 12, color: colors.textPrimary),
+          ),
+        ],
+      ),
     );
   }
 
+  /// "Postuler" : pilule à teinte pâle violette (jamais en violet plein) ;
+  /// une fois postulé, pilule verte "Candidature envoyée" (tap = annuler).
   Widget _buildApplyButton(AppSurfaceColors colors) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: widget.hasApplied ? () => _confirmWithdraw(context) : widget.onApply,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: widget.hasApplied ? colors.divider : OnboardingColors.violet,
-          foregroundColor: widget.hasApplied ? colors.textSecondary : Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: 0,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (widget.hasApplied) ...[
-              const Icon(Icons.check_circle_rounded, size: 18),
-              const SizedBox(width: AppSpacing.xs),
-            ],
-            Text(
-              widget.hasApplied ? 'Candidature envoyée' : 'Postuler',
-              style: AppTypography.primaryButton.copyWith(
-                fontSize: 14,
-                color: widget.hasApplied ? colors.textSecondary : Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
+    if (!widget.hasApplied) {
+      return SoftPrimaryButton(
+        label: 'Postuler',
+        icon: Icons.send_rounded,
+        onPressed: widget.onApply,
+      );
+    }
+    return SoftPrimaryButton(
+      label: 'Candidature envoyée',
+      icon: Icons.check_circle_rounded,
+      color: const Color(0xFF0F8A6E),
+      onPressed: () => _confirmWithdraw(context),
     );
   }
 
@@ -339,9 +332,8 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     _expanded ? 'Voir moins' : 'Voir plus',
-                    style: const TextStyle(
-                      color: OnboardingColors.violet,
-                      fontWeight: FontWeight.w600,
+                    style: AppTypography.interSemiBold.copyWith(
+                      color: SoftUi.brandInk(AppSurfaceColors.of(context)),
                       fontSize: 13,
                     ),
                   ),

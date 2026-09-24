@@ -1,18 +1,35 @@
 import 'package:flutter/material.dart';
 
-/// Palette de couleurs de l'écran d'onboarding JOEM.
+/// Palette de l'accueil, de la connexion, des wizards d'inscription et du
+/// splash — bleu océan, mêmes valeurs que `DashboardColors` (espaces
+/// candidat/recruteur) et que le thème "Bleu océan" du Portfolio. Ancienne
+/// palette violette : violet `0xFF7C3AED`, violetDeep `0xFF5B21B6`,
+/// violetLight `0xFF8B5CF6`, lavender `0xFFEDE4FE`.
 class OnboardingColors {
   const OnboardingColors._();
 
-  static const Color navy = Color(0xFF12143A);
-  static const Color violetDeep = Color(0xFF5B21B6);
-  static const Color violet = Color(0xFF7C3AED);
-  static const Color violetLight = Color(0xFF8B5CF6);
-  static const Color lavender = Color(0xFFEDE4FE);
-  static const Color bgTop = Color(0xFFFBFAFE);
-  static const Color bgBottom = Color(0xFFF3EEFD);
-  static const Color textMuted = Color(0xFF6B6B85);
-  static const Color baseline = Color(0xFF4A4A68);
+  /// Bleu nuit des textes forts et du début du dégradé du logo.
+  static const Color navy = Color(0xFF0F1B3D);
+
+  /// Bleu nuit (ancien `violetDeep`).
+  static const Color accentDeep = Color(0xFF1E3A8A);
+
+  /// Accent principal (ancien `violet`).
+  static const Color accent = Color(0xFF3B82F6);
+
+  /// Bleu clair (ancien `violetLight`).
+  static const Color accentLight = Color(0xFF60A5FA);
+
+  /// Texte des éléments teintés (pilules, étapes du wizard).
+  static const Color ink = Color(0xFF1D4ED8);
+
+  /// Teinte très pâle (ancien `lavender`).
+  static const Color tint = Color(0xFFDBEAFE);
+
+  static const Color bgTop = Color(0xFFF7FAFF);
+  static const Color bgBottom = Color(0xFFEAF1FD);
+  static const Color textMuted = Color(0xFF64748B);
+  static const Color baseline = Color(0xFF475569);
 }
 
 /// Répartition verticale (en fraction de la hauteur disponible) de

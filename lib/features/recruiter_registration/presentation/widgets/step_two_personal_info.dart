@@ -1,3 +1,4 @@
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
 import 'package:joem/core/widgets/light_text_field.dart';
 import 'package:joem/core/widgets/location_autocomplete_field.dart';
+import 'package:joem/core/widgets/animated_entrance.dart';
 
 /// Étape 2 — "Info personnelle" : logo de l'entreprise, identité du
 /// recruteur et présentation de l'entreprise.
@@ -45,13 +47,14 @@ class StepTwoPersonalInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: staggered([
+        Text(
           'Informations personnelles',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1C1C26),
+          style: GoogleFonts.fraunces(
+            fontSize: 23,
+            fontWeight: FontWeight.w700,
+            color: OnboardingColors.navy,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 20),
@@ -125,7 +128,7 @@ class StepTwoPersonalInfo extends StatelessWidget {
           controller: descriptionController,
           maxLines: 4,
         ),
-      ],
+      ]),
     );
   }
 }
@@ -197,7 +200,7 @@ class _LogoPicker extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: const BoxDecoration(
-                          color: OnboardingColors.violet,
+                          color: OnboardingColors.accent,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -215,7 +218,7 @@ class _LogoPicker extends StatelessWidget {
                     children: [
                       const Icon(
                         Icons.cloud_upload_outlined,
-                        color: OnboardingColors.violet,
+                        color: OnboardingColors.accent,
                         size: 26,
                       ),
                       const SizedBox(height: 6),

@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
 import 'package:joem/core/widgets/notification_badge.dart';
 import 'search_bar_widget.dart';
+import 'soft_ui.dart';
 
 /// En-tête du dashboard recruteur : barre de recherche de candidats +
 /// notification + logo entreprise — équivalent recruteur de
@@ -84,14 +84,14 @@ class EmployerHeader extends StatelessWidget {
             onTap: onLogoTap,
             child: CircleAvatar(
               radius: 20,
-              backgroundColor: AppColors.primaryLightest,
+              backgroundColor: SoftUi.tint(colors, DashboardColors.accent),
               backgroundImage: logoBytes != null
                   ? MemoryImage(logoBytes!) as ImageProvider
                   : null,
               child: logoBytes == null
-                  ? const Icon(
+                  ? Icon(
                       Icons.business_rounded,
-                      color: AppColors.primary,
+                      color: SoftUi.brandInk(colors),
                       size: 20,
                     )
                   : null,

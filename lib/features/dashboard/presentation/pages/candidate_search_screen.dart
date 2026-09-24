@@ -1,17 +1,21 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
-import '../../../../features/welcome/presentation/welcome_palette.dart';
+import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../data/account_search_repository.dart';
+import '../../data/job_offer_repository.dart';
+import '../widgets/bottom_navigation.dart';
 import '../widgets/search_bar_widget.dart';
+import '../widgets/soft_ui.dart';
 import 'candidate_profile_view_screen.dart';
+import 'employer_notifications_screen.dart';
+import 'employer_profile_screen.dart';
+import 'job_offer_publish_screen.dart';
 
 /// Recherche de candidats — équivalent recruteur de `JobSearchScreen`.
 /// Recherche réelle parmi les comptes chercheur d'emploi inscrits
@@ -28,8 +32,13 @@ class CandidateSearchScreen extends StatefulWidget {
 class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final AccountSearchRepository _repository = const AccountSearchRepository();
+  final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
+  final AuthService _authService = AuthService();
 
-  String get _userId => AuthService().currentUser?.id ?? '';
+  String get _userId => _authService.currentUser?.id ?? '';
+  int? get _employerUserId => int.tryParse(_userId);
+
+  AppSurfaceColors get _colors => AppSurfaceColors.of(context);
 
   List<String> _history = [];
   List<CandidateSearchResult> _results = [];
@@ -37,10 +46,54 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
   bool _hasQuery = false;
   Timer? _debounce;
 
+  /// Pastille de la nav basse — même calcul que sur le dashboard.
+  int _notificationCount = 0;
+
   @override
   void initState() {
     super.initState();
     _loadHistory();
+    _loadNotificationCount();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    final employerUserId = _employerUserId;
+    if (employerUserId == null) return;
+    if (_authService.currentUser?.notificationsEnabled == false) {
+      if (!mounted) return;
+      setState(() => _notificationCount = 0);
+      return;
+    }
+    final count = await _jobOfferRepository
+        .countUnreadApplicationNotificationsForEmployer(employerUserId);
+    if (!mounted) return;
+    setState(() => _notificationCount = count);
+  }
+
+  /// Navigation de la barre basse : remplace l'écran courant par l'écran
+  /// cible (comportement d'onglets, pas d'empilement) ou revient au
+  /// dashboard ("Accueil", toujours la racine de la pile de navigation
+  /// après connexion).
+  void _onNavTap(int index) {
+    if (index == 1) return;
+    if (index == 0) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    late final Widget screen;
+    switch (index) {
+      case 2:
+        screen = const JobOfferPublishScreen();
+        break;
+      case 3:
+        screen = const EmployerNotificationsScreen();
+        break;
+      default:
+        screen = const EmployerProfileScreen();
+    }
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => screen));
   }
 
   Future<void> _loadHistory() async {
@@ -144,7 +197,7 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: SoftUi.pageBackground(_colors),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,9 +212,9 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary,
+                      color: _colors.textPrimary,
                     ),
                   ),
                   Expanded(
@@ -184,12 +237,30 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: BottomNavigation(
+        currentIndex: 1,
+        onTap: _onNavTap,
+        secondItemIcon: Icons.search_rounded,
+        secondItemLabel: 'Recherche',
+        notificationCount: _notificationCount,
+        accentColor: DashboardColors.accent,
+        softHomeButton: true,
+      ),
     );
   }
 
   Widget _buildResults() {
     if (_isSearching) {
-      return const Center(child: CircularProgressIndicator());
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.safeAreaHorizontal,
+          vertical: AppSpacing.sm,
+        ),
+        child: SkeletonCardList(
+          count: 4,
+          cardBuilder: (context, index) => const ListRowSkeleton(),
+        ),
+      );
     }
     if (_results.isEmpty) {
       return _buildEmptyState(
@@ -205,9 +276,13 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
       ),
       itemCount: _results.length,
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) => _CandidateResultCard(
-        candidate: _results[index],
-        onTap: () => _openCandidateDetail(_results[index]),
+      itemBuilder: (context, index) => FadeSlideIn(
+        key: ValueKey(_results[index].userId),
+        delay: staggerDelayFor(index),
+        child: _CandidateResultCard(
+          candidate: _results[index],
+          onTap: () => _openCandidateDetail(_results[index]),
+        ),
       ),
     );
   }
@@ -223,14 +298,7 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Historiques',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SerifSectionTitle('Recherches récentes', fontSize: 19),
             ],
           ),
         ),
@@ -242,11 +310,13 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
                   title: 'Aucun historique',
                   message: 'Vos recherches de candidats récentes apparaîtront ici.',
                 )
-              : ListView.builder(
+              : ListView.separated(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.safeAreaHorizontal,
+                    vertical: AppSpacing.xs,
                   ),
                   itemCount: _history.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, index) => _buildHistoryItem(index),
                 ),
         ),
@@ -254,43 +324,35 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
     );
   }
 
+  /// Recherche récente : pilule blanche à fine bordure, comme les champs
+  /// de la maquette.
   Widget _buildHistoryItem(int index) {
     final query = _history[index];
-    return InkWell(
+    return SoftCard(
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       onTap: () => _onHistoryTap(query),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.history_rounded,
-              size: 20,
-              color: Color(0xFF9CA3AF),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                query,
-                style: AppTypography.interRegular.copyWith(
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 18, color: _colors.textTertiary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              query,
+              style: AppTypography.interRegular.copyWith(
+                fontSize: 14,
+                color: _colors.textPrimary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            IconButton(
-              onPressed: () => _removeHistoryItem(index),
-              icon: const Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: Color(0xFF9CA3AF),
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            onPressed: () => _removeHistoryItem(index),
+            icon: Icon(Icons.close_rounded, size: 18, color: _colors.textTertiary),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
       ),
     );
   }
@@ -300,26 +362,14 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
     required String title,
     required String message,
   }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: const Color(0xFF9CA3AF)),
-            const SizedBox(height: AppSpacing.md),
-            Text(title, style: AppTypography.sectionTitle),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              message,
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: const Color(0xFF6B7280),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.safeAreaHorizontal,
+        vertical: AppSpacing.sm,
+      ),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SoftEmptyState(icon: icon, text: '$title — $message'),
       ),
     );
   }
@@ -333,116 +383,70 @@ class _CandidateResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final name = candidate.fullName.isEmpty ? 'Candidat' : candidate.fullName;
     final position = candidate.position?.trim() ?? '';
     final location = candidate.localisation?.trim() ?? '';
     final skills = candidate.skills.take(3).toList();
 
-    return InkWell(
+    return SoftCard(
       onTap: onTap,
-      borderRadius: AppRadius.cardRadius,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: AppRadius.cardRadius,
-          boxShadow: AppShadows.cardShadow,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Avatar(photo: candidate.photo, icon: Icons.person_rounded),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    candidate.fullName.isEmpty ? 'Candidat' : candidate.fullName,
-                    style: AppTypography.jobTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (position.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(position, style: AppTypography.companyName),
-                  ],
-                  if (location.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF9CA3AF)),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            style: AppTypography.jobInfo,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (skills.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: skills.map((s) => _SkillChip(label: s)).toList(),
-                    ),
-                  ],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SoftAvatar(
+            name: name,
+            size: 48,
+            photo: candidate.photo != null ? MemoryImage(candidate.photo!) : null,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: colors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (position.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(position, style: colors.companyName),
                 ],
-              ),
+                if (location.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 14, color: colors.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: colors.jobInfo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (skills.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: skills
+                        .map((s) => SoftDotBadge(label: s, color: DashboardColors.accent))
+                        .toList(),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: colors.textTertiary),
+        ],
       ),
     );
   }
 }
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.photo, required this.icon});
-
-  final Uint8List? photo;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: OnboardingColors.violet.withOpacity(0.1),
-        shape: BoxShape.circle,
-        image: photo != null ? DecorationImage(image: MemoryImage(photo!), fit: BoxFit.cover) : null,
-      ),
-      child: photo == null ? Icon(icon, color: OnboardingColors.violet, size: 24) : null,
-    );
-  }
-}
-
-class _SkillChip extends StatelessWidget {
-  const _SkillChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-      decoration: BoxDecoration(
-        color: OnboardingColors.violet.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.jobInfo.copyWith(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-

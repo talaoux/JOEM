@@ -1,13 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_durations.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/widgets/animated_entrance.dart';
+import '../../../../core/widgets/skeleton_loading.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../features/login/presentation/login_screen.dart';
 import '../../data/account_search_repository.dart';
@@ -20,6 +18,7 @@ import '../widgets/stat_card.dart';
 import '../widgets/interview_card.dart';
 import '../widgets/advice_card.dart';
 import '../widgets/bottom_navigation.dart';
+import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
 import 'candidate_profile_view_screen.dart';
 import 'candidate_search_screen.dart';
@@ -39,7 +38,7 @@ class EmployerDashboard extends StatefulWidget {
 }
 
 class _EmployerDashboardState extends State<EmployerDashboard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -68,6 +67,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   /// Candidatures reçues, offre par offre (`job_offer_id` -> nombre) — pour
   /// le compteur affiché sur chaque carte de "Mes offres d'emploi".
   Map<int, int> _applicantCountsByOffer = {};
+  Map<int, List<String>> _categoriesByOffer = {};
 
   /// Nombre total de vues (candidats distincts) sur toutes les offres de ce
   /// recruteur (`job_offer_views`) — carte "Vues totales".
@@ -153,9 +153,12 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         await _jobOfferRepository.fetchApplicantCountsByOffer(employerUserId);
     final totalViews =
         await _jobOfferRepository.countOfferViewsForEmployer(employerUserId);
+    final categoriesByOffer =
+        await _jobOfferRepository.fetchCategoriesByOffer(employerUserId);
     if (!mounted) return;
     setState(() {
       _postedOffers = offers;
+      _categoriesByOffer = categoriesByOffer;
       _applicantsCount = applicantsCount;
       _applicantCountsByOffer = applicantCountsByOffer;
       _totalViews = totalViews;
@@ -272,11 +275,11 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   /// Calcule le childAspectRatio optimal pour le GridView des Stat Cards
   double _getStatCardAspectRatio(BuildContext context) {
     if (_isSmallScreen(context)) {
-      return 1.0;
-    } else if (_isMediumScreen(context)) {
-      return 1.1;
-    } else {
       return 1.2;
+    } else if (_isMediumScreen(context)) {
+      return 1.35;
+    } else {
+      return 1.45;
     }
   }
 
@@ -296,12 +299,28 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   late AnimationController _profilePanelController;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    appRouteObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _searchController.dispose();
     _animationController.dispose();
     _profilePanelController.dispose();
     super.dispose();
   }
+
+  /// Redevient visible après la fermeture d'un sous-écran de la nav basse
+  /// (Recherche, Publier une offre, Notifications, Profil) — même quand le
+  /// retour a sauté par plusieurs remplacements d'onglets plutôt qu'un
+  /// simple `pop` direct (voir `BottomNavigation`/`_onNavTap` des
+  /// sous-écrans) : on recharge tout comme le faisait auparavant le seul
+  /// `await Navigator.push` du dashboard.
+  @override
+  void didPopNext() => _reloadAll();
 
   void _openProfilePanel() {
     _profilePanelController.forward();
@@ -312,6 +331,30 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   }
 
   Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Se déconnecter'),
+        content: const Text(
+          'Voulez-vous vraiment vous déconnecter de votre compte ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              'Se déconnecter',
+              style: TextStyle(color: DashboardColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     await _authService.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -320,35 +363,14 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     );
   }
 
+  /// L'offre est désormais persistée par `JobOfferPublishScreen` lui-même
+  /// (voir sa doc) — il suffit d'ouvrir l'écran ; `didPopNext` se charge de
+  /// recharger le dashboard au retour, que l'offre ait été publiée ou non.
   Future<void> _openPublishScreen() async {
-    final formData = await Navigator.push<Map<String, dynamic>>(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const JobOfferPublishScreen()),
     );
-    if (formData == null || !mounted) return;
-
-    final offer = await _jobOfferRepository.publish(
-      employerUserId: _employerUserId ?? 0,
-      companyName: _companyName,
-      companyLogo: _authService.currentUser?.photoBytes,
-      title: formData['title'] as String,
-      description: formData['description'] as String,
-      location: formData['location'] as String,
-      salary: formData['salary'] as String,
-      contractType: formData['contractType'] as String,
-      posterImage: formData['posterImage'] as Uint8List?,
-    );
-    if (!mounted) return;
-
-    setState(() {
-      _postedOffers.insert(0, offer);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Offre "${offer.title}" publiée avec succès.')),
-    );
-    // Recalcule stats, compteurs par offre et "Candidats suggérés" (la
-    // nouvelle offre peut faire remonter des candidats jusque-là sans score).
-    _reloadAll();
   }
 
   @override
@@ -356,7 +378,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: _colors.background,
+          backgroundColor: SoftUi.pageBackground(_colors),
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -397,12 +419,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final isSmallScreen = _isSmallScreen(context);
-                      final titleFontSize = isSmallScreen ? 16.0 : 18.0;
+                      final titleFontSize = isSmallScreen ? 20.0 : 23.0;
                       final subtitleFontSize = isSmallScreen ? 12.0 : 14.0;
-                      final buttonTextFontSize = isSmallScreen ? 12.0 : 14.0;
-                      final buttonIconSize = isSmallScreen ? 18.0 : 20.0;
-                      final buttonPaddingHorizontal = isSmallScreen ? AppSpacing.sm : AppSpacing.lg;
-                      final buttonPaddingVertical = isSmallScreen ? AppSpacing.sm : AppSpacing.md;
+                      final isDark = _colors.background.computeLuminance() < 0.2;
 
                       return FadeTransition(
                         opacity: _animationController,
@@ -418,78 +437,60 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.safeAreaHorizontal,
                             ),
+                            // Carte blanche façon formulaire de la maquette
+                            // `nouveau_design.jpeg` : titre serif, texte
+                            // discret, bouton pilule aligné à droite.
                             child: Container(
-                              padding: EdgeInsets.all(_getCardPadding(context)),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [AppColors.primaryLightest, AppColors.primaryLighter],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: AppRadius.cardRadius,
+                              padding: EdgeInsets.fromLTRB(
+                                _getCardPadding(context) + 2,
+                                _getCardPadding(context),
+                                _getCardPadding(context),
+                                _getCardPadding(context),
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Publier une offre',
-                                          style: AppTypography.poppinsSemiBold.copyWith(
-                                            fontSize: titleFontSize,
-                                            color: _colors.textPrimary,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        SizedBox(height: AppSpacing.xs),
-                                        Text(
-                                          'Trouvez les meilleurs talents',
-                                          style: AppTypography.interRegular.copyWith(
-                                            fontSize: subtitleFontSize,
-                                            color: _colors.textSecondary,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                              decoration: BoxDecoration(
+                                color: _colors.background,
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(color: _colors.divider),
+                                boxShadow: isDark
+                                    ? null
+                                    : [
+                                        BoxShadow(
+                                          color: DashboardColors.accent.withValues(alpha: 0.07),
+                                          blurRadius: 24,
+                                          offset: const Offset(0, 8),
                                         ),
                                       ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Publier une offre',
+                                    style: AppTypography.frauncesBold.copyWith(
+                                      fontSize: titleFontSize,
+                                      color: _colors.textPrimary,
+                                      height: 1.15,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Flexible(
-                                    child: ElevatedButton(
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Trouvez les meilleurs talents',
+                                    style: AppTypography.interRegular.copyWith(
+                                      fontSize: subtitleFontSize,
+                                      color: _colors.textSecondary,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: SoftPillButton(
+                                      label: 'Nouvelle offre',
+                                      icon: Icons.send_rounded,
                                       onPressed: _openPublishScreen,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: buttonPaddingHorizontal,
-                                          vertical: buttonPaddingVertical,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.add_rounded, size: buttonIconSize),
-                                          SizedBox(width: AppSpacing.sm),
-                                          Flexible(
-                                            child: Text(
-                                              'Nouvelle offre',
-                                              style: TextStyle(
-                                                fontSize: buttonTextFontSize,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                                     ),
                                   ),
                                 ],
@@ -555,8 +556,10 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                         },
                       ),
                     );
-                    _reloadAll();
                   }
+                  // `didPopNext` recharge déjà le dashboard dès qu'il
+                  // redevient visible (voir plus haut), y compris quand le
+                  // retour saute par plusieurs remplacements d'onglets.
                   if (mounted) {
                     setState(() {
                       _currentNavIndex = 0;
@@ -569,6 +572,8 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                 });
               },
               notificationCount: _notificationCount,
+              accentColor: DashboardColors.accent,
+              softHomeButton: true,
             ),
           ),
         ),
@@ -621,28 +626,28 @@ class _EmployerDashboardState extends State<EmployerDashboard>
           'title': 'Offres publiées',
           'value': '${_postedOffers.length}',
           'icon': Icons.work_outline_rounded,
-          'iconColor': const Color(0xFF3B82F6),
+          'iconColor': DashboardColors.accentStrong,
           'onTap': () => _openStatScreenFromPanel(const EmployerOffersScreen()),
         },
         {
           'title': 'Candidatures reçues',
           'value': '$_applicantsCount',
           'icon': Icons.people_outline_rounded,
-          'iconColor': const Color(0xFF10B981),
+          'iconColor': const Color(0xFF0F8A6E),
           'onTap': () => _openStatScreenFromPanel(const EmployerNotificationsScreen()),
         },
         {
           'title': 'Entretiens programmés',
           'value': '${_upcomingInterviews.length}',
           'icon': Icons.calendar_today_rounded,
-          'iconColor': const Color(0xFFF59E0B),
+          'iconColor': const Color(0xFFC2780E),
           'onTap': () => _openStatScreenFromPanel(const EmployerInterviewsScreen()),
         },
         {
           'title': 'Vues totales',
           'value': '$_totalViews',
           'icon': Icons.visibility_rounded,
-          'iconColor': const Color(0xFF8B5CF6),
+          'iconColor': const Color(0xFFD1366E),
           'onTap': () => _openStatScreenFromPanel(const EmployerOfferViewsScreen()),
         },
       ],
@@ -665,57 +670,54 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.safeAreaHorizontal,
               ),
-              child: Text(
-                'Tableau de bord',
-                style: _colors.sectionTitle,
-              ),
+              child: const SerifSectionTitle('Tableau de bord'),
             ),
             const SizedBox(height: AppSpacing.md),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.safeAreaHorizontal,
               ),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                childAspectRatio: _getStatCardAspectRatio(context),
-                crossAxisSpacing: AppSpacing.md,
-                mainAxisSpacing: AppSpacing.md,
-                children: [
-                  StatCard(
-                    title: 'Offres actives',
-                    value: '${_postedOffers.length}',
-                    icon: Icons.work_outline_rounded,
-                    iconColor: const Color(0xFF3B82F6),
-                    miniChart: 'Sur ${_postedOffers.length} publiées',
-                    onTap: () => _openStatScreen(const EmployerOffersScreen()),
-                  ),
-                  StatCard(
-                    title: 'Candidatures',
-                    value: '$_applicantsCount',
-                    icon: Icons.people_outline_rounded,
-                    iconColor: const Color(0xFF10B981),
-                    miniChart: 'Sur ${_postedOffers.length} offre${_postedOffers.length > 1 ? 's' : ''}',
-                    onTap: () => _openStatScreen(const EmployerNotificationsScreen()),
-                  ),
-                  StatCard(
-                    title: 'Entretiens',
-                    value: '${_upcomingInterviews.length}',
-                    icon: Icons.calendar_today_rounded,
-                    iconColor: const Color(0xFFF59E0B),
-                    miniChart: 'À venir',
-                    onTap: () => _openStatScreen(const EmployerInterviewsScreen()),
-                  ),
-                  StatCard(
-                    title: 'Vues totales',
-                    value: '$_totalViews',
-                    icon: Icons.visibility_outlined,
-                    iconColor: const Color(0xFF8B5CF6),
-                    miniChart: 'Sur vos offres',
-                    onTap: () => _openStatScreen(const EmployerOfferViewsScreen()),
-                  ),
-                ],
+              child: StatCardGroup(
+                tint: DashboardColors.accent,
+                child: GridView.count(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  childAspectRatio: _getStatCardAspectRatio(context),
+                  crossAxisSpacing: AppSpacing.sm,
+                  mainAxisSpacing: AppSpacing.sm,
+                  children: [
+                    StatCard(
+                      title: 'Offres actives',
+                      value: '${_postedOffers.length}',
+                      accentColor: DashboardColors.accentStrong,
+                      caption: 'Sur ${_postedOffers.length} publiées',
+                      onTap: () => _openStatScreen(const EmployerOffersScreen()),
+                    ),
+                    StatCard(
+                      title: 'Candidatures',
+                      value: '$_applicantsCount',
+                      accentColor: const Color(0xFF0F8A6E),
+                      caption: 'Sur ${_postedOffers.length} offre${_postedOffers.length > 1 ? 's' : ''}',
+                      onTap: () => _openStatScreen(const EmployerNotificationsScreen()),
+                    ),
+                    StatCard(
+                      title: 'Entretiens',
+                      value: '${_upcomingInterviews.length}',
+                      accentColor: const Color(0xFFC2780E),
+                      caption: 'À venir',
+                      onTap: () => _openStatScreen(const EmployerInterviewsScreen()),
+                    ),
+                    StatCard(
+                      title: 'Vues totales',
+                      value: '$_totalViews',
+                      accentColor: const Color(0xFFD1366E),
+                      caption: 'Sur vos offres',
+                      onTap: () => _openStatScreen(const EmployerOfferViewsScreen()),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -741,6 +743,15 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     _reloadAll();
   }
 
+  Future<void> _editOffer(JobOffer offer) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => JobOfferPublishScreen(offer: offer)),
+    );
+    if (!mounted) return;
+    _reloadAll();
+  }
+
   Future<void> _openAllOffers() async {
     await Navigator.push(
       context,
@@ -761,34 +772,32 @@ class _EmployerDashboardState extends State<EmployerDashboard>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Mes offres d\'emploi', style: _colors.sectionTitle),
+              const SerifSectionTitle('Mes offres d\'emploi'),
               if (_postedOffers.isNotEmpty)
-                TextButton(
+                SoftPillButton(
+                  label: hasMore ? 'Voir tout (${_postedOffers.length})' : 'Voir tout',
+                  icon: Icons.arrow_forward_rounded,
+                  compact: true,
                   onPressed: _openAllOffers,
-                  child: Text(
-                    hasMore ? 'Voir tout (${_postedOffers.length})' : 'Voir tout',
-                    style: AppTypography.secondaryButton.copyWith(fontSize: 13),
-                  ),
                 ),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),
         if (_loadingOffers)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(child: CircularProgressIndicator()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: SkeletonCardList(
+              count: 2,
+              cardBuilder: (context, index) => const EmployerOfferCardSkeleton(),
+            ),
           )
         else if (_postedOffers.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
-            child: Text(
-              "Vous n'avez publié aucune offre pour le moment.",
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-                color: _colors.textTertiary,
-              ),
+            child: const SoftEmptyState(
+              icon: Icons.work_outline_rounded,
+              text: "Vous n'avez publié aucune offre pour le moment.",
             ),
           )
         else
@@ -800,10 +809,16 @@ class _EmployerDashboardState extends State<EmployerDashboard>
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
             itemBuilder: (context, index) {
               final offer = preview[index];
-              return EmployerOfferCard(
-                offer: offer,
-                applicantCount: _applicantCountsByOffer[offer.id] ?? 0,
-                onTap: () => _openOfferApplicants(offer),
+              return FadeSlideIn(
+                key: ValueKey(offer.id),
+                delay: staggerDelayFor(index),
+                child: EmployerOfferCard(
+                  offer: offer,
+                  applicantCount: _applicantCountsByOffer[offer.id] ?? 0,
+                  onTap: () => _openOfferApplicants(offer),
+                  categories: _categoriesByOffer[offer.id] ?? const [],
+                  onEdit: () => _editOffer(offer),
+                ),
               );
             },
           ),
@@ -815,9 +830,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   /// en dessous — permet au recruteur de repérer les meilleurs profils
   /// d'un coup d'œil.
   Color _matchColor(int percent) {
-    if (percent >= 85) return const Color(0xFF10B981);
-    if (percent >= 70) return const Color(0xFF3B82F6);
-    return const Color(0xFFF59E0B);
+    if (percent >= 85) return const Color(0xFF0F8A6E);
+    if (percent >= 70) return const Color(0xFF2563EB);
+    return const Color(0xFFC2780E);
   }
 
   Future<void> _openCandidateProfile(CandidateSearchResult candidate) async {
@@ -846,22 +861,22 @@ class _EmployerDashboardState extends State<EmployerDashboard>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Candidats suggérés', style: _colors.sectionTitle),
-              TextButton(
+              const SerifSectionTitle('Candidats suggérés'),
+              SoftPillButton(
+                label: 'Voir tout',
+                icon: Icons.arrow_forward_rounded,
+                compact: true,
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const CandidateSearchScreen()),
                   );
                 },
-                child: Text(
-                  'Voir tout',
-                  style: AppTypography.secondaryButton.copyWith(fontSize: 13),
-                ),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
           child: Text(
@@ -876,19 +891,19 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         ),
         const SizedBox(height: AppSpacing.md),
         if (_loadingSuggestedCandidates)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(child: CircularProgressIndicator()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: SkeletonCardList(
+              count: 3,
+              cardBuilder: (context, index) => const ListRowSkeleton(),
+            ),
           )
         else if (_suggestedCandidates.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
-            child: Text(
-              "Aucun candidat inscrit pour le moment.",
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                color: _colors.textTertiary,
-              ),
+            child: const SoftEmptyState(
+              icon: Icons.people_outline_rounded,
+              text: 'Aucun candidat inscrit pour le moment.',
             ),
           )
         else
@@ -898,7 +913,11 @@ class _EmployerDashboardState extends State<EmployerDashboard>
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
             itemCount: preview.length,
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-            itemBuilder: (context, index) => _buildSuggestedCandidateCard(preview[index]),
+            itemBuilder: (context, index) => FadeSlideIn(
+              key: ValueKey(preview[index].candidate.userId),
+              delay: staggerDelayFor(index),
+              child: _buildSuggestedCandidateCard(preview[index]),
+            ),
           ),
       ],
     );
@@ -914,110 +933,77 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         ? 'Pour "${suggestion.matchedJob}"'
         : (position.isNotEmpty ? position : 'Chercheur d\'emploi');
 
-    return InkWell(
+    return SoftCard(
       onTap: () => _openCandidateProfile(candidate),
-      borderRadius: AppRadius.cardRadius,
-      child: Container(
-        padding: EdgeInsets.all(_getCardPadding(context)),
-        decoration: BoxDecoration(
-          color: _colors.background,
-          borderRadius: AppRadius.cardRadius,
-          boxShadow: AppShadows.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primaryLightest, AppColors.primaryLighter],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                image: candidate.photo != null
-                    ? DecorationImage(image: MemoryImage(candidate.photo!), fit: BoxFit.cover)
-                    : null,
-              ),
-              child: candidate.photo == null
-                  ? Center(
-                      child: Text(
-                        name[0].toUpperCase(),
-                        style: AppTypography.poppinsSemiBold.copyWith(
-                          color: AppColors.primary,
-                          fontSize: 18,
-                        ),
-                      ),
-                    )
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: SoftUi.tint(_colors, DashboardColors.accent),
+              shape: BoxShape.circle,
+              image: candidate.photo != null
+                  ? DecorationImage(image: MemoryImage(candidate.photo!), fit: BoxFit.cover)
                   : null,
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: AppTypography.interviewCompany
-                        .copyWith(fontSize: 15, color: _colors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: _colors.companyName.copyWith(fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (location.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, size: 13, color: _colors.textTertiary),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            style: _colors.jobInfo.copyWith(fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (matchPercent != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _matchColor(matchPercent).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bolt_rounded, size: 14, color: _matchColor(matchPercent)),
-                    const SizedBox(width: 2),
-                    Text(
-                      '$matchPercent%',
-                      style: AppTypography.interSemiBold.copyWith(
-                        fontSize: 11,
-                        color: _matchColor(matchPercent),
+            child: candidate.photo == null
+                ? Center(
+                    child: Text(
+                      name[0].toUpperCase(),
+                      style: AppTypography.frauncesBold.copyWith(
+                        color: SoftUi.brandInk(_colors),
+                        fontSize: 19,
                       ),
                     ),
-                  ],
+                  )
+                : null,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.interSemiBold
+                      .copyWith(fontSize: 15, color: _colors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ] else
-              Icon(Icons.chevron_right_rounded, color: _colors.textTertiary),
-          ],
-        ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: _colors.companyName.copyWith(fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (location.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 13, color: _colors.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: _colors.jobInfo.copyWith(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (matchPercent != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            SoftDotBadge(label: '$matchPercent%', color: _matchColor(matchPercent)),
+          ] else
+            Icon(Icons.chevron_right_rounded, color: _colors.textTertiary),
+        ],
       ),
     );
   }
@@ -1036,24 +1022,23 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
-          child: Text(title, style: _colors.sectionTitle),
+          child: SerifSectionTitle(title),
         ),
         const SizedBox(height: AppSpacing.md),
         if (_loadingInterviews)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(child: CircularProgressIndicator()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
+            child: SkeletonCardList(
+              count: 2,
+              cardBuilder: (context, index) => const ListRowSkeleton(),
+            ),
           )
         else if (list.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.safeAreaHorizontal),
-            child: Text(
-              "Aucun entretien planifié. Ouvrez une candidature reçue pour en planifier un.",
-              style: AppTypography.interRegular.copyWith(
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-                color: _colors.textTertiary,
-              ),
+            child: const SoftEmptyState(
+              icon: Icons.event_available_outlined,
+              text: 'Aucun entretien planifié. Ouvrez une candidature reçue pour en planifier un.',
             ),
           )
         else
@@ -1069,16 +1054,20 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                   left: AppSpacing.safeAreaHorizontal,
                   right: AppSpacing.safeAreaHorizontal,
                 ),
-                child: InterviewCard(
-                  company: interview.candidateName.trim().isNotEmpty
-                      ? interview.candidateName.trim()
-                      : 'Candidat',
-                  date: interview.dateLabel,
-                  time: interview.time,
-                  location: interview.offerTitle.trim().isNotEmpty
-                      ? '${interview.locationLabel} · ${interview.offerTitle}'
-                      : interview.locationLabel,
-                  onViewDetails: () => _openInterviewCandidate(interview),
+                child: FadeSlideIn(
+                  key: ValueKey(interview.id),
+                  delay: staggerDelayFor(index),
+                  child: InterviewCard(
+                    company: interview.candidateName.trim().isNotEmpty
+                        ? interview.candidateName.trim()
+                        : 'Candidat',
+                    date: interview.dateLabel,
+                    time: interview.isDateToBeDefined ? 'À voir' : interview.timeLabel,
+                    location: interview.offerTitle.trim().isNotEmpty
+                        ? '${interview.locationLabel} · ${interview.offerTitle}'
+                        : interview.locationLabel,
+                    onViewDetails: () => _openInterviewCandidate(interview),
+                  ),
                 ),
               );
             },
@@ -1119,14 +1108,75 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     );
   }
 
+  /// Conseil "réel" : dérivé de l'état effectif du profil entreprise et de
+  /// l'activité de recrutement (offres publiées, candidatures reçues, vues,
+  /// entretiens planifiés) plutôt qu'un texte fixe — le plus actionnable en
+  /// premier. Une fois tout à jour, une petite rotation de conseils
+  /// génériques change selon le jour, pour ne pas figer sur un seul texte.
+  ({String title, String text}) _recruiterAdvice() {
+    final user = _authService.currentUser;
+    final missing = user?.missingEmployerFieldLabels ?? const [];
+
+    if (missing.isNotEmpty) {
+      final extra = missing.length - 1;
+      return (
+        title: 'Complétez votre profil entreprise',
+        text: extra > 0
+            ? '${missing.first} — et $extra autre${extra > 1 ? 's' : ''} élément${extra > 1 ? 's' : ''} à renseigner pour rassurer les candidats.'
+            : '${missing.first} pour rassurer les candidats.',
+      );
+    }
+
+    if (_postedOffers.isEmpty) {
+      return (
+        title: 'Publiez votre première offre',
+        text: 'Votre profil entreprise est complet : publiez une offre pour commencer à recevoir des candidatures.',
+      );
+    }
+
+    if (_applicantsCount == 0) {
+      return (
+        title: _totalViews > 0 ? 'Convertissez vos vues en candidatures' : 'Attirez des candidats',
+        text: _totalViews > 0
+            ? 'Vos offres ont déjà été vues $_totalViews fois mais aucune candidature reçue : précisez le salaire et les missions pour rassurer les candidats.'
+            : 'Rédigez des offres claires et détaillées (missions, salaire, contrat) pour attirer plus de candidats qualifiés.',
+      );
+    }
+
+    if (_todayInterviews.isEmpty && _upcomingInterviews.isEmpty) {
+      return (
+        title: 'Planifiez des entretiens',
+        text: 'Vous avez $_applicantsCount candidature${_applicantsCount > 1 ? 's' : ''} reçue${_applicantsCount > 1 ? 's' : ''} : consultez-les et planifiez un entretien avec les profils qui vous intéressent.',
+      );
+    }
+
+    const tips = [
+      (
+        title: 'Conseil recruteur',
+        text: 'Répondez rapidement aux candidatures reçues : les meilleurs profils sont souvent contactés par plusieurs entreprises.',
+      ),
+      (
+        title: 'Élargissez votre recherche',
+        text: 'Utilisez "Candidats suggérés" ou la recherche pour contacter directement des profils qui correspondent à vos offres.',
+      ),
+      (
+        title: 'Soignez vos offres',
+        text: 'Une offre claire et détaillée (missions, salaire, contrat) attire des candidats mieux qualifiés.',
+      ),
+    ];
+    return tips[DateTime.now().day % tips.length];
+  }
+
   Widget _buildAdviceSection() {
+    final advice = _recruiterAdvice();
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.safeAreaHorizontal,
       ),
-      child: const AdviceCard(
-        title: 'Conseil recruteur',
-        text: 'Rédigez des offres claires et détaillées pour attirer plus de candidats qualifiés.',
+      child: AdviceCard(
+        title: advice.title,
+        text: advice.text,
+        soft: true,
       ),
     );
   }
