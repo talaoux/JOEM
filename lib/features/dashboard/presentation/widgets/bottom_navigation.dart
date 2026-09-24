@@ -376,7 +376,7 @@ class _HomeButton extends StatelessWidget {
                 ? null
                 : [
                     BoxShadow(
-                      color: accent.withOpacity(isActive ? 0.35 : 0.22),
+                      color: accent.withValues(alpha: isActive ? 0.35 : 0.22),
                       blurRadius: isActive ? 18 : 12,
                       spreadRadius: -1,
                       offset: const Offset(0, 6),
@@ -488,7 +488,7 @@ class _BumpedBarShadowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = geometry.build(size);
     final paint = Paint()
-      ..color = Colors.black.withOpacity(0.14)
+      ..color = Colors.black.withValues(alpha: 0.14)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9);
     canvas.save();
     canvas.translate(0, 5);

@@ -430,7 +430,7 @@ class _JobSeekerRegistrationScreenState
                               switchOutCurve: Curves.easeInCubic,
                               layoutBuilder: (current, previous) => Stack(
                                 alignment: Alignment.topLeft,
-                                children: [...previous, if (current != null) current],
+                                children: [...previous, ?current],
                               ),
                               transitionBuilder: (child, animation) {
                                 final isIncoming = child.key == ValueKey(_currentStep);

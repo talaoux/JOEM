@@ -260,7 +260,7 @@ class SmoothSwitcher extends StatelessWidget {
         switchOutCurve: Curves.easeIn,
         layoutBuilder: (current, previous) => Stack(
           alignment: alignment,
-          children: [...previous, if (current != null) current],
+          children: [...previous, ?current],
         ),
         transitionBuilder: (child, animation) => FadeTransition(
           opacity: animation,

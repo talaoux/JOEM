@@ -275,7 +275,7 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
         vertical: AppSpacing.sm,
       ),
       itemCount: _results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) => FadeSlideIn(
         key: ValueKey(_results[index].userId),
         delay: staggerDelayFor(index),

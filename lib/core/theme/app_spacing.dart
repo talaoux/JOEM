@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Espacements de l'application JOEM
 /// Système d'espacement cohérent
 class AppSpacing {
