@@ -451,7 +451,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
 
   Widget _buildIdentitySection(AppSurfaceColors colors) {
     final user = _authService.currentUser;
-    final fullName = user != null ? '${user.firstName} ${user.lastName}' : 'Marie Martin';
+    final fullName = user != null ? '${user.firstName} ${user.lastName}' : '';
     final position = user?.position?.trim();
     final subtitle = (position != null && position.isNotEmpty)
         ? '$position · Chercheur d\'emploi'

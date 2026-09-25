@@ -1,0 +1,10 @@
+# Modèle de android/key.properties (le vrai fichier est exclu de git).
+# 1. Créer la clé de signature (une seule fois, à conserver précieusement :
+#    la perdre = ne plus jamais pouvoir mettre à jour l'app sur le Play Store) :
+#      keytool -genkey -v -keystore C:\chemin\hors-du-projet\joem-release.jks ^
+#        -keyalg RSA -keysize 2048 -validity 10000 -alias joem
+# 2. Copier ce fichier en android/key.properties et remplir les valeurs.
+storePassword=MOT_DE_PASSE_DU_KEYSTORE
+keyPassword=MOT_DE_PASSE_DE_LA_CLE
+keyAlias=joem
+storeFile=C:/chemin/hors-du-projet/joem-release.jks

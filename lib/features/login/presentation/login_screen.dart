@@ -17,6 +17,7 @@ import 'package:joem/features/dashboard/presentation/pages/job_seeker_dashboard.
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/features/welcome/presentation/welcome_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/constants/google_config.dart';
 
 /// Écran "Connexion" : pas de wizard, un simple formulaire email + mot
 /// de passe (ou Google) sur fond dégradé façon onboarding, même identité visuelle que les
@@ -33,8 +34,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _isLoading = false;
-  bool _isResettingTestAccounts = false;
   final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_onFieldChanged);
+    _passwordController.addListener(_onFieldChanged);
+  }
 
   @override
   void dispose() {
@@ -42,6 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     super.dispose();
   }
+
+  void _onFieldChanged() => setState(() {});
 
   Future<void> _onGoogleSignIn() async {
     setState(() => _isLoading = true);
@@ -98,21 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Debug uniquement : supprime tous les comptes créés localement via
-  /// les wizards d'inscription (base SQLite, voir `AppDatabase`), pour
-  /// pouvoir retester une inscription sans "email déjà utilisé".
-  Future<void> _onResetTestAccounts() async {
-    setState(() => _isResettingTestAccounts = true);
-
-    await AppDatabase.instance.resetDatabase();
-    await _authService.logout();
-
-    if (!mounted) return;
-    setState(() => _isResettingTestAccounts = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Comptes de test réinitialisés.')),
-    );
-  }
 
   Future<void> _onSubmit() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -244,11 +238,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          GoogleSignInButton(onTap: _onGoogleSignIn),
-                          const SizedBox(height: 20),
+                          // Masqué tant que Google Sign-In n'est pas configuré
+                          // (voir `isGoogleSignInConfigured`).
+                          if (isGoogleSignInConfigured) ...[
+                            GoogleSignInButton(onTap: _onGoogleSignIn),
+                            const SizedBox(height: 20),
 
-                          const OrDivider(),
-                          const SizedBox(height: 20),
+                            const OrDivider(),
+                            const SizedBox(height: 20),
+                          ],
 
                           LightTextField(
                             label: 'Adresse email',
@@ -329,39 +327,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 24),
 
-                          SizedBox(
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
                             width: double.infinity,
                             child: GlassButton(
                               label: _isLoading ? 'Connexion...' : 'Se connecter',
-                              onTap: _isLoading ? null : _onSubmit,
-                              color: OnboardingColors.accent,
+                              onTap: _isLoading || _emailController.text.isEmpty || _passwordController.text.isEmpty
+                                  ? null
+                                  : _onSubmit,
+                              color: _emailController.text.isEmpty || _passwordController.text.isEmpty
+                                  ? OnboardingColors.accent.withOpacity(0.4)
+                                  : OnboardingColors.accent,
                             ),
                           ),
 
-                          if (kDebugMode) ...[
-                            const SizedBox(height: 14),
-                            Center(
-                              child: TextButton.icon(
-                                onPressed: _isResettingTestAccounts
-                                    ? null
-                                    : _onResetTestAccounts,
-                                icon: const Icon(
-                                  Icons.delete_outline_rounded,
-                                  size: 18,
-                                  color: AppColors.error,
-                                ),
-                                label: Text(
-                                  _isResettingTestAccounts
-                                      ? 'Réinitialisation...'
-                                      : 'Réinitialiser les comptes de test (debug)',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.error,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
                         ]),
                       ),
                     ),

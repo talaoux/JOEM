@@ -1,10 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
+import 'package:sqflite/sqflite.dart';
 
 /// Base SQLite locale de l'application (mock de backend — voir
 /// CLAUDE.md, "Deux implémentations parallèles"). Un seul fichier
@@ -31,27 +28,8 @@ class AppDatabase {
   }
 
   Future<Database> _open() async {
-    String dbPath;
-    if (kIsWeb) {
-      // sqflite lui-même n'a pas d'implémentation web (canaux de plateforme
-      // natifs uniquement) : sans ceci, `databaseFactory` reste jamais
-      // initialisé et toute opération (inscription, connexion, publication
-      // d'offre...) échoue avec "databaseFactory not initialized" — avalé
-      // par les blocs `catch` génériques des écrans en "Une erreur est
-      // survenue". La persistance web se fait via IndexedDB (sqlite3 en
-      // WASM), pas de vrai chemin de fichier : un simple nom suffit. Voir
-      // `dart run sqflite_common_ffi_web:setup` (télécharge `sqlite3.wasm`
-      // et `sqflite_sw.js` dans `web/`, requis pour que ceci fonctionne).
-      databaseFactory = databaseFactoryFfiWeb;
-      dbPath = 'joem.db';
-    } else {
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        sqfliteFfiInit();
-        databaseFactory = databaseFactoryFfi;
-      }
-      final directory = await getApplicationSupportDirectory();
-      dbPath = p.join(directory.path, 'joem.db');
-    }
+    final directory = await getApplicationSupportDirectory();
+    final dbPath = p.join(directory.path, 'joem.db');
 
     return openDatabase(
       dbPath,

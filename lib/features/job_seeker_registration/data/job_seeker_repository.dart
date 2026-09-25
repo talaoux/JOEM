@@ -78,7 +78,7 @@ class JobSeekerRepository {
     final userId = await db.transaction((txn) async {
       final id = await txn.insert('users', {
         'email': data.email,
-        'password_hash': hashPassword(data.password),
+        'password_hash': await hashPassword(data.password),
         'role': 'job_seeker',
         'created_at': DateTime.now().toIso8601String(),
       });

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/constants/job_categories.dart';
+import 'package:joem/core/constants/job_categories.dart' as jc;
 import 'package:joem/core/constants/malagasy_cities.dart';
 import 'package:joem/features/welcome/presentation/welcome_palette.dart';
 import 'package:joem/core/widgets/light_dropdown.dart';
@@ -26,6 +27,7 @@ class StepTwoPersonalInfo extends StatelessWidget {
     required this.descriptionController,
     required this.categorieEntreprise,
     required this.onCategorieChanged,
+    required this.otherSectorController,
   });
 
   final Uint8List? logoBytes;
@@ -36,8 +38,9 @@ class StepTwoPersonalInfo extends StatelessWidget {
   final TextEditingController localisationController;
   final TextEditingController nomEntrepriseController;
   final TextEditingController descriptionController;
+  final TextEditingController otherSectorController;
 
-  /// Catégorie d'entreprise choisie (parmi `kJobCategories`) — champ
+  /// Catégorie d'entreprise choisie (parmi `kJobCategories` + "Autres") — champ
   /// obligatoire, réutilisé côté candidat pour filtrer les offres par
   /// secteur (voir `JobCategoriesScreen`).
   final String? categorieEntreprise;
@@ -115,11 +118,21 @@ class StepTwoPersonalInfo extends StatelessWidget {
           label: 'Catégorie d\'entreprise',
           hint: 'Sélectionnez un secteur d\'activité',
           icon: Icons.category_outlined,
-          options: kJobCategories,
+          options: [...kJobCategories, jc.kOtherJobCategory],
           value: categorieEntreprise,
           onChanged: onCategorieChanged,
         ),
         const SizedBox(height: 18),
+
+        if (categorieEntreprise == jc.kOtherJobCategory) ...[
+          LightTextField(
+            label: 'Précisez votre secteur d\'activité',
+            hint: 'Ex: Énergie solaire, E-commerce, ...',
+            icon: Icons.edit_note_rounded,
+            controller: otherSectorController,
+          ),
+          const SizedBox(height: 18),
+        ],
 
         LightTextField(
           label: 'Description de vos besoins principaux',

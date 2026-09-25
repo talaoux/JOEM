@@ -38,10 +38,10 @@ class EmployerProfileSidePanel extends StatelessWidget {
     super.key,
     required this.animation,
     required this.onClose,
-    this.companyName = 'Tech Solutions',
-    this.recruiterName = 'Jean Dupont',
+    this.companyName = '',
+    this.recruiterName = '',
     this.logoBytes,
-    this.location = 'Antananarivo, Analamanga',
+    this.location = '',
     this.onSettingsTap,
     this.onLogoutTap,
     this.profileCompletion = 0.0,
@@ -154,7 +154,8 @@ class EmployerProfileSidePanel extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        if (recruiterName.isNotEmpty) const SizedBox(height: 6),
+                        if (recruiterName.isNotEmpty)
                         SizedBox(
                           width: double.infinity,
                           child: Text(
@@ -163,7 +164,8 @@ class EmployerProfileSidePanel extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        if (location.isNotEmpty) const SizedBox(height: 6),
+                        if (location.isNotEmpty)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.max,

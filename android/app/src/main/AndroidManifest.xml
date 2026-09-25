@@ -4,7 +4,7 @@
          tout le reste reste 100% local (SQLite). -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="joem"
+        android:label="JOEM"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

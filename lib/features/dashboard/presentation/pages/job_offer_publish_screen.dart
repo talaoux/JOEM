@@ -253,7 +253,7 @@ class _JobOfferPublishScreenState extends State<JobOfferPublishScreen> {
     final employerUserId = int.tryParse(_authService.currentUser?.id ?? '') ?? 0;
     final offer = await _jobOfferRepository.publish(
       employerUserId: employerUserId,
-      companyName: _authService.currentUser?.companyName ?? 'Tech Solutions',
+      companyName: _authService.currentUser?.companyName ?? '',
       companyLogo: _authService.currentUser?.photoBytes,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),

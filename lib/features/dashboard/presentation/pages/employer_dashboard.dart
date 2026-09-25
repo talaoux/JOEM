@@ -80,7 +80,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
   List<Interview> _upcomingInterviews = [];
   bool _loadingInterviews = true;
 
-  String get _companyName => _authService.currentUser?.companyName ?? 'Tech Solutions';
+  String get _companyName => _authService.currentUser?.companyName ?? '';
 
   /// Palette de surfaces (fond de page, cartes, texte) dynamique selon le
   /// "Mode nuit" de `EmployerSettingsScreen` — voir `AppSurfaceColors` /
@@ -608,9 +608,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         _reloadAll();
       },
       companyName: _companyName,
-      recruiterName: recruiterName ?? 'Jean Dupont',
+      recruiterName: recruiterName ?? '',
       logoBytes: user?.photoBytes,
-      location: location ?? 'Antananarivo, Analamanga',
+      location: location ?? '',
       profileCompletion: user?.employerProfileCompletion ?? 0.0,
       onProfileCompletionTap: () {
         _closeProfilePanel();

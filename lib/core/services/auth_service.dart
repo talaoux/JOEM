@@ -567,7 +567,13 @@ class AuthService extends ChangeNotifier {
   /// aucune ligne dans `users` (AUTOINCREMENT, toujours positif), donc un
   /// id positif collisionnerait tôt ou tard avec un vrai utilisateur
   /// inscrit — notamment pour `job_offers.employer_user_id`.
-  static final Map<String, Map<String, dynamic>> _demoAccounts = {
+  /// Comptes de démo, disponibles UNIQUEMENT en mode debug (développement
+  /// et tests) : dans un build release, [_demoAccounts] est vide et ces
+  /// identifiants ne permettent pas de se connecter.
+  static Map<String, Map<String, dynamic>> get _demoAccounts =>
+      kDebugMode ? _debugDemoAccounts : const {};
+
+  static final Map<String, Map<String, dynamic>> _debugDemoAccounts = {
     'employeur@gmail.com': {
       'password': 'employeur123@gmail.com',
       'user': User(
@@ -697,7 +703,18 @@ class AuthService extends ChangeNotifier {
     if (rows.isEmpty) return null;
 
     final row = rows.first;
-    if (row['password_hash'] != hashPassword(password)) return null;
+    final stored = row['password_hash'] as String;
+    if (!await verifyPassword(password, stored)) return null;
+    // Ancien hash (SHA-256 sans sel) : remplacé par le format actuel dès la
+    // première connexion réussie.
+    if (needsRehash(stored)) {
+      await db.update(
+        'users',
+        {'password_hash': await hashPassword(password)},
+        where: 'email = ?',
+        whereArgs: [email],
+      );
+    }
 
     return _buildUserFromRow(row, email);
   }
@@ -930,7 +947,7 @@ class AuthService extends ChangeNotifier {
 
     await db.update(
       'users',
-      {'password_hash': hashPassword(newPassword)},
+      {'password_hash': await hashPassword(newPassword)},
       where: 'email = ?',
       whereArgs: [trimmedEmail],
     );
@@ -1774,7 +1791,7 @@ class AuthService extends ChangeNotifier {
       limit: 1,
     );
     if (rows.isEmpty) return false;
-    return rows.first['password_hash'] == hashPassword(password);
+    return verifyPassword(password, rows.first['password_hash'] as String);
   }
 
   /// Supprime définitivement le compte connecté : la ligne `users`

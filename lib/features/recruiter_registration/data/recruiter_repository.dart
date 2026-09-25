@@ -65,7 +65,7 @@ class RecruiterRepository {
     final userId = await db.transaction((txn) async {
       final id = await txn.insert('users', {
         'email': data.email,
-        'password_hash': hashPassword(data.password),
+        'password_hash': await hashPassword(data.password),
         'role': 'employer',
         'created_at': DateTime.now().toIso8601String(),
       });

@@ -17,6 +17,7 @@ class StepThreeValidation extends StatelessWidget {
     required this.localisation,
     required this.nomEntreprise,
     required this.categorieEntreprise,
+    required this.otherSector,
     required this.description,
   });
 
@@ -28,6 +29,7 @@ class StepThreeValidation extends StatelessWidget {
   final String localisation;
   final String nomEntreprise;
   final String? categorieEntreprise;
+  final String otherSector;
   final String description;
 
   String _orPlaceholder(String value) => value.trim().isEmpty ? 'Non renseigné' : value;
@@ -80,7 +82,9 @@ class StepThreeValidation extends StatelessWidget {
             _SummaryRow(
               icon: Icons.category_outlined,
               label: 'Catégorie d\'entreprise',
-              value: _orPlaceholder(categorieEntreprise ?? ''),
+              value: categorieEntreprise == 'Autres' && otherSector.trim().isNotEmpty
+                  ? 'Autres · ${otherSector.trim()}'
+                  : _orPlaceholder(categorieEntreprise ?? ''),
             ),
             _SummaryRow(
               icon: Icons.notes_rounded,

@@ -50,11 +50,11 @@ class ProfileSidePanel extends StatelessWidget {
     super.key,
     required this.animation,
     required this.onClose,
-    this.fullName = 'Marie Martin',
+    this.fullName = '',
     this.avatarAsset = 'assets/images/avatar_portfolio1.jpg',
     this.avatarBytes,
-    this.skills = "Développeur Flutter . Chercheur d'emploi",
-    this.location = 'Antananarivo, Analamanga',
+    this.skills = '',
+    this.location = '',
     this.onSettingsTap,
     this.onLogoutTap,
     this.profileCompletion = 0.0,
@@ -189,7 +189,8 @@ class ProfileSidePanel extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        if (skills.isNotEmpty) const SizedBox(height: 6),
+                        if (skills.isNotEmpty)
                         SizedBox(
                           width: double.infinity,
                           child: Text(
@@ -198,7 +199,8 @@ class ProfileSidePanel extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        if (location.isNotEmpty) const SizedBox(height: 6),
+                        if (location.isNotEmpty)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.max,

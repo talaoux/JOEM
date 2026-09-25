@@ -1,5 +1,5 @@
 /// Client OAuth "Web application" (`client_type: 3`) créé dans le même
-/// projet Google Cloud que le client "Android" (package `com.example.joem`
+/// projet Google Cloud que le client "Android" (package `mg.joem.app`
 /// + empreinte SHA-1 de signature) — voir la doc du projet pour la
 /// procédure complète de création des deux clients.
 ///
@@ -10,4 +10,10 @@
 /// signature précis. Remplacer la valeur ci-dessous par le "Client ID" du
 /// client web une fois créé sur https://console.cloud.google.com/apis/credentials.
 const String kGoogleServerClientId =
-    'REMPLACE_MOI.apps.googleusercontent.com';
+    'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
+
+/// `false` tant que [kGoogleServerClientId] est le placeholder : les boutons
+/// "Continuer avec Google" (connexion, étape "Compte" des inscriptions) sont
+/// alors masqués plutôt que d'échouer à chaque tap. Ils réapparaissent
+/// automatiquement dès qu'un vrai Client ID est renseigné.
+bool get isGoogleSignInConfigured => !kGoogleServerClientId.startsWith('REMPLACE_MOI');

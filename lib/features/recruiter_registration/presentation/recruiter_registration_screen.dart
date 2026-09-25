@@ -56,6 +56,7 @@ class _RecruiterRegistrationScreenState
   final _localisationController = TextEditingController();
   final _nomEntrepriseController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _otherSectorController = TextEditingController();
   String? _categorieEntreprise;
 
   final _repository = const RecruiterRepository();
@@ -71,6 +72,7 @@ class _RecruiterRegistrationScreenState
     _prenomController.addListener(_onFieldChanged);
     _localisationController.addListener(_onFieldChanged);
     _nomEntrepriseController.addListener(_onFieldChanged);
+    _otherSectorController.addListener(_onFieldChanged);
   }
 
   @override
@@ -84,6 +86,7 @@ class _RecruiterRegistrationScreenState
     _localisationController.dispose();
     _nomEntrepriseController.dispose();
     _descriptionController.dispose();
+    _otherSectorController.dispose();
     super.dispose();
   }
 
@@ -114,13 +117,21 @@ class _RecruiterRegistrationScreenState
 
   /// L'étape 2 est valide si nom, prénom, localisation, nom de
   /// l'entreprise et catégorie d'entreprise sont tous remplis (téléphone
-  /// et description restent optionnels).
-  bool get _isStepTwoValid =>
-      _nomController.text.trim().isNotEmpty &&
-      _prenomController.text.trim().isNotEmpty &&
-      _localisationController.text.trim().isNotEmpty &&
-      _nomEntrepriseController.text.trim().isNotEmpty &&
-      _categorieEntreprise != null;
+  /// et description restent optionnels). Si "Autres" est choisi, le
+  /// secteur personnalisé doit aussi être rempli.
+  bool get _isStepTwoValid {
+    final hasBasicFields =
+        _nomController.text.trim().isNotEmpty &&
+        _prenomController.text.trim().isNotEmpty &&
+        _localisationController.text.trim().isNotEmpty &&
+        _nomEntrepriseController.text.trim().isNotEmpty &&
+        _categorieEntreprise != null;
+    
+    if (_categorieEntreprise == 'Autres') {
+      return hasBasicFields && _otherSectorController.text.trim().isNotEmpty;
+    }
+    return hasBasicFields;
+  }
 
   bool get _canProceedFromCurrentStep {
     switch (_currentStep) {
@@ -180,6 +191,11 @@ class _RecruiterRegistrationScreenState
     final nomEntreprise = _nomEntrepriseController.text.trim();
 
     try {
+      // Si "Autres" est choisi, stocker "Autres · secteur_personnalisé"
+      final categorieToStore = _categorieEntreprise == 'Autres'
+          ? 'Autres · ${_otherSectorController.text.trim()}'
+          : _categorieEntreprise!;
+      
       final result = await _repository.register(
         RecruiterRegistrationData(
           email: email,
@@ -191,7 +207,7 @@ class _RecruiterRegistrationScreenState
           nomEntreprise: nomEntreprise,
           description: _descriptionController.text.trim(),
           logoBytes: _logoBytes,
-          categorieEntreprise: _categorieEntreprise!,
+          categorieEntreprise: categorieToStore,
         ),
       );
 
@@ -272,6 +288,7 @@ class _RecruiterRegistrationScreenState
           descriptionController: _descriptionController,
           categorieEntreprise: _categorieEntreprise,
           onCategorieChanged: (value) => setState(() => _categorieEntreprise = value),
+          otherSectorController: _otherSectorController,
         );
       default:
         return StepThreeValidation(
@@ -284,6 +301,7 @@ class _RecruiterRegistrationScreenState
           localisation: _localisationController.text,
           nomEntreprise: _nomEntrepriseController.text,
           categorieEntreprise: _categorieEntreprise,
+          otherSector: _otherSectorController.text,
           description: _descriptionController.text,
         );
     }

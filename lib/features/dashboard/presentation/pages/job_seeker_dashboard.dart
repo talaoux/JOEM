@@ -472,9 +472,12 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
         );
         _loadNotificationCount();
       },
-      fullName: fullName ?? 'Marie Martin',
+      fullName: fullName ?? '',
       avatarBytes: user?.photoBytes,
-      skills: position ?? "Développeur Flutter . Chercheur d'emploi",
+      skills: position ?? '',
+      // Ville réelle du candidat (auparavant jamais transmise : le panneau
+      // affichait toujours la valeur par défaut "Antananarivo, Analamanga").
+      location: user?.localisation?.trim() ?? '',
       profileCompletion: user?.profileCompletion ?? 0.0,
       advice: _careerAdvice(),
       onProfileCompletionTap: () {

@@ -9,6 +9,7 @@ import 'google_sign_in_button.dart';
 import 'light_text_field.dart';
 import 'or_divider.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/constants/google_config.dart';
 
 final RegExp _emailFormat = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -94,21 +95,25 @@ class _StepOneAccountState extends State<StepOneAccount> {
         ),
         const SizedBox(height: 20),
 
-        GoogleSignInButton(
-          onTap: _handleGoogleSignIn,
-          label: _isSigningIn ? 'Connexion...' : 'Continuer avec Google',
-        ),
-        if (_googleError != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _googleError!,
-            style: const TextStyle(fontSize: 12, color: Color(0xFFE53935)),
+        // Masqué tant que Google Sign-In n'est pas configuré (voir
+        // `isGoogleSignInConfigured`) : il échouerait à chaque tap.
+        if (isGoogleSignInConfigured) ...[
+          GoogleSignInButton(
+            onTap: _handleGoogleSignIn,
+            label: _isSigningIn ? 'Connexion...' : 'Continuer avec Google',
           ),
-        ],
-        const SizedBox(height: 20),
+          if (_googleError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _googleError!,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFE53935)),
+            ),
+          ],
+          const SizedBox(height: 20),
 
-        const OrDivider(),
-        const SizedBox(height: 20),
+          const OrDivider(),
+          const SizedBox(height: 20),
+        ],
 
         LightTextField(
           label: 'Email',
