@@ -13,6 +13,7 @@ import 'job_profile_screen.dart';
 import 'portfolio_screen.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 class JobCategoriesScreen extends StatefulWidget {
   const JobCategoriesScreen({super.key});
@@ -21,7 +22,8 @@ class JobCategoriesScreen extends StatefulWidget {
   State<JobCategoriesScreen> createState() => _JobCategoriesScreenState();
 }
 
-class _JobCategoriesScreenState extends State<JobCategoriesScreen> {
+class _JobCategoriesScreenState extends State<JobCategoriesScreen>
+    with LiveRefresh<JobCategoriesScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -32,6 +34,13 @@ class _JobCategoriesScreenState extends State<JobCategoriesScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNotificationCount();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadNotificationCount();
   }
 
@@ -172,7 +181,9 @@ class _JobCategoriesScreenState extends State<JobCategoriesScreen> {
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
-        thirdItemIcon: Icons.collections_bookmark_rounded,
+        notched: true,
+        secondItemIcon: Icons.grid_view_outlined,
+        thirdItemIcon: Icons.collections_bookmark_outlined,
         thirdItemLabel: 'Portfolio',
       ),
     );

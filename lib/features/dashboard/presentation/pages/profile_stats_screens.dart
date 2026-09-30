@@ -14,6 +14,7 @@ import 'company_profile_view_screen.dart';
 import 'job_offer_detail_screen.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Les 4 écrans de détail derrière les cartes "Les Statistiques" du panneau
 /// latéral candidat (`ProfileSidePanel`) : "Candidatures envoyées",
@@ -183,7 +184,8 @@ class MyApplicationsScreen extends StatefulWidget {
   State<MyApplicationsScreen> createState() => _MyApplicationsScreenState();
 }
 
-class _MyApplicationsScreenState extends State<MyApplicationsScreen> {
+class _MyApplicationsScreenState extends State<MyApplicationsScreen>
+    with LiveRefresh<MyApplicationsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
   List<JobOffer> _offers = const [];
@@ -195,6 +197,13 @@ class _MyApplicationsScreenState extends State<MyApplicationsScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 
@@ -269,7 +278,8 @@ class MyInterviewsScreen extends StatefulWidget {
   State<MyInterviewsScreen> createState() => _MyInterviewsScreenState();
 }
 
-class _MyInterviewsScreenState extends State<MyInterviewsScreen> {
+class _MyInterviewsScreenState extends State<MyInterviewsScreen>
+    with LiveRefresh<MyInterviewsScreen> {
   final AuthService _authService = AuthService();
   final InterviewRepository _repository = const InterviewRepository();
   List<Interview> _interviews = const [];
@@ -278,6 +288,13 @@ class _MyInterviewsScreenState extends State<MyInterviewsScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 
@@ -343,23 +360,33 @@ class _InterviewTile extends StatelessWidget {
     final title = interview.offerTitle.trim().isNotEmpty
         ? interview.offerTitle.trim()
         : 'Entretien';
+    final company = interview.companyName?.trim() ?? '';
+    final hasCompany = company.isNotEmpty || interview.companyLogo != null;
     return SoftCard(
       onTap: onTap,
       child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: SoftUi.tint(colors, const Color(0xFFC2780E)),
-                shape: BoxShape.circle,
+            if (hasCompany)
+              // L'entreprise qui propose l'entretien se reconnaît à son logo.
+              SoftAvatar(
+                name: company,
+                icon: Icons.business_rounded,
+                photo: interview.companyLogo != null ? MemoryImage(interview.companyLogo!) : null,
+              )
+            else
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: SoftUi.tint(colors, const Color(0xFFC2780E)),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  interview.isVisio ? Icons.videocam_rounded : Icons.event_available_rounded,
+                  color: SoftUi.accentInk(colors, const Color(0xFFC2780E)),
+                  size: 20,
+                ),
               ),
-              child: Icon(
-                interview.isVisio ? Icons.videocam_rounded : Icons.event_available_rounded,
-                color: SoftUi.accentInk(colors, const Color(0xFFC2780E)),
-                size: 20,
-              ),
-            ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -380,6 +407,12 @@ class _InterviewTile extends StatelessWidget {
                         const SoftDotBadge(label: 'Modifié', color: Color(0xFFB45309)),
                       ],
                     ],
+                  ),
+                  Text(
+                      company.isNotEmpty ? company : 'Entreprise · recruteur #${interview.employerUserId}',
+                      style: AppTypography.interMedium.copyWith(fontSize: 13, color: colors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -414,7 +447,8 @@ class MySavedOffersScreen extends StatefulWidget {
   State<MySavedOffersScreen> createState() => _MySavedOffersScreenState();
 }
 
-class _MySavedOffersScreenState extends State<MySavedOffersScreen> {
+class _MySavedOffersScreenState extends State<MySavedOffersScreen>
+    with LiveRefresh<MySavedOffersScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
   List<JobOffer> _offers = const [];
@@ -423,6 +457,13 @@ class _MySavedOffersScreenState extends State<MySavedOffersScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 
@@ -487,7 +528,8 @@ class ProfileViewersScreen extends StatefulWidget {
   State<ProfileViewersScreen> createState() => _ProfileViewersScreenState();
 }
 
-class _ProfileViewersScreenState extends State<ProfileViewersScreen> {
+class _ProfileViewersScreenState extends State<ProfileViewersScreen>
+    with LiveRefresh<ProfileViewersScreen> {
   final AuthService _authService = AuthService();
   final AccountSearchRepository _repository = const AccountSearchRepository();
   List<ProfileViewer> _viewers = const [];
@@ -496,6 +538,13 @@ class _ProfileViewersScreenState extends State<ProfileViewersScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 

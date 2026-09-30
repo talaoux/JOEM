@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:joem/core/network/api_client.dart';
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_durations.dart';
 import 'package:joem/core/utils/cv_storage.dart';
@@ -50,6 +51,10 @@ class _JobSeekerRegistrationScreenState
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _googleAccountCreated = false;
+
+  /// Jeton Google transmis au serveur à l'inscription (voir
+  /// `googleIdToken` des données d'inscription).
+  String? _googleIdToken;
 
   // Étape 2 — Info personnelle
   final _imagePicker = ImagePicker();
@@ -136,13 +141,14 @@ class _JobSeekerRegistrationScreenState
 
   /// L'étape 1 est valide si le compte a été créé via Google, ou si les 3
   /// champs (email, mot de passe, confirmation) sont tous remplis, que
-  /// l'email a un format plausible, et que les deux mots de passe
+  /// l'email a un format plausible, que le mot de passe fait au moins
+  /// `kMinPasswordLength` caractères, et que les deux mots de passe
   /// correspondent.
   bool get _isStepOneValid =>
       _googleAccountCreated ||
       (_emailController.text.trim().isNotEmpty &&
           isPlausibleEmail(_emailController.text) &&
-          _passwordController.text.trim().isNotEmpty &&
+          isPasswordLongEnough(_passwordController.text) &&
           _confirmPasswordController.text.trim().isNotEmpty &&
           _passwordController.text == _confirmPasswordController.text);
 
@@ -225,6 +231,7 @@ class _JobSeekerRegistrationScreenState
         JobSeekerRegistrationData(
           email: email,
           password: password,
+          googleIdToken: _googleAccountCreated ? _googleIdToken : null,
           nom: nom,
           prenom: prenom,
           telephone: _telephoneController.text.trim(),
@@ -266,8 +273,11 @@ class _JobSeekerRegistrationScreenState
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      // Le dashboard devient la racine : un retour depuis "Accueil" quitte
+      // l'application au lieu de revenir à Welcome.
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const JobSeekerDashboard()),
+        (route) => false,
       );
     } on EmailAlreadyUsedException {
       if (!mounted) return;
@@ -279,6 +289,31 @@ class _JobSeekerRegistrationScreenState
         const SnackBar(
           content: Text('Cet email est déjà utilisé, veuillez en choisir un autre.'),
           backgroundColor: Color(0xFFE53935),
+        ),
+      );
+    } on ApiException catch (error) {
+      // Refus du serveur JOEM (e-mail déjà pris, mot de passe trop court…)
+      // ou serveur injoignable : son message est déjà rédigé pour
+      // l'utilisateur. Une erreur sur l'e-mail ou le mot de passe renvoie
+      // à l'étape "Compte" pour la corriger.
+      if (!mounted) return;
+      final isGoogleError = error.errors.containsKey('google_id_token');
+      final isAccountError =
+          isGoogleError || error.errors.containsKey('email') || error.errors.containsKey('password');
+      setState(() {
+        if (isAccountError) _currentStep = 0;
+        // Jeton Google expiré ou refusé : il faut repasser par Google (ou
+        // choisir un mot de passe).
+        if (isGoogleError) {
+          _googleAccountCreated = false;
+          _googleIdToken = null;
+        }
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.displayMessage),
+          backgroundColor: const Color(0xFFE53935),
         ),
       );
     } catch (error, stackTrace) {
@@ -307,6 +342,7 @@ class _JobSeekerRegistrationScreenState
           confirmPasswordController: _confirmPasswordController,
           onGoogleSignIn: (account) => setState(() {
             _googleAccountCreated = true;
+            _googleIdToken = account.authentication.idToken;
             final nameParts = (account.displayName ?? '').trim().split(RegExp(r'\s+'));
             if (nameParts.isNotEmpty && nameParts.first.isNotEmpty) {
               _prenomController.text = nameParts.first;

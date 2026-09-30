@@ -10,6 +10,7 @@ import 'package:joem/core/theme/app_typography.dart';
 import 'package:joem/features/login/presentation/login_screen.dart';
 
 import '../../data/account_search_repository.dart';
+import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
 import 'change_password_screen.dart';
 import 'edit_job_seeker_profile_screen.dart';
@@ -98,7 +99,11 @@ class _JobSeekerSettingsScreenState extends State<JobSeekerSettingsScreen> {
     final user = _authService.currentUser;
     if (user == null) return;
 
+    // Le message annonce "toutes les notifications" : entretiens et
+    // décisions compris, pas seulement les nouvelles offres.
     await _jobOfferRepository.markAllNotificationsRead(user.id);
+    await const InterviewRepository().markAllSeekerNotificationsRead(user.id);
+    await _jobOfferRepository.markAllDecisionNotificationsRead(user.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Toutes les notifications ont été marquées comme lues.')),

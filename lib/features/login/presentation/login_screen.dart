@@ -1,8 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/api_client.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/widgets/form_surface.dart';
 import 'package:joem/core/widgets/glass_button.dart';
@@ -59,6 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
     String? errorMessage;
     try {
       result = await _authService.loginWithGoogle();
+    } on ApiException catch (error) {
+      errorMessage = error.displayMessage;
     } catch (_) {
       errorMessage = 'Connexion Google impossible, veuillez réessayer.';
     }
@@ -140,9 +141,14 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     if (error != null) {
+      // Serveur JOEM injoignable, trop de tentatives, etc. : le message de
+      // l'API est déjà rédigé pour l'utilisateur.
+      final message = error is ApiException
+          ? error.displayMessage
+          : 'Une erreur est survenue lors de la connexion, veuillez réessayer.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Une erreur est survenue lors de la connexion, veuillez réessayer.'),
+        SnackBar(
+          content: Text(message),
           backgroundColor: AppColors.error,
         ),
       );

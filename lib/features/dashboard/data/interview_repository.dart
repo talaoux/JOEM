@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:joem/core/database/app_database.dart';
+
+import 'package:joem/core/network/api_client.dart';
+import 'package:joem/features/dashboard/data/remote/interview_api.dart';
 
 const List<String> _shortMonths = [
   'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
@@ -41,6 +46,8 @@ class Interview {
     this.seekerRead = false,
     this.revision = 0,
     DateTime? notifiedAt,
+    this.companyName,
+    this.companyLogo,
   }) : notifiedAt = notifiedAt ?? createdAt;
 
   final int id;
@@ -86,6 +93,12 @@ class Interview {
   /// (`interviews.notified_at`). Sert à trier `JobNotificationsScreen` et à
   /// dater la notification.
   final DateTime notifiedAt;
+
+  /// Entreprise qui propose l'entretien, telle que le candidat doit la
+  /// reconnaître (nom et logo de son profil recruteur) — `null` si elle
+  /// n'est pas connue (compte de démo, entreprise supprimée).
+  final String? companyName;
+  final Uint8List? companyLogo;
 
   bool get isModified => revision > 0;
 
@@ -146,6 +159,14 @@ class Interview {
 class InterviewRepository {
   const InterviewRepository();
 
+  /// Version API de ce dépôt quand `API_BASE_URL` est fourni, `null` en
+  /// mode 100% local.
+  InterviewApi? get _api {
+    final client = ApiClient.shared;
+    return client == null ? null : InterviewApi(client);
+  }
+
+
   /// 'AAAA-MM-JJ', ou '' pour une date à définir (colonne `NOT NULL`).
   static String _dateKey(DateTime? d) => d == null
       ? ''
@@ -164,6 +185,11 @@ class InterviewRepository {
     required String mode,
     String? notes,
   }) async {
+    final api = _api;
+    if (api != null) {
+      return api.schedule(jobApplicationId: jobApplicationId, date: date, time: time, location: location, mode: mode, notes: notes);
+    }
+
     final db = await AppDatabase.instance.database;
     final createdAt = DateTime.now();
     final dateKey = _dateKey(date);
@@ -218,6 +244,9 @@ class InterviewRepository {
     required String mode,
     String? notes,
   }) async {
+    final api = _api;
+    if (api != null) return api.reschedule(id, date: date, time: time, location: location, mode: mode, notes: notes);
+
     final db = await AppDatabase.instance.database;
     await db.rawUpdate(
       '''
@@ -248,6 +277,9 @@ class InterviewRepository {
   }
 
   Future<void> updateStatus(int id, String status) async {
+    final api = _api;
+    if (api != null) return api.updateStatus(id, status);
+
     final db = await AppDatabase.instance.database;
     await db.update('interviews', {'status': status}, where: 'id = ?', whereArgs: [id]);
   }
@@ -255,6 +287,9 @@ class InterviewRepository {
   Future<void> cancel(int id) => updateStatus(id, InterviewStatus.cancelled);
 
   Future<void> delete(int id) async {
+    final api = _api;
+    if (api != null) return api.delete(id);
+
     final db = await AppDatabase.instance.database;
     await db.delete('interviews', where: 'id = ?', whereArgs: [id]);
   }
@@ -263,6 +298,15 @@ class InterviewRepository {
   /// par `CandidateApplicationDetailScreen` pour basculer "Planifier un
   /// entretien" en "Voir l'entretien planifié".
   Future<Interview?> fetchByApplication(int jobApplicationId) async {
+    final api = _api;
+    if (api != null) {
+      final matches = (await api.fetchMine())
+          .where((i) => i.jobApplicationId == jobApplicationId && i.status != InterviewStatus.cancelled)
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return matches.firstOrNull;
+    }
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'interviews',
@@ -278,6 +322,11 @@ class InterviewRepository {
   /// Tous les entretiens (non annulés) d'un recruteur, du plus proche au
   /// plus lointain.
   Future<List<Interview>> fetchForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) {
+      return (await api.fetchMine()).where((i) => i.status != InterviewStatus.cancelled).toList()..sort(Interview.compareBySchedule);
+    }
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'interviews',
@@ -291,6 +340,15 @@ class InterviewRepository {
   /// Entretiens planifiés aujourd'hui pour ce recruteur (quelle que soit
   /// l'heure, passée ou à venir dans la journée), triés par heure.
   Future<List<Interview>> fetchTodayForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) {
+      final todayKey = _dateKey(DateTime.now());
+      return (await api.fetchMine())
+          .where((i) => i.status == InterviewStatus.scheduled && i.date != null && _dateKey(i.date) == todayKey)
+          .toList()
+        ..sort(Interview.compareBySchedule);
+    }
+
     final db = await AppDatabase.instance.database;
     final todayKey = _dateKey(DateTime.now());
     final rows = await db.query(
@@ -353,6 +411,8 @@ class InterviewRepository {
       seekerRead: (row['seeker_read'] as int? ?? 0) == 1,
       revision: row['revision'] as int? ?? 0,
       notifiedAt: DateTime.tryParse(row['notified_at'] as String? ?? ''),
+      companyName: row['company_name'] as String?,
+      companyLogo: row['company_logo'] as Uint8List?,
     );
   }
 
@@ -364,12 +424,24 @@ class InterviewRepository {
   /// Entretiens à notifier à ce candidat (non supprimés de son côté), le
   /// plus récemment planifié ou modifié en premier.
   Future<List<Interview>> fetchNotificationsForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchSeekerNotifications();
+
     final db = await AppDatabase.instance.database;
-    final rows = await db.query(
-      'interviews',
-      where: 'job_seeker_user_id = ? AND seeker_deleted = 0 AND status != ?',
-      whereArgs: [jobSeekerUserId, InterviewStatus.cancelled],
-      orderBy: 'COALESCE(notified_at, created_at) DESC',
+    // L'entreprise est lue dans son profil (nom et logo à jour), sinon sur
+    // l'offre ; `interviews.employer_user_id` n'a pas de clé étrangère.
+    final rows = await db.rawQuery(
+      '''
+      SELECT i.*,
+        COALESCE(NULLIF(TRIM(ep.nom_entreprise), ''), NULLIF(TRIM(jo.company_name), '')) AS company_name,
+        COALESCE(ep.logo, jo.company_logo) AS company_logo
+      FROM interviews i
+      LEFT JOIN employer_profiles ep ON ep.user_id = i.employer_user_id
+      LEFT JOIN job_offers jo ON jo.id = i.job_offer_id
+      WHERE i.job_seeker_user_id = ? AND i.seeker_deleted = 0 AND i.status != ?
+      ORDER BY COALESCE(i.notified_at, i.created_at) DESC
+      ''',
+      [jobSeekerUserId, InterviewStatus.cancelled],
     );
     return rows.map(_fromRow).toList();
   }
@@ -378,6 +450,9 @@ class InterviewRepository {
   /// — s'ajoute au compteur d'offres non lues sur la pastille du dashboard
   /// candidat (`JobSeekerDashboard._loadNotificationCount`).
   Future<int> countUnreadNotificationsForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.countSeekerNotifications(unreadOnly: true);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'interviews',
@@ -394,6 +469,9 @@ class InterviewRepository {
   /// (`ProfileSidePanel`). Même filtre que [fetchNotificationsForJobSeeker]
   /// pour que le compteur corresponde exactement à la liste ouverte au tap.
   Future<int> countForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.countSeekerNotifications();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'interviews',
@@ -405,6 +483,9 @@ class InterviewRepository {
   }
 
   Future<void> markSeekerNotificationRead(int id, {bool read = true}) async {
+    final api = _api;
+    if (api != null) return api.setSeekerRead(id, isRead: read);
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'interviews',
@@ -415,6 +496,9 @@ class InterviewRepository {
   }
 
   Future<void> deleteSeekerNotification(int id) async {
+    final api = _api;
+    if (api != null) return api.deleteSeekerNotification(id);
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'interviews',
@@ -425,6 +509,14 @@ class InterviewRepository {
   }
 
   Future<void> markAllSeekerNotificationsRead(String jobSeekerUserId) async {
+    final api = _api;
+    // Une seule requête (`PATCH /notifications/read-all`) plutôt qu'une
+    // par entretien.
+    if (api != null) {
+      await api.client.patch('/notifications/read-all');
+      return;
+    }
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'interviews',

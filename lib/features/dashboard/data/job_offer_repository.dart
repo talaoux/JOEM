@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/api_client.dart';
+import 'package:joem/features/dashboard/data/remote/job_offer_api.dart';
 
 const List<String> _shortMonths = [
   'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
@@ -311,6 +313,15 @@ class JobSeekerCvFile {
 class JobOfferRepository {
   const JobOfferRepository();
 
+  /// Version API de ce dépôt quand `API_BASE_URL` est fourni (offres,
+  /// candidatures, favoris et notifications partagés entre téléphones),
+  /// `null` en mode 100% local.
+  JobOfferApi? get _api {
+    final client = ApiClient.shared;
+    return client == null ? null : JobOfferApi(client);
+  }
+
+
   Future<JobOffer> publish({
     required int employerUserId,
     required String companyName,
@@ -324,6 +335,11 @@ class JobOfferRepository {
     List<String> categories = const [],
     String? otherSector,
   }) async {
+    final api = _api;
+    if (api != null) {
+      return api.publish(title: title, description: description, location: location, salary: salary, contractType: contractType, posterImage: posterImage, categories: categories, otherSector: otherSector);
+    }
+
     final db = await AppDatabase.instance.database;
     final createdAt = DateTime.now();
 
@@ -370,6 +386,9 @@ class JobOfferRepository {
   /// récentes en premier — c'est ce que voit un chercheur d'emploi, quel
   /// que soit le métier qu'il recherche.
   Future<List<JobOffer>> fetchAll() async {
+    final api = _api;
+    if (api != null) return api.fetchAll();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query('job_offers', orderBy: 'created_at DESC');
     return rows.map(_fromRow).toList();
@@ -381,6 +400,9 @@ class JobOfferRepository {
   /// — même mécanisme que "Supprimer" dans `JobNotificationsScreen`, un
   /// masquage propre à ce candidat, l'offre reste visible par les autres).
   Future<List<JobOffer>> fetchAllForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchAll(hideDismissed: true);
+
     final offers = await fetchAll();
     final stateRows = await (await AppDatabase.instance.database).query(
       'job_offer_notification_reads',
@@ -402,6 +424,9 @@ class JobOfferRepository {
   /// ligne `employer_profiles`, leurs anciennes offres n'apparaissent donc
   /// dans aucun filtre.
   Future<List<JobOffer>> fetchByCategory(String category) async {
+    final api = _api;
+    if (api != null) return api.fetchAll(category: category);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -426,6 +451,9 @@ class JobOfferRepository {
   /// de `kJobCategories` côté appelant — vide pour une offre publiée avant
   /// la migration v28.
   Future<List<String>> fetchCategoriesForOffer(int jobOfferId) async {
+    final api = _api;
+    if (api != null) return api.fetchCategoriesForOffer(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_offer_categories',
@@ -441,6 +469,9 @@ class JobOfferRepository {
   /// requête — affichées sur les cartes de "Mes offres d'emploi". Une offre
   /// sans catégorie propre (antérieure à v28) est absente de la map.
   Future<Map<int, List<String>>> fetchCategoriesByOffer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchCategoriesByOffer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -479,6 +510,11 @@ class JobOfferRepository {
     required List<String> categories,
     String? otherSector,
   }) async {
+    final api = _api;
+    if (api != null) {
+      return api.updateOffer(offer: offer, title: title, description: description, location: location, salary: salary, contractType: contractType, posterImage: posterImage, categories: categories, otherSector: otherSector);
+    }
+
     final db = await AppDatabase.instance.database;
     await db.transaction((txn) async {
       await txn.update(
@@ -544,6 +580,9 @@ class JobOfferRepository {
     String category,
     String jobSeekerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchAll(category: category, hideDismissed: true);
+
     final offers = await fetchByCategory(category);
     final stateRows = await (await AppDatabase.instance.database).query(
       'job_offer_notification_reads',
@@ -557,6 +596,9 @@ class JobOfferRepository {
   /// Offres publiées par un recruteur précis — "Mes offres" côté
   /// `EmployerDashboard`.
   Future<List<JobOffer>> fetchByEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchByEmployer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_offers',
@@ -573,6 +615,9 @@ class JobOfferRepository {
   Future<List<JobOfferNotification>> fetchNotificationsForJobSeeker(
     String jobSeekerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchOfferNotifications();
+
     final db = await AppDatabase.instance.database;
     final offerRows = await db.query('job_offers', orderBy: 'created_at DESC');
     final stateRows = await db.query(
@@ -599,25 +644,44 @@ class JobOfferRepository {
   /// Nombre d'offres publiées qu'un chercheur d'emploi n'a ni lues ni
   /// supprimées — alimente la pastille de compteur (header + nav basse).
   Future<int> countUnreadNotificationsForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.countUnreadOfferNotifications();
+
     final notifications = await fetchNotificationsForJobSeeker(jobSeekerUserId);
     return notifications.where((n) => !n.isRead).length;
   }
 
   Future<void> markNotificationRead(int jobOfferId, String jobSeekerUserId) {
+    final api = _api;
+    if (api != null) return api.setOfferNotificationRead(jobOfferId, isRead: true);
+
     return _setNotificationState(jobOfferId, jobSeekerUserId, isRead: true);
   }
 
   Future<void> markNotificationUnread(int jobOfferId, String jobSeekerUserId) {
+    final api = _api;
+    if (api != null) return api.setOfferNotificationRead(jobOfferId, isRead: false);
+
     return _setNotificationState(jobOfferId, jobSeekerUserId, isRead: false);
   }
 
   Future<void> deleteNotification(int jobOfferId, String jobSeekerUserId) {
+    final api = _api;
+    if (api != null) return api.deleteOfferNotification(jobOfferId);
+
     return _setNotificationState(jobOfferId, jobSeekerUserId, isDeleted: true);
   }
 
   /// Marque comme lues toutes les offres actuellement non lues (et non
   /// supprimées) de ce chercheur d'emploi — "Tout marquer comme lu".
+  ///
+  /// Avec l'API, une seule requête marque tout ce que voit le candidat
+  /// (offres, décisions et entretiens) au lieu d'une requête par
+  /// notification.
   Future<void> markAllNotificationsRead(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.markAllNotificationsRead();
+
     final notifications = await fetchNotificationsForJobSeeker(jobSeekerUserId);
     for (final notification in notifications.where((n) => !n.isRead)) {
       await markNotificationRead(notification.offer.id, jobSeekerUserId);
@@ -639,6 +703,9 @@ class JobOfferRepository {
     required String candidateName,
     String? candidatePosition,
   }) async {
+    final api = _api;
+    if (api != null) return api.apply(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     await db.insert(
       'job_applications',
@@ -664,6 +731,9 @@ class JobOfferRepository {
     required int jobOfferId,
     required String jobSeekerUserId,
   }) async {
+    final api = _api;
+    if (api != null) return api.withdrawApplication(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     final deleted = await db.delete(
       'job_applications',
@@ -680,6 +750,9 @@ class JobOfferRepository {
     int jobOfferId,
     String jobSeekerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchApplicationStatus(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_applications',
@@ -698,6 +771,9 @@ class JobOfferRepository {
   /// Statut de chaque candidature de ce candidat, par id d'offre — badges
   /// "En attente"/"Acceptée"/"Non retenue" de `MyApplicationsScreen`.
   Future<Map<int, String>> fetchApplicationStatusesByOffer(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchApplicationStatusesByOffer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_applications',
@@ -726,6 +802,9 @@ class JobOfferRepository {
       _decide(applicationId, ApplicationStatus.accepted, message);
 
   Future<void> _decide(int applicationId, String status, String? message) async {
+    final api = _api;
+    if (api != null) return api.decide(applicationId, status, message);
+
     final db = await AppDatabase.instance.database;
     final trimmed = message?.trim();
     await db.update(
@@ -746,6 +825,9 @@ class JobOfferRepository {
   /// candidature repasse en attente et la notification disparaît côté
   /// candidat.
   Future<void> restoreApplication(int applicationId) async {
+    final api = _api;
+    if (api != null) return api.decide(applicationId, ApplicationStatus.pending, null);
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'job_applications',
@@ -767,6 +849,9 @@ class JobOfferRepository {
   Future<List<ApplicationDecisionNotification>> fetchDecisionNotificationsForJobSeeker(
     String jobSeekerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchDecisionNotifications();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -800,6 +885,9 @@ class JobOfferRepository {
   /// Nombre de décisions non lues — ajouté à la pastille de notifications
   /// du candidat (header + nav basse).
   Future<int> countUnreadDecisionNotificationsForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.countUnreadDecisionNotifications();
+
     final db = await AppDatabase.instance.database;
     final result = await db.rawQuery(
       '''
@@ -812,6 +900,9 @@ class JobOfferRepository {
   }
 
   Future<void> markDecisionNotificationRead(int applicationId, {bool read = true}) async {
+    final api = _api;
+    if (api != null) return api.setDecisionNotificationRead(applicationId, isRead: read);
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'job_applications',
@@ -822,6 +913,9 @@ class JobOfferRepository {
   }
 
   Future<void> deleteDecisionNotification(int applicationId) async {
+    final api = _api;
+    if (api != null) return api.deleteDecisionNotification(applicationId);
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'job_applications',
@@ -832,6 +926,9 @@ class JobOfferRepository {
   }
 
   Future<void> markAllDecisionNotificationsRead(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.markAllNotificationsRead();
+
     final db = await AppDatabase.instance.database;
     await db.update(
       'job_applications',
@@ -845,6 +942,9 @@ class JobOfferRepository {
   /// utilisé pour afficher "Candidature envoyée" (bouton désactivé) au
   /// lieu de "Postuler".
   Future<bool> hasApplied(int jobOfferId, String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return (await api.fetchAppliedOfferIds()).contains(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_applications',
@@ -859,6 +959,9 @@ class JobOfferRepository {
   /// déjà postulé — une seule requête pour marquer d'un coup toutes les
   /// cartes "Candidature envoyée" dans une liste (dashboard, recherche...).
   Future<Set<int>> fetchAppliedOfferIds(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchAppliedOfferIds();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_applications',
@@ -873,6 +976,9 @@ class JobOfferRepository {
   /// tous recruteurs confondus — alimente "X candidatures envoyées" sur
   /// son profil.
   Future<int> countApplicationsForJobSeeker(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.countApplicationsForJobSeeker();
+
     final db = await AppDatabase.instance.database;
     final result = await db.rawQuery(
       'SELECT COUNT(*) AS count FROM job_applications WHERE job_seeker_user_id = ?',
@@ -885,6 +991,9 @@ class JobOfferRepository {
   /// un recruteur précis — alimente la carte statistique "Candidatures"
   /// de `EmployerDashboard`.
   Future<int> countApplicantsForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.countApplicantsForEmployer();
+
     final db = await AppDatabase.instance.database;
     final result = await db.rawQuery(
       '''
@@ -907,6 +1016,9 @@ class JobOfferRepository {
   Future<List<JobApplicationNotification>> fetchApplicationNotificationsForEmployer(
     int employerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchApplicationNotificationsForEmployer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -991,25 +1103,40 @@ class JobOfferRepository {
   /// supprimées — alimente la pastille de compteur (header + nav basse)
   /// de `EmployerDashboard`.
   Future<int> countUnreadApplicationNotificationsForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.countUnreadApplicationNotificationsForEmployer();
+
     final notifications = await fetchApplicationNotificationsForEmployer(employerUserId);
     return notifications.where((n) => !n.isRead).length;
   }
 
   Future<void> markApplicationNotificationRead(int applicationId) {
+    final api = _api;
+    if (api != null) return api.setApplicationNotificationRead(applicationId, isRead: true);
+
     return _setApplicationNotificationState(applicationId, isRead: true);
   }
 
   Future<void> markApplicationNotificationUnread(int applicationId) {
+    final api = _api;
+    if (api != null) return api.setApplicationNotificationRead(applicationId, isRead: false);
+
     return _setApplicationNotificationState(applicationId, isRead: false);
   }
 
   Future<void> deleteApplicationNotification(int applicationId) {
+    final api = _api;
+    if (api != null) return api.deleteApplicationNotification(applicationId);
+
     return _setApplicationNotificationState(applicationId, isDeleted: true);
   }
 
   /// Marque comme lues toutes les candidatures actuellement non lues (et
   /// non supprimées) reçues par ce recruteur — "Tout marquer comme lu".
   Future<void> markAllApplicationNotificationsRead(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.markAllNotificationsRead();
+
     final notifications = await fetchApplicationNotificationsForEmployer(employerUserId);
     for (final notification in notifications.where((n) => !n.isRead)) {
       await markApplicationNotificationRead(notification.applicationId);
@@ -1093,6 +1220,9 @@ class JobOfferRepository {
   Future<JobSeekerProfileSummary?> fetchJobSeekerProfileSummary(
     String jobSeekerUserId,
   ) async {
+    final api = _api;
+    if (api != null) return api.fetchJobSeekerProfileSummary(jobSeekerUserId);
+
     final userId = int.tryParse(jobSeekerUserId);
     if (userId == null || userId <= 0) return null;
 
@@ -1150,6 +1280,9 @@ class JobOfferRepository {
   /// candidat n'a pas de CV, est un compte de démo, n'a plus de profil, ou
   /// si le fichier a disparu du disque entre-temps.
   Future<JobSeekerCvFile?> fetchJobSeekerCv(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchJobSeekerCv(jobSeekerUserId);
+
     final userId = int.tryParse(jobSeekerUserId);
     if (userId == null || userId <= 0) return null;
 
@@ -1177,6 +1310,9 @@ class JobOfferRepository {
   /// publication" sur la carte) — idempotent (`UNIQUE(job_offer_id,
   /// job_seeker_user_id)`, violation ignorée).
   Future<void> saveOffer(int jobOfferId, String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.saveOffer(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     await db.insert(
       'job_offer_saves',
@@ -1191,6 +1327,9 @@ class JobOfferRepository {
 
   /// Retire cette offre des publications enregistrées de ce candidat.
   Future<void> unsaveOffer(int jobOfferId, String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.unsaveOffer(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     await db.delete(
       'job_offer_saves',
@@ -1203,6 +1342,9 @@ class JobOfferRepository {
   /// requête pour marquer d'un coup toutes les cartes "Enregistré" dans une
   /// liste, comme [fetchAppliedOfferIds].
   Future<Set<int>> fetchSavedOfferIds(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchSavedOfferIds();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'job_offer_saves',
@@ -1218,6 +1360,9 @@ class JobOfferRepository {
   /// page "Candidatures envoyées" ouverte depuis la stat du panneau latéral
   /// candidat (`ProfileSidePanel`).
   Future<List<JobOffer>> fetchAppliedOffers(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchAppliedOffers();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -1235,6 +1380,9 @@ class JobOfferRepository {
   /// jointe à `job_offers`), la plus récemment enregistrée en premier —
   /// page "Favoris" ouverte depuis la stat du panneau latéral candidat.
   Future<List<JobOffer>> fetchSavedOffers(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchSavedOffers();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -1251,6 +1399,9 @@ class JobOfferRepository {
   /// Retire toutes les offres enregistrées de ce candidat — "Vider mes
   /// offres enregistrées" de `JobSeekerSettingsScreen`.
   Future<void> clearSavedOffers(String jobSeekerUserId) async {
+    final api = _api;
+    if (api != null) return api.clearSavedOffers();
+
     final db = await AppDatabase.instance.database;
     await db.delete(
       'job_offer_saves',
@@ -1266,6 +1417,9 @@ class JobOfferRepository {
   /// recruteur sur sa propre offre (l'appelant filtre : seul un candidat
   /// connecté appelle cette méthode).
   Future<void> recordOfferView(int jobOfferId, String viewerUserId) async {
+    final api = _api;
+    if (api != null) return api.recordOfferView(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     await db.insert(
       'job_offer_views',
@@ -1281,6 +1435,9 @@ class JobOfferRepository {
   /// Nombre total de vues (candidats distincts) sur toutes les offres de ce
   /// recruteur — carte statistique "Vues totales" de `EmployerDashboard`.
   Future<int> countOfferViewsForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.countOfferViewsForEmployer();
+
     final db = await AppDatabase.instance.database;
     final result = await db.rawQuery(
       '''
@@ -1299,6 +1456,9 @@ class JobOfferRepository {
   /// la page "Vues totales" ouverte depuis la carte du "Tableau de bord"
   /// et du panneau latéral recruteur.
   Future<List<OfferView>> fetchOfferViewsForEmployer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchOfferViewsForEmployer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -1339,6 +1499,9 @@ class JobOfferRepository {
   /// une seule requête pour afficher le compteur sur chaque carte de "Mes
   /// offres d'emploi" sans une requête par offre.
   Future<Map<int, int>> fetchApplicantCountsByOffer(int employerUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchApplicantCountsByOffer();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -1362,6 +1525,9 @@ class JobOfferRepository {
   /// pas les candidatures marquées "supprimées" côté notifications : le
   /// recruteur veut voir tous les postulants d'une offre.
   Future<List<JobApplicationNotification>> fetchApplicationsForOffer(int jobOfferId) async {
+    final api = _api;
+    if (api != null) return api.fetchApplicationsForOffer(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''
@@ -1442,6 +1608,9 @@ class JobOfferRepository {
   /// (`ON DELETE CASCADE`). Les entretiens déjà planifiés restent (aucune
   /// FK, `offer_title` dupliqué — voir `AppDatabase` migration v18 -> v19).
   Future<void> deleteOffer(int jobOfferId) async {
+    final api = _api;
+    if (api != null) return api.deleteOffer(jobOfferId);
+
     final db = await AppDatabase.instance.database;
     await db.delete('job_offers', where: 'id = ?', whereArgs: [jobOfferId]);
   }

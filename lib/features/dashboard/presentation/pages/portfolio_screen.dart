@@ -22,6 +22,7 @@ import 'portfolio_projects_screen.dart';
 import 'portfolio_skills_screen.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Écran principal du Portfolio candidat — vitrine professionnelle réelle
 /// (pas un simple CV) : carte d'identité, indicateur de complétion et accès
@@ -46,7 +47,8 @@ class PortfolioScreen extends StatefulWidget {
   State<PortfolioScreen> createState() => _PortfolioScreenState();
 }
 
-class _PortfolioScreenState extends State<PortfolioScreen> {
+class _PortfolioScreenState extends State<PortfolioScreen>
+    with LiveRefresh<PortfolioScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -59,6 +61,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNotificationCount();
+    _loadProfileViews();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadNotificationCount();
     _loadProfileViews();
   }
@@ -220,11 +230,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       bottomNavigationBar: BottomNavigation(
         currentIndex: 2,
         onTap: _onNavTap,
-        thirdItemIcon: Icons.collections_bookmark_rounded,
+        thirdItemIcon: Icons.collections_bookmark_outlined,
         thirdItemLabel: 'Portfolio',
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
       softHomeButton: true,
+      notched: true,
+      secondItemIcon: Icons.grid_view_outlined,
       ),
     );
   }
@@ -477,7 +489,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         ),
         _OverviewTile(
           theme: theme,
-          icon: Icons.collections_bookmark_rounded,
+          icon: Icons.collections_bookmark_outlined,
           title: 'Projets',
           subtitle:
               projectCount == 0 ? 'Aucun pour le moment' : '$projectCount réalisations',

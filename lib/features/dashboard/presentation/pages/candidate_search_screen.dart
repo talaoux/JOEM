@@ -16,6 +16,7 @@ import 'candidate_profile_view_screen.dart';
 import 'employer_notifications_screen.dart';
 import 'employer_profile_screen.dart';
 import 'job_offer_publish_screen.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Recherche de candidats — équivalent recruteur de `JobSearchScreen`.
 /// Recherche réelle parmi les comptes chercheur d'emploi inscrits
@@ -29,7 +30,8 @@ class CandidateSearchScreen extends StatefulWidget {
   State<CandidateSearchScreen> createState() => _CandidateSearchScreenState();
 }
 
-class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
+class _CandidateSearchScreenState extends State<CandidateSearchScreen>
+    with LiveRefresh<CandidateSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final AccountSearchRepository _repository = const AccountSearchRepository();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
@@ -53,6 +55,13 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    _loadNotificationCount();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadNotificationCount();
   }
 
@@ -245,6 +254,7 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
+        notched: true,
       ),
     );
   }

@@ -297,8 +297,19 @@ void main() {
 
     test('compte les entretiens à venir', () async {
       final repo = const InterviewRepository();
+      // Les fixtures du setUp sont datées de 2024, donc passées : on ajoute
+      // un entretien relatif à aujourd'hui pour ne pas dépendre de la date.
+      await repo.schedule(
+        employerUserId: 1,
+        jobSeekerUserId: 'candidate6',
+        candidateName: 'Futur',
+        offerTitle: 'Job Future',
+        date: DateTime.now().add(const Duration(days: 7)),
+        time: '10:00',
+        mode: InterviewMode.visio,
+      );
       final count = await repo.countUpcomingForEmployer(1);
-      expect(count, greaterThan(0));
+      expect(count, 1);
     });
   });
 
@@ -394,8 +405,6 @@ void main() {
 
   group('InterviewRepository - Utilitaires', () {
     test('compareBySchedule trie correctement', () async {
-      final repo = const InterviewRepository();
-      
       final interview1 = Interview(
         id: 1,
         employerUserId: 1,
@@ -442,8 +451,6 @@ void main() {
     });
 
     test('les getters d\'étiquette fonctionnent', () async {
-      final repo = const InterviewRepository();
-      
       final withDate = Interview(
         id: 1,
         employerUserId: 1,
@@ -480,8 +487,6 @@ void main() {
     });
 
     test('locationLabel retourne le lieu ou un texte par défaut', () async {
-      final repo = const InterviewRepository();
-      
       final withLocation = Interview(
         id: 1,
         employerUserId: 1,

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -368,7 +367,7 @@ void main() {
       final repo = const JobOfferRepository();
       
       // Créer une deuxième offre
-      final offer2 = await repo.publish(
+      await repo.publish(
         employerUserId: 2,
         companyName: 'Company 2',
         title: 'Job 2',

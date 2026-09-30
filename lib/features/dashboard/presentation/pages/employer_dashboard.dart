@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -29,6 +30,7 @@ import 'job_offer_publish_screen.dart';
 import 'offer_applicants_screen.dart';
 import 'employer_notifications_screen.dart';
 import 'employer_profile_screen.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 class EmployerDashboard extends StatefulWidget {
   const EmployerDashboard({super.key});
@@ -38,7 +40,7 @@ class EmployerDashboard extends StatefulWidget {
 }
 
 class _EmployerDashboardState extends State<EmployerDashboard>
-    with TickerProviderStateMixin, RouteAware {
+    with TickerProviderStateMixin, RouteAware, LiveRefresh<EmployerDashboard> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -110,6 +112,13 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     _loadPostedOffers().then((_) => _loadSuggestedCandidates());
     _loadNotificationCount();
     _loadInterviews();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
+    _reloadAll();
   }
 
   /// Recharge tout ce que le dashboard affiche — appelé au retour d'un
@@ -373,8 +382,26 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     );
   }
 
+  /// Le dashboard est la racine de la pile de navigation une fois connecté :
+  /// le retour matériel ferme d'abord le panneau latéral s'il est ouvert,
+  /// sinon quitte l'application (jamais de retour vers Welcome/Login).
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_profilePanelController.value > 0) {
+          _closeProfilePanel();
+          return;
+        }
+        SystemNavigator.pop();
+      },
+      child: _buildDashboard(context),
+    );
+  }
+
+  Widget _buildDashboard(BuildContext context) {
     return Stack(
       children: [
         Scaffold(
@@ -574,6 +601,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               notificationCount: _notificationCount,
               accentColor: DashboardColors.accent,
               softHomeButton: true,
+              notched: true,
             ),
           ),
         ),

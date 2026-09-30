@@ -13,6 +13,13 @@ import 'package:joem/core/constants/google_config.dart';
 
 final RegExp _emailFormat = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
+/// Longueur minimale du mot de passe, identique à la règle de l'API
+/// (`min:8` dans `AuthController`) : vérifiée dès l'étape 1 des wizards
+/// plutôt qu'au moment de l'envoi final.
+const int kMinPasswordLength = 8;
+
+bool isPasswordLongEnough(String value) => value.length >= kMinPasswordLength;
+
 /// Vrai si [value] ressemble à un email valide (`quelquechose@domaine.tld`).
 /// Une chaîne vide est considérée valide ici — le caractère obligatoire du
 /// champ est géré séparément (voir `_isStepOneValid`).
@@ -80,6 +87,8 @@ class _StepOneAccountState extends State<StepOneAccount> {
         widget.confirmPasswordController.text != widget.passwordController.text;
     final emailInvalid = widget.emailController.text.isNotEmpty &&
         !isPlausibleEmail(widget.emailController.text);
+    final passwordTooShort = widget.passwordController.text.isNotEmpty &&
+        !isPasswordLongEnough(widget.passwordController.text);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,6 +140,9 @@ class _StepOneAccountState extends State<StepOneAccount> {
           icon: Icons.lock_outline_rounded,
           controller: widget.passwordController,
           obscurable: true,
+          errorText: passwordTooShort
+              ? 'Au moins $kMinPasswordLength caractères'
+              : null,
         ),
         const SizedBox(height: 18),
 

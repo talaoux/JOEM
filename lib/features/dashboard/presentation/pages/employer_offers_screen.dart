@@ -11,6 +11,7 @@ import '../widgets/employer_offer_card.dart';
 import '../widgets/soft_ui.dart';
 import 'job_offer_publish_screen.dart';
 import 'offer_applicants_screen.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Liste complète des offres publiées par le recruteur connecté — ouverte
 /// via "Voir tout" de la section "Mes offres d'emploi" du `EmployerDashboard`.
@@ -25,7 +26,8 @@ class EmployerOffersScreen extends StatefulWidget {
   State<EmployerOffersScreen> createState() => _EmployerOffersScreenState();
 }
 
-class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
+class _EmployerOffersScreenState extends State<EmployerOffersScreen>
+    with LiveRefresh<EmployerOffersScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
   final AuthService _authService = AuthService();
 
@@ -39,6 +41,13 @@ class _EmployerOffersScreenState extends State<EmployerOffersScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 

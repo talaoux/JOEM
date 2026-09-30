@@ -18,6 +18,7 @@ import 'portfolio_screen.dart';
 import '../../../job_seeker_registration/presentation/widgets/step_four_daily_rate.dart' show WorkMode, WorkModeLabel;
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 class JobProfileScreen extends StatefulWidget {
   const JobProfileScreen({super.key});
@@ -26,7 +27,8 @@ class JobProfileScreen extends StatefulWidget {
   State<JobProfileScreen> createState() => _JobProfileScreenState();
 }
 
-class _JobProfileScreenState extends State<JobProfileScreen> {
+class _JobProfileScreenState extends State<JobProfileScreen>
+    with LiveRefresh<JobProfileScreen> {
   static const double _bannerHeight = 130;
   static const double _avatarOverflow = 45;
   static const double _avatarBoxSize = 98; // rayon 45 * 2 + padding 4 * 2
@@ -56,6 +58,15 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _loadApplicationsCount();
+    _loadProfileViewsCount();
+    _loadNotificationCount();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadApplicationsCount();
     _loadProfileViewsCount();
     _loadNotificationCount();
@@ -262,7 +273,9 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
-        thirdItemIcon: Icons.collections_bookmark_rounded,
+        notched: true,
+        secondItemIcon: Icons.grid_view_outlined,
+        thirdItemIcon: Icons.collections_bookmark_outlined,
         thirdItemLabel: 'Portfolio',
       ),
     );
@@ -757,7 +770,7 @@ class _JobProfileScreenState extends State<JobProfileScreen> {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.collections_bookmark_rounded,
+                Icons.collections_bookmark_outlined,
                 color: SoftUi.brandInk(colors),
                 size: 20,
               ),

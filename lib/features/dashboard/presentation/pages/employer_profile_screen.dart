@@ -13,6 +13,7 @@ import 'edit_employer_profile_screen.dart';
 import 'employer_notifications_screen.dart';
 import 'job_offer_publish_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Profil entreprise — équivalent recruteur de `JobProfileScreen`, mais le
 /// contenu tourne autour de l'entreprise (logo, description, coordonnées)
@@ -24,7 +25,8 @@ class EmployerProfileScreen extends StatefulWidget {
   State<EmployerProfileScreen> createState() => _EmployerProfileScreenState();
 }
 
-class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
+class _EmployerProfileScreenState extends State<EmployerProfileScreen>
+    with LiveRefresh<EmployerProfileScreen> {
   final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
@@ -46,6 +48,14 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNotificationCount();
+    _loadStats();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadNotificationCount();
     _loadStats();
   }
@@ -217,6 +227,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
+        notched: true,
       ),
     );
   }

@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/api_client.dart';
 import 'package:joem/core/services/auth_service.dart'
     show Certification, Formation, JobExperience, PortfolioProject, ProfessionalLink, User;
+import 'package:joem/features/dashboard/data/remote/account_search_api.dart';
 
 /// Type de recherche de compte — distingue les historiques recruteur
 /// (recherche de candidats) et candidat (recherche d'entreprises) dans
@@ -159,9 +161,23 @@ class ProfileViewer {
 class AccountSearchRepository {
   const AccountSearchRepository();
 
+  /// Version API de ce dépôt quand `API_BASE_URL` est fourni, `null` en
+  /// mode 100% local.
+  AccountSearchApi? get _api {
+    final client = ApiClient.shared;
+    return client == null ? null : AccountSearchApi(client);
+  }
+
+
   static const int _historyLimit = 8;
 
   Future<List<CandidateSearchResult>> searchJobSeekers(String query) async {
+    final api = _api;
+    if (api != null) {
+      if (query.trim().isEmpty) return [];
+      return api.searchJobSeekers(query.trim());
+    }
+
     final term = query.trim();
     if (term.isEmpty) return [];
 
@@ -186,6 +202,9 @@ class AccountSearchRepository {
   /// désormais l'ensemble des inscrits (les plus pertinents pour les offres
   /// du recruteur en tête, voir `EmployerDashboard._loadSuggestedCandidates`).
   Future<List<CandidateSearchResult>> fetchAllJobSeekers() {
+    final api = _api;
+    if (api != null) return api.searchJobSeekers('');
+
     return _fetchJobSeekers(whereClause: '', whereArgs: const []);
   }
 
@@ -197,6 +216,9 @@ class AccountSearchRepository {
   /// de le consulter. `null` si aucun compte réel ne correspond (comptes de
   /// démo, id négatif sans ligne `users`).
   Future<CandidateSearchResult?> fetchJobSeekerById(String userId) async {
+    final api = _api;
+    if (api != null) return api.fetchJobSeekerById(userId);
+
     final id = int.tryParse(userId);
     if (id == null) return null;
     final results = await _fetchJobSeekers(
@@ -339,6 +361,12 @@ class AccountSearchRepository {
   }
 
   Future<List<CompanySearchResult>> searchEmployers(String query) async {
+    final api = _api;
+    if (api != null) {
+      if (query.trim().isEmpty) return [];
+      return api.searchEmployers(query.trim());
+    }
+
     final term = query.trim();
     if (term.isEmpty) return [];
 
@@ -393,6 +421,9 @@ class AccountSearchRepository {
     required String userId,
     required String searchType,
   }) async {
+    final api = _api;
+    if (api != null) return api.fetchHistory(searchType);
+
     final db = await AppDatabase.instance.database;
     final rows = await db.query(
       'search_history',
@@ -414,6 +445,12 @@ class AccountSearchRepository {
     required String searchType,
     required String query,
   }) async {
+    final api = _api;
+    if (api != null) {
+      if (query.trim().isNotEmpty) await api.recordSearch(searchType, query.trim());
+      return;
+    }
+
     final term = query.trim();
     if (term.isEmpty) return;
 
@@ -436,6 +473,9 @@ class AccountSearchRepository {
     required String searchType,
     required String query,
   }) async {
+    final api = _api;
+    if (api != null) return api.removeHistoryEntry(searchType, query);
+
     final db = await AppDatabase.instance.database;
     await db.delete(
       'search_history',
@@ -451,6 +491,9 @@ class AccountSearchRepository {
     required String userId,
     required String searchType,
   }) async {
+    final api = _api;
+    if (api != null) return api.clearHistory(searchType);
+
     final db = await AppDatabase.instance.database;
     await db.delete(
       'search_history',
@@ -470,6 +513,12 @@ class AccountSearchRepository {
     required String profileUserId,
     required String viewerUserId,
   }) async {
+    final api = _api;
+    if (api != null) {
+      if (profileUserId != viewerUserId) await api.recordProfileView(profileUserId);
+      return;
+    }
+
     if (profileUserId == viewerUserId) return;
     final db = await AppDatabase.instance.database;
     await db.insert(
@@ -487,6 +536,9 @@ class AccountSearchRepository {
   /// [profileUserId] — compteur "N vues du profil" de `JobProfileScreen` et
   /// stat "Vues du profil" du panneau latéral candidat.
   Future<int> countProfileViews(String profileUserId) async {
+    final api = _api;
+    if (api != null) return api.countProfileViews();
+
     final db = await AppDatabase.instance.database;
     final result = await db.rawQuery(
       'SELECT COUNT(*) AS count FROM job_seeker_profile_views WHERE profile_user_id = ?',
@@ -498,6 +550,9 @@ class AccountSearchRepository {
   /// Recruteurs ayant consulté le profil de [profileUserId], la vue la plus
   /// récente en premier — page "Vues du profil" du panneau latéral candidat.
   Future<List<ProfileViewer>> fetchProfileViewers(String profileUserId) async {
+    final api = _api;
+    if (api != null) return api.fetchProfileViewers();
+
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''

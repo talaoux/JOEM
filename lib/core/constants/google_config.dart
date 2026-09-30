@@ -10,10 +10,12 @@
 /// signature précis. Remplacer la valeur ci-dessous par le "Client ID" du
 /// client web une fois créé sur https://console.cloud.google.com/apis/credentials.
 const String kGoogleServerClientId =
-    'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
+    '687326138839-c3sr5g8ap746v7pbdlm4815nuc23c12i.apps.googleusercontent.com';
 
 /// `false` tant que [kGoogleServerClientId] est le placeholder : les boutons
 /// "Continuer avec Google" (connexion, étape "Compte" des inscriptions) sont
 /// alors masqués plutôt que d'échouer à chaque tap. Ils réapparaissent
 /// automatiquement dès qu'un vrai Client ID est renseigné.
-bool get isGoogleSignInConfigured => !kGoogleServerClientId.startsWith('REMPLACE_MOI');
+bool get isGoogleSignInConfigured =>
+    !kGoogleServerClientId.startsWith('REMPLACE_MOI') &&
+    !kGoogleServerClientId.startsWith('YOUR_WEB_CLIENT_ID');

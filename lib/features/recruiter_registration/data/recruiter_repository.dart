@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/api_client.dart';
+import 'package:joem/core/network/server_registration.dart';
 import 'package:joem/core/utils/password_hasher.dart';
 import 'package:joem/features/job_seeker_registration/data/job_seeker_repository.dart'
     show EmailAlreadyUsedException;
@@ -19,10 +21,16 @@ class RecruiterRegistrationData {
     required this.description,
     required this.logoBytes,
     required this.categorieEntreprise,
+    this.googleIdToken,
   });
 
   final String email;
   final String password;
+
+  /// Jeton d'identité Google quand le compte est créé via "Continuer avec
+  /// Google" : le serveur en tire l'e-mail vérifié, et [password] n'est pas
+  /// envoyé (mode serveur uniquement).
+  final String? googleIdToken;
   final String nom;
   final String prenom;
   final String telephone;
@@ -49,7 +57,12 @@ class RecruiterRegistrationResult {
 class RecruiterRepository {
   const RecruiterRepository();
 
+  /// Avec `API_BASE_URL`, le compte est créé sur le serveur (voir
+  /// [registerOnServer]) : un refus du serveur remonte en [ApiException].
   Future<RecruiterRegistrationResult> register(RecruiterRegistrationData data) async {
+    final api = ApiClient.shared;
+    if (api != null) return _registerOnServer(api, data);
+
     final db = await AppDatabase.instance.database;
 
     final existing = await db.query(
@@ -84,6 +97,33 @@ class RecruiterRepository {
 
       return id;
     });
+
+    return RecruiterRegistrationResult(userId: userId, email: data.email);
+  }
+
+  Future<RecruiterRegistrationResult> _registerOnServer(ApiClient api, RecruiterRegistrationData data) async {
+    final userId = await registerOnServer(
+      api,
+      fields: {
+        'role': 'employer',
+        'email': data.email,
+        if (data.googleIdToken != null)
+          'google_id_token': data.googleIdToken
+        else ...{
+          'password': data.password,
+          // Le wizard a déjà vérifié la confirmation à l'étape "Compte".
+          'password_confirmation': data.password,
+        },
+        'nom': data.nom,
+        'prenom': data.prenom,
+        'telephone': blankToNull(data.telephone),
+        'localisation': blankToNull(data.localisation),
+        'nom_entreprise': data.nomEntreprise,
+        'description': blankToNull(data.description),
+        'categorie': data.categorieEntreprise,
+      },
+      photoBytes: data.logoBytes,
+    );
 
     return RecruiterRegistrationResult(userId: userId, email: data.email);
   }

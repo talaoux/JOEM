@@ -447,6 +447,7 @@ class _JobOfferPublishScreenState extends State<JobOfferPublishScreen> {
         notificationCount: _notificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
+        notched: true,
       ),
     );
   }

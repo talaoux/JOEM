@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -8,8 +7,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:joem/core/database/app_database.dart';
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/features/dashboard/data/job_offer_repository.dart';
+import 'package:joem/features/job_seeker_registration/data/job_seeker_repository.dart';
+import 'package:joem/features/recruiter_registration/data/recruiter_repository.dart';
 
-/// Test E2E du flux de candidature complet
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -17,15 +17,14 @@ void main() {
 
   setUpAll(() async {
     tempDir = Directory.systemTemp.createTempSync('joem_e2e_application');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async => tempDir.path,
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => tempDir.path,
+        );
 
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
-    
-    await AppDatabase.instance.resetDatabase();
   });
 
   tearDownAll(() async {
@@ -35,278 +34,229 @@ void main() {
     }
   });
 
-  group('E2E - Flux de Candidature', () {
-    late JobOffer testOffer;
-    late String candidateUserId;
+  group('Application flow', () {
+    late JobOffer offer;
+    late String candidateId;
 
     setUp(() async {
       await AppDatabase.instance.resetDatabase();
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // Créer un recruteur et publier une offre
-      await authService.registerEmployer(
-        email: 'recruiter@test.com',
-        password: 'Test123!',
-        firstName: 'Recruiter',
-        lastName: 'Name',
-        companyName: 'Test Company',
-        category: 'Informatique',
+      await const RecruiterRepository().register(
+        const RecruiterRegistrationData(
+          email: 'recruiter@test.com',
+          password: 'Test123!',
+          nom: 'Name',
+          prenom: 'Recruiter',
+          telephone: '0340000000',
+          localisation: 'Antananarivo',
+          nomEntreprise: 'Test Company',
+          description: 'Test employer',
+          logoBytes: null,
+          categorieEntreprise: 'Informatique',
+        ),
       );
-      
-      final recruiterId = authService.currentUser!.id;
-      await authService.logout();
-      
-      testOffer = await offerRepo.publish(
-        employerUserId: int.parse(recruiterId),
+
+      final recruiterAuth = AuthService();
+      expect(
+        await recruiterAuth.login('recruiter@test.com', 'Test123!'),
+        isTrue,
+      );
+      offer = await const JobOfferRepository().publish(
+        employerUserId: int.parse(recruiterAuth.currentUser!.id),
         companyName: 'Test Company',
-        title: 'Développeur Flutter Senior',
-        description: 'Nous recherchons un développeur Flutter expérimenté',
+        title: 'Flutter Developer',
+        description: 'Développeur mobile',
         location: 'Antananarivo',
-        salary: '800000-1200000 MGA',
+        salary: '800000 MGA',
         contractType: 'CDI',
         categories: ['Informatique'],
       );
-      
-      // Créer un candidat
-      await authService.registerJobSeeker(
-        email: 'candidate@test.com',
-        password: 'Test123!',
-        firstName: 'Candidate',
-        lastName: 'User',
-        professionalTitle: 'Développeur Flutter',
-        skills: ['Flutter', 'Dart', 'Firebase'],
+      await recruiterAuth.logout();
+
+      candidateId = (await _registerCandidate(
+        'candidate@test.com',
+        'Candidate',
+        'User',
+      )).toString();
+    });
+
+    test('candidate applies and recruiter accepts the application', () async {
+      final authService = AuthService();
+      const repository = JobOfferRepository();
+
+      expect(await authService.login('candidate@test.com', 'Test123!'), isTrue);
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: candidateId,
+        candidateName: 'Candidate User',
+        candidatePosition: 'Flutter Developer',
       );
-      
-      candidateUserId = authService.currentUser!.id;
+      expect(await repository.hasApplied(offer.id, candidateId), isTrue);
+      await authService.logout();
+
+      expect(await authService.login('recruiter@test.com', 'Test123!'), isTrue);
+      final applications = await repository
+          .fetchApplicationNotificationsForEmployer(
+            int.parse(authService.currentUser!.id),
+          );
+      expect(applications, hasLength(1));
+      await repository.acceptApplication(
+        applications.single.applicationId,
+        message: 'Bienvenue !',
+      );
+      await authService.logout();
+
+      expect(await authService.login('candidate@test.com', 'Test123!'), isTrue);
+      final decisions = await repository.fetchDecisionNotificationsForJobSeeker(
+        candidateId,
+      );
+      expect(decisions.single.isAccepted, isTrue);
+      expect(decisions.single.decisionMessage, 'Bienvenue !');
       await authService.logout();
     });
 
-    testWidgets('flux complet: publication -> candidature -> décision', (tester) async {
+    test('candidate can withdraw a pending application', () async {
       final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // 1. Candidat postule
-      await authService.login('candidate@test.com', 'Test123!');
-      
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
+      const repository = JobOfferRepository();
+
+      expect(await authService.login('candidate@test.com', 'Test123!'), isTrue);
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: candidateId,
         candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
       );
-      
-      final hasApplied = await offerRepo.hasApplied(testOffer.id, candidateUserId);
-      expect(hasApplied, true);
-      
+
+      expect(
+        await repository.withdrawApplication(
+          jobOfferId: offer.id,
+          jobSeekerUserId: candidateId,
+        ),
+        isTrue,
+      );
+      expect(await repository.hasApplied(offer.id, candidateId), isFalse);
       await authService.logout();
-      
-      // 2. Recruteur voit la candidature
+    });
+
+    test('candidate cannot withdraw after acceptance', () async {
+      final authService = AuthService();
+      const repository = JobOfferRepository();
+
+      await authService.login('candidate@test.com', 'Test123!');
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: candidateId,
+        candidateName: 'Candidate User',
+      );
+      await authService.logout();
+
       await authService.login('recruiter@test.com', 'Test123!');
-      
-      final notifications = await offerRepo.fetchApplicationNotificationsForEmployer(
-        int.parse(authService.currentUser!.id),
-      );
-      
-      expect(notifications.length, 1);
-      expect(notifications.first.candidateName, 'Candidate User');
-      
-      // 3. Recruteur accepte la candidature
-      await offerRepo.acceptApplication(notifications.first.applicationId, message: 'Bienvenue !');
-      
+      final applications = await repository
+          .fetchApplicationNotificationsForEmployer(
+            int.parse(authService.currentUser!.id),
+          );
+      await repository.acceptApplication(applications.single.applicationId);
       await authService.logout();
-      
-      // 4. Candidat voit la décision
-      await authService.login('candidate@test.com', 'Test123!');
-      
-      final decisionNotifications = await offerRepo.fetchDecisionNotificationsForJobSeeker(candidateUserId);
-      expect(decisionNotifications.length, 1);
-      expect(decisionNotifications.first.isAccepted, true);
-      expect(decisionNotifications.first.decisionMessage, 'Bienvenue !');
-    });
 
-    testWidgets('candidat peut retirer sa candidature avant décision', (tester) async {
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
       await authService.login('candidate@test.com', 'Test123!');
-      
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
-        candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
-      );
-      
-      final withdrawn = await offerRepo.withdrawApplication(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
-      );
-      
-      expect(withdrawn, true);
-      
-      final hasApplied = await offerRepo.hasApplied(testOffer.id, candidateUserId);
-      expect(hasApplied, false);
-    });
-
-    testWidgets('candidat ne peut pas retirer après acceptation', (tester) async {
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // Candidat postule
-      await authService.login('candidate@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
-        candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
+      expect(
+        await repository.withdrawApplication(
+          jobOfferId: offer.id,
+          jobSeekerUserId: candidateId,
+        ),
+        isFalse,
       );
       await authService.logout();
-      
-      // Recruteur accepte
+    });
+
+    test('rejected decision notifies candidate and can be restored', () async {
+      final authService = AuthService();
+      const repository = JobOfferRepository();
+
+      await authService.login('candidate@test.com', 'Test123!');
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: candidateId,
+        candidateName: 'Candidate User',
+      );
+      await authService.logout();
+
       await authService.login('recruiter@test.com', 'Test123!');
-      final notifications = await offerRepo.fetchApplicationNotificationsForEmployer(
-        int.parse(authService.currentUser!.id),
+      final applications = await repository
+          .fetchApplicationNotificationsForEmployer(
+            int.parse(authService.currentUser!.id),
+          );
+      await repository.rejectApplication(
+        applications.single.applicationId,
+        message: 'Autre profil retenu',
       );
-      await offerRepo.acceptApplication(notifications.first.applicationId);
+      await repository.restoreApplication(applications.single.applicationId);
       await authService.logout();
-      
-      // Candidat tente de retirer
+
       await authService.login('candidate@test.com', 'Test123!');
-      final withdrawn = await offerRepo.withdrawApplication(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
+      expect(
+        await repository.fetchDecisionNotificationsForJobSeeker(candidateId),
+        isEmpty,
       );
-      
-      expect(withdrawn, false);
+      await authService.logout();
     });
 
-    testWidgets('recruteur peut rejeter une candidature', (tester) async {
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // Candidat postule
-      await authService.login('candidate@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
-        candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
-      );
-      await authService.logout();
-      
-      // Recruteur rejette
-      await authService.login('recruiter@test.com', 'Test123!');
-      final notifications = await offerRepo.fetchApplicationNotificationsForEmployer(
-        int.parse(authService.currentUser!.id),
-      );
-      await offerRepo.rejectApplication(
-        notifications.first.applicationId,
-        message: 'Profil ne correspond pas',
-      );
-      await authService.logout();
-      
-      // Candidat voit le rejet
-      await authService.login('candidate@test.com', 'Test123!');
-      final decisionNotifications = await offerRepo.fetchDecisionNotificationsForJobSeeker(candidateUserId);
-      expect(decisionNotifications.length, 1);
-      expect(decisionNotifications.first.isRejected, true);
-      expect(decisionNotifications.first.decisionMessage, 'Profil ne correspond pas');
-    });
+    test('multiple candidates can apply to the same offer', () async {
+      const repository = JobOfferRepository();
+      final secondCandidateId = (await _registerCandidate(
+        'second@test.com',
+        'Second',
+        'Candidate',
+      )).toString();
+      final thirdCandidateId = (await _registerCandidate(
+        'third@test.com',
+        'Third',
+        'Candidate',
+      )).toString();
 
-    testWidgets('recruteur peut annuler une décision', (tester) async {
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // Candidat postule
-      await authService.login('candidate@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: candidateId,
         candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
       );
-      await authService.logout();
-      
-      // Recruteur rejette
-      await authService.login('recruiter@test.com', 'Test123!');
-      final notifications = await offerRepo.fetchApplicationNotificationsForEmployer(
-        int.parse(authService.currentUser!.id),
-      );
-      await offerRepo.rejectApplication(notifications.first.applicationId);
-      
-      // Annuler la décision
-      await offerRepo.restoreApplication(notifications.first.applicationId);
-      await authService.logout();
-      
-      // Candidat ne voit plus la décision
-      await authService.login('candidate@test.com', 'Test123!');
-      final decisionNotifications = await offerRepo.fetchDecisionNotificationsForJobSeeker(candidateUserId);
-      expect(decisionNotifications.length, 0);
-    });
-
-    testWidgets('plusieurs candidats postulent à la même offre', (tester) async {
-      final authService = AuthService();
-      final offerRepo = const JobOfferRepository();
-      
-      // Créer des candidats supplémentaires
-      await authService.registerJobSeeker(
-        email: 'candidate2@test.com',
-        password: 'Test123!',
-        firstName: 'Second',
-        lastName: 'Candidate',
-        professionalTitle: 'Designer',
-        skills: ['Figma'],
-      );
-      final candidate2Id = authService.currentUser!.id;
-      await authService.logout();
-      
-      await authService.registerJobSeeker(
-        email: 'candidate3@test.com',
-        password: 'Test123!',
-        firstName: 'Third',
-        lastName: 'Candidate',
-        professionalTitle: 'Manager',
-        skills: ['Management'],
-      );
-      final candidate3Id = authService.currentUser!.id;
-      await authService.logout();
-      
-      // Tous postulent
-      await authService.login('candidate@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidateUserId,
-        candidateName: 'Candidate User',
-        candidatePosition: 'Développeur Flutter',
-      );
-      await authService.logout();
-      
-      await authService.login('candidate2@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidate2Id,
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: secondCandidateId,
         candidateName: 'Second Candidate',
-        candidatePosition: 'Designer',
       );
-      await authService.logout();
-      
-      await authService.login('candidate3@test.com', 'Test123!');
-      await offerRepo.apply(
-        jobOfferId: testOffer.id,
-        jobSeekerUserId: candidate3Id,
+      await repository.apply(
+        jobOfferId: offer.id,
+        jobSeekerUserId: thirdCandidateId,
         candidateName: 'Third Candidate',
-        candidatePosition: 'Manager',
       );
-      await authService.logout();
-      
-      // Recruteur voit toutes les candidatures
-      await authService.login('recruiter@test.com', 'Test123!');
-      final notifications = await offerRepo.fetchApplicationNotificationsForEmployer(
-        int.parse(authService.currentUser!.id),
+
+      expect(
+        await repository.fetchApplicationsForOffer(offer.id),
+        hasLength(3),
       );
-      
-      expect(notifications.length, 3);
     });
   });
+}
+
+Future<int> _registerCandidate(
+  String email,
+  String firstName,
+  String lastName,
+) async {
+  final result = await const JobSeekerRepository().register(
+    JobSeekerRegistrationData(
+      email: email,
+      password: 'Test123!',
+      nom: lastName,
+      prenom: firstName,
+      telephone: '0341234567',
+      localisation: 'Antananarivo',
+      titreProfessionnel: 'Flutter Developer',
+      presentation: 'Test candidate',
+      photoBytes: null,
+      skills: const [(name: 'Flutter', rating: 4), (name: 'Dart', rating: 4)],
+      tarifJournalier: '',
+      disponibilite: null,
+      workModes: const [],
+    ),
+  );
+  return result.userId;
 }

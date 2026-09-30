@@ -7,6 +7,7 @@ import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Liste des candidats ayant postulé à une offre précise — ouverte en
 /// tapant sur une carte de "Mes offres d'emploi" (`EmployerDashboard` ou
@@ -22,7 +23,8 @@ class OfferApplicantsScreen extends StatefulWidget {
   State<OfferApplicantsScreen> createState() => _OfferApplicantsScreenState();
 }
 
-class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
+class _OfferApplicantsScreenState extends State<OfferApplicantsScreen>
+    with LiveRefresh<OfferApplicantsScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
 
   List<JobApplicationNotification> _applications = [];
@@ -33,6 +35,13 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 

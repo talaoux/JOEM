@@ -14,6 +14,7 @@ import 'job_offer_detail_screen.dart';
 import 'job_profile_screen.dart';
 import 'portfolio_screen.dart';
 import '../widgets/soft_ui.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Notifications du chercheur d'emploi. Trois sources réelles, fusionnées et
 /// triées par date décroissante :
@@ -34,7 +35,8 @@ class JobNotificationsScreen extends StatefulWidget {
   State<JobNotificationsScreen> createState() => _JobNotificationsScreenState();
 }
 
-class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
+class _JobNotificationsScreenState extends State<JobNotificationsScreen>
+    with LiveRefresh<JobNotificationsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
@@ -56,15 +58,25 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
     _loadNavNotificationCount();
   }
 
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
+    _loadNotifications();
+    _loadNavNotificationCount();
+  }
+
   Future<void> _loadNavNotificationCount() async {
     final userId = _jobSeekerUserId;
     if (userId == null) return;
     final offersMuted = _authService.currentUser?.notificationsEnabled == false;
-    final offerCount = offersMuted ? 0 : await _repository.countUnreadNotificationsForJobSeeker(userId);
-    final interviewCount = await _interviewRepository.countUnreadNotificationsForJobSeeker(userId);
-    final decisionCount = await _repository.countUnreadDecisionNotificationsForJobSeeker(userId);
+    final counts = await Future.wait([
+      offersMuted ? Future.value(0) : _repository.countUnreadNotificationsForJobSeeker(userId),
+      _interviewRepository.countUnreadNotificationsForJobSeeker(userId),
+      _repository.countUnreadDecisionNotificationsForJobSeeker(userId),
+    ]);
     if (!mounted) return;
-    setState(() => _navNotificationCount = offerCount + interviewCount + decisionCount);
+    setState(() => _navNotificationCount = counts.fold(0, (sum, count) => sum + count));
   }
 
   /// Navigation de la barre basse : remplace l'écran courant par l'écran
@@ -97,9 +109,13 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
       setState(() => _loading = false);
       return;
     }
-    final offers = await _repository.fetchNotificationsForJobSeeker(userId);
-    final interviews = await _interviewRepository.fetchNotificationsForJobSeeker(userId);
-    final decisions = await _repository.fetchDecisionNotificationsForJobSeeker(userId);
+    // En parallèle : avec l'API, chaque liste attend le serveur (et les
+    // logos des entreprises), les enchaîner additionnait les délais.
+    final (offers, interviews, decisions) = await (
+      _repository.fetchNotificationsForJobSeeker(userId),
+      _interviewRepository.fetchNotificationsForJobSeeker(userId),
+      _repository.fetchDecisionNotificationsForJobSeeker(userId),
+    ).wait;
 
     final items = <_NotifItem>[
       ...offers.map(_NotifItem.offer),
@@ -300,7 +316,9 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
         notificationCount: _navNotificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
-        thirdItemIcon: Icons.collections_bookmark_rounded,
+        notched: true,
+        secondItemIcon: Icons.grid_view_outlined,
+        thirdItemIcon: Icons.collections_bookmark_outlined,
         thirdItemLabel: 'Portfolio',
       ),
     );
@@ -340,8 +358,18 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen> {
                     accent = accepted ? const Color(0xFF0F8A6E) : const Color(0xFF64748B);
                     icon = accepted ? Icons.verified_rounded : Icons.do_not_disturb_on_outlined;
                   } else if (item.isInterview) {
-                    accent = item.interview!.isModified ? const Color(0xFFB45309) : const Color(0xFFC2780E);
-                    icon = item.interview!.isModified ? Icons.edit_calendar_rounded : Icons.event_available_rounded;
+                    // L'entreprise qui propose l'entretien se reconnaît à son logo.
+                    final interview = item.interview!;
+                    if ((interview.companyName?.trim() ?? '').isNotEmpty || interview.companyLogo != null) {
+                      return SoftAvatar(
+                        name: interview.companyName ?? '',
+                        size: 44,
+                        icon: Icons.business_rounded,
+                        photo: interview.companyLogo != null ? MemoryImage(interview.companyLogo!) : null,
+                      );
+                    }
+                    accent = interview.isModified ? const Color(0xFFB45309) : const Color(0xFFC2780E);
+                    icon = interview.isModified ? Icons.edit_calendar_rounded : Icons.event_available_rounded;
                   } else {
                     accent = DashboardColors.accentStrong;
                     icon = Icons.campaign_rounded;
@@ -494,11 +522,13 @@ class _NotifItem {
     if (!isInterview) return offerNotif!.message;
     final offer = interview!.offerTitle.trim();
     final forPost = offer.isNotEmpty ? ' pour le poste "$offer"' : '';
+    final company = interview!.companyName?.trim() ?? '';
+    final who = company.isNotEmpty ? company : 'Une entreprise';
     return interview!.isModified
-        ? 'Une entreprise a modifié les informations de votre entretien$forPost — vérifiez la nouvelle date, l\'heure et le lieu.'
+        ? '$who a modifié les informations de votre entretien$forPost — vérifiez la nouvelle date, l\'heure et le lieu.'
         : (offer.isNotEmpty
-              ? 'Une entreprise souhaite vous rencontrer$forPost.'
-              : 'Une entreprise souhaite vous rencontrer en entretien.');
+              ? '$who souhaite vous rencontrer$forPost.'
+              : '$who souhaite vous rencontrer en entretien.');
   }
 
   String get timeLabel {

@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -16,6 +17,18 @@ plugins {
     // La valeur reçue peut déjà contenir `\\` : toute suite de `\` devient un seul `/`.
     if (target.contains('\\')) extra["target"] = target.replace(Regex("""\\+"""), "/")
 }
+
+// HTTP non chiffré : Android le bloque par défaut en release. On ne
+// l'autorise que si l'API donnée au build est en `http://` (PC du réseau
+// local, voir `lib/core/network/api_config.dart`) ; une API en `https://` ou
+// l'absence d'API garde le blocage. Flutter transmet les `--dart-define` à
+// Gradle en Base64, séparés par des virgules.
+val apiBaseUrl = (findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.map { String(Base64.getDecoder().decode(it)) }
+    ?.firstOrNull { it.startsWith("API_BASE_URL=") }
+    ?.substringAfter("=")
+val allowCleartextHttp = apiBaseUrl?.startsWith("http://") == true
 
 android {
     namespace = "mg.joem.app"
@@ -37,6 +50,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["usesCleartextTraffic"] = allowCleartextHttp.toString()
     }
 
     // Signature de production : lue depuis `android/key.properties` (exclu de
@@ -65,6 +79,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Toujours autorisé en debug (flutter run vers un PC local).
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }

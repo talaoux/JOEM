@@ -8,6 +8,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Détail complet d'une offre publiée par un recruteur (`job_offers`) —
 /// accessible depuis la liste "Recommandées pour vous" du dashboard
@@ -21,7 +22,8 @@ class JobOfferDetailScreen extends StatefulWidget {
   State<JobOfferDetailScreen> createState() => _JobOfferDetailScreenState();
 }
 
-class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
+class _JobOfferDetailScreenState extends State<JobOfferDetailScreen>
+    with LiveRefresh<JobOfferDetailScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
   final AuthService _authService = AuthService();
 
@@ -50,6 +52,14 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen> {
     super.initState();
     _loadApplicationStatus();
     _recordView();
+    _loadCategories();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
+    _loadApplicationStatus();
     _loadCategories();
   }
 

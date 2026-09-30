@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:joem/core/network/api_client.dart';
 import 'package:joem/core/services/auth_service.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
@@ -43,11 +44,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
+    // Le serveur exige 8 caractères (contrat §2) ; la base locale, 6.
+    final usesServer = ApiClient.shared != null;
+    final minLength = usesServer ? 8 : 6;
     setState(() {
       _currentPasswordError =
           currentPassword.isEmpty ? 'Renseignez votre mot de passe actuel' : null;
-      _newPasswordError = newPassword.length < 6
-          ? 'Le nouveau mot de passe doit contenir au moins 6 caractères'
+      _newPasswordError = newPassword.length < minLength
+          ? 'Le nouveau mot de passe doit contenir au moins $minLength caractères'
           : (newPassword != confirmPassword
               ? 'Les deux mots de passe ne correspondent pas'
               : null);
@@ -55,6 +59,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (_currentPasswordError != null || _newPasswordError != null) return;
 
     setState(() => _isSubmitting = true);
+
+    if (usesServer) {
+      await _changePasswordOnServer(currentPassword, newPassword);
+      return;
+    }
 
     final isCurrentPasswordValid = await _authService.verifyCurrentPassword(currentPassword);
     if (!isCurrentPasswordValid) {
@@ -81,6 +90,32 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         _currentPasswordError = 'Les comptes de démonstration ne peuvent pas changer de mot de passe';
       });
     }
+  }
+
+  /// Compte serveur : `PATCH /auth/password` vérifie l'ancien mot de passe
+  /// et déconnecte les autres appareils.
+  Future<void> _changePasswordOnServer(String currentPassword, String newPassword) async {
+    try {
+      await _authService.changePassword(currentPassword: currentPassword, newPassword: newPassword);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _currentPasswordError = error.firstErrorFor('current_password');
+        _newPasswordError = error.firstErrorFor('password');
+      });
+      if (_currentPasswordError == null && _newPasswordError == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.displayMessage)));
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Mot de passe mis à jour.')),
+    );
+    Navigator.pop(context);
   }
 
   @override

@@ -1,6 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart' show ConflictAlgorithm;
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/account_api.dart';
+import 'package:joem/core/network/api_client.dart';
+import 'package:joem/core/network/live_updates.dart';
+import 'package:joem/core/network/local_account_mirror.dart';
+import 'package:joem/core/network/server_registration.dart' show blankToNull;
 import 'package:joem/core/services/display_preferences_controller.dart';
 import 'package:joem/core/services/google_auth_service.dart';
 import 'package:joem/core/utils/cv_storage.dart';
@@ -570,8 +576,17 @@ class AuthService extends ChangeNotifier {
   /// Comptes de démo, disponibles UNIQUEMENT en mode debug (développement
   /// et tests) : dans un build release, [_demoAccounts] est vide et ces
   /// identifiants ne permettent pas de se connecter.
+  ///
+  /// Désactivés aussi quand l'application parle à l'API (`API_BASE_URL`) :
+  /// ils n'existent pas sur le serveur (contrat §2).
   static Map<String, Map<String, dynamic>> get _demoAccounts =>
-      kDebugMode ? _debugDemoAccounts : const {};
+      kDebugMode && ApiClient.shared == null ? _debugDemoAccounts : const {};
+
+  /// Message des fonctions de compte pas encore disponibles côté serveur.
+  static const ApiException _unavailableWithServer = ApiException(
+    statusCode: 501,
+    message: 'Cette fonction n\'est pas encore disponible avec le serveur JOEM.',
+  );
 
   static final Map<String, Map<String, dynamic>> _debugDemoAccounts = {
     'employeur@gmail.com': {
@@ -609,6 +624,16 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final api = ApiClient.shared;
+      if (api != null) {
+        final apiUser = await _loginWithApi(api, email, password);
+        if (apiUser == null) return false;
+        _currentUser = apiUser;
+        _syncDisplayPreferences();
+        await _persistSession(apiUser.email);
+        return true;
+      }
+
       // Simuler un délai réseau
       await Future.delayed(const Duration(seconds: 1));
 
@@ -647,6 +672,9 @@ class AuthService extends ChangeNotifier {
   Future<bool> restoreSession() async {
     if (_currentUser != null) return true;
 
+    final api = ApiClient.shared;
+    if (api != null) return _restoreApiSession(api);
+
     final db = await AppDatabase.instance.database;
     final sessionRows = await db.query('session', limit: 1);
     if (sessionRows.isEmpty) return false;
@@ -684,6 +712,59 @@ class AuthService extends ChangeNotifier {
       isLargeText: user?.largeTextEnabled ?? false,
       reducedAnimations: user?.reducedAnimationsEnabled ?? false,
     );
+  }
+
+  /// Connexion par l'API : `null` si les identifiants sont refusés (422).
+  /// Le compte serveur est recopié dans SQLite (voir [LocalAccountMirror])
+  /// pour que les écrans encore locaux le retrouvent par son id.
+  Future<User?> _loginWithApi(ApiClient api, String email, String password) async {
+    final account = AccountApi(api);
+    try {
+      await account.login(email, password);
+    } on ApiException catch (error) {
+      if (error.isValidationError) return null;
+      rethrow;
+    }
+    return _mirrorServerAccount(api);
+  }
+
+  /// Au démarrage, en mode API : le jeton enregistré est vérifié par
+  /// `GET /profile`. Refusé (401) : session terminée. Serveur injoignable :
+  /// on rouvre le dernier compte connu sur ce téléphone, pour que l'app
+  /// reste utilisable hors ligne.
+  Future<bool> _restoreApiSession(ApiClient api) async {
+    if (await api.token == null) {
+      await _clearPersistedSession();
+      return false;
+    }
+
+    User? user;
+    try {
+      user = await _mirrorServerAccount(api);
+    } on ApiException catch (error) {
+      if (error.isUnauthorized) {
+        await api.clearToken();
+        await _clearPersistedSession();
+        return false;
+      }
+      if (!error.isNetworkError) rethrow;
+      final db = await AppDatabase.instance.database;
+      final sessionRows = await db.query('session', limit: 1);
+      if (sessionRows.isNotEmpty) user = await _loadUserByEmail(sessionRows.first['email'] as String);
+    }
+
+    if (user == null) return false;
+    _currentUser = user;
+    _syncDisplayPreferences();
+    await _persistSession(user.email);
+    notifyListeners();
+    return true;
+  }
+
+  Future<User?> _mirrorServerAccount(ApiClient api) async {
+    final profile = await AccountApi(api).profile();
+    await const LocalAccountMirror().save(profile, client: api);
+    return _loadUserByEmail(profile['email'] as String);
   }
 
   Future<void> _persistSession(String email) async {
@@ -900,6 +981,32 @@ class AuthService extends ChangeNotifier {
     final account = await GoogleAuthService.instance.signIn();
     if (account == null) return null;
 
+    // Avec le serveur, seul le jeton signé par Google est envoyé : c'est le
+    // serveur qui le vérifie et retrouve le compte (jamais l'e-mail seul).
+    final api = ApiClient.shared;
+    if (api != null) {
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw const ApiException(
+          statusCode: 422,
+          message: 'Google n\'a pas fourni de jeton de connexion. Réessayez.',
+        );
+      }
+      try {
+        await AccountApi(api).loginWithGoogle(idToken);
+      } on ApiException catch (error) {
+        if (error.statusCode == 404) return false;
+        rethrow;
+      }
+      final apiUser = await _mirrorServerAccount(api);
+      if (apiUser == null) return false;
+      _currentUser = apiUser;
+      _syncDisplayPreferences();
+      notifyListeners();
+      await _persistSession(apiUser.email);
+      return true;
+    }
+
     final user = await _loadUserByEmail(account.email);
     if (user == null) return false;
 
@@ -915,7 +1022,13 @@ class AuthService extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 500));
+    final api = ApiClient.shared;
+    if (api != null) {
+      await AccountApi(api).logout();
+      LiveUpdates.instance.reset();
+    } else {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     _currentUser = null;
     DisplayPreferencesController.instance.reset();
@@ -931,10 +1044,37 @@ class AuthService extends ChangeNotifier {
   /// (via un wizard) ne correspond — les comptes de démo codés en dur
   /// (`_demoAccounts`, aucune ligne dans `users`) ne sont volontairement
   /// pas concernés, leur mot de passe reste celui du code.
+  /// Mode serveur, étape 1 de "Mot de passe oublié" : le serveur envoie un
+  /// code à 6 chiffres à [email] (s'il correspond à un compte).
+  Future<void> requestPasswordResetCode(String email) =>
+      AccountApi(_requireApi()).requestPasswordResetCode(email.trim());
+
+  /// Mode serveur, étape 2 : nouveau mot de passe avec le code reçu. Lève
+  /// [ApiException] si le code est faux ou expiré.
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) =>
+      AccountApi(_requireApi()).resetPasswordWithCode(
+        email: email.trim(),
+        code: code.trim(),
+        newPassword: newPassword,
+      );
+
+  ApiClient _requireApi() {
+    final api = ApiClient.shared;
+    if (api == null) throw StateError('Aucun serveur JOEM configuré (API_BASE_URL).');
+    return api;
+  }
+
   Future<bool> resetPassword({
     required String email,
     required String newPassword,
   }) async {
+    // Avec le serveur : code par e-mail, voir [requestPasswordResetCode].
+    if (ApiClient.shared != null) throw _unavailableWithServer;
+
     final db = await AppDatabase.instance.database;
     final trimmedEmail = email.trim();
     final rows = await db.query(
@@ -987,6 +1127,7 @@ class AuthService extends ChangeNotifier {
         whereArgs: [userId],
       );
     }
+    await _syncToServer('photo', (account) => account.uploadPhoto(photoBytes));
   }
 
   /// Change la photo de couverture (bannière) de l'utilisateur connecté et
@@ -1020,6 +1161,7 @@ class AuthService extends ChangeNotifier {
         whereArgs: [userId],
       );
     }
+    await _syncToServer('bannière', (account) => account.uploadCover(coverPhotoBytes));
   }
 
   /// Change le CV (PDF ou image) du chercheur d'emploi connecté et le
@@ -1044,6 +1186,7 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('CV', (account) => account.uploadCv(cvBytes, cvFileName));
   }
 
   /// Supprime le CV du chercheur d'emploi connecté — fichier sur le disque
@@ -1068,6 +1211,7 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('suppression du CV', (account) => account.deleteCv());
   }
 
   /// Change la préférence "Profil visible par les recruteurs" du candidat
@@ -1116,6 +1260,8 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    // Les colonnes locales portent les mêmes noms que les champs de l'API.
+    await _syncToServer(column, (account) => account.updateProfile({column: value}));
   }
 
   /// Change la préférence "Recevoir des notifications de nouvelles offres"
@@ -1210,6 +1356,7 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('mode_nuit', (account) => account.updateProfile({'mode_nuit': enabled}));
   }
 
   /// Change "Texte agrandi" de l'utilisateur connecté (candidat ou
@@ -1234,6 +1381,7 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('texte_agrandi', (account) => account.updateProfile({'texte_agrandi': enabled}));
   }
 
   /// Change "Réduire les animations" de l'utilisateur connecté (candidat ou
@@ -1259,6 +1407,7 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('animations_reduites', (account) => account.updateProfile({'animations_reduites': enabled}));
   }
 
   /// Met à jour les champs du profil chercheur d'emploi modifiables depuis
@@ -1348,6 +1497,32 @@ class AuthService extends ChangeNotifier {
     for (final mode in workModes) {
       await db.insert('job_seeker_work_modes', {'user_id': userId, 'work_mode': mode});
     }
+
+    await _syncToServer('profil', (account) async {
+      // L'écran ne modifie que les noms des compétences : on garde la note
+      // déjà connue du serveur (1 à 5) pour celles qui existaient.
+      final current = await account.profile();
+      final ratings = {
+        for (final skill in (current['skills'] as List? ?? const []).cast<Map<String, dynamic>>())
+          skill['name'] as String: skill['rating'] as int,
+      };
+      final title = position?.trim() ?? '';
+      await account.updateProfile({
+        'nom': lastName,
+        'prenom': firstName,
+        if (title.isNotEmpty) 'titre_professionnel': title,
+        'telephone': blankToNull(telephone),
+        'localisation': blankToNull(localisation),
+        'presentation': blankToNull(presentation),
+        'objectifs': blankToNull(objectifs),
+        'tarif_journalier': blankToNull(tarifJournalier),
+        'disponibilite': blankToNull(disponibilite),
+        'skills': [
+          for (final skill in skills.toSet()) {'name': skill, 'rating': ratings[skill] ?? 1},
+        ],
+        'work_modes': workModes.toSet().toList(),
+      });
+    });
   }
 
   /// Met à jour les champs du profil recruteur modifiables depuis l'écran
@@ -1417,6 +1592,17 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+
+    final company = companyName?.trim() ?? '';
+    await _syncToServer('profil', (account) => account.updateProfile({
+          'nom': lastName,
+          'prenom': firstName,
+          if (company.isNotEmpty) 'nom_entreprise': company,
+          if (categorieEntreprise != null && categorieEntreprise.isNotEmpty) 'categorie': categorieEntreprise,
+          'telephone': blankToNull(telephone),
+          'localisation': blankToNull(localisation),
+          'description': blankToNull(presentation),
+        }));
   }
 
   /// Ajoute une expérience professionnelle au profil connecté, saisie
@@ -1434,11 +1620,22 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
+    final created = await _createOnServer('/portfolio/experiences', {
+      'poste': poste,
+      'entreprise': entreprise,
+      'date_debut': dateDebut,
+      'date_fin': blankToNull(dateFin),
+      'en_cours': enCours,
+      'description': blankToNull(description),
+    });
+    if (created != null) dateFin = created['date_fin'] as String?;
+
     int? id;
     final userId = int.tryParse(user.id);
     if (userId != null && userId > 0) {
       final db = await AppDatabase.instance.database;
       id = await db.insert('job_seeker_experiences', {
+        'id': ?created?['id'],
         'user_id': userId,
         'poste': poste,
         'entreprise': entreprise,
@@ -1446,7 +1643,7 @@ class AuthService extends ChangeNotifier {
         'date_fin': dateFin,
         'en_cours': enCours ? 1 : 0,
         'description': description,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     final experience = JobExperience(
@@ -1470,6 +1667,7 @@ class AuthService extends ChangeNotifier {
     if (index < 0 || index >= user.experiences.length) return;
 
     final experience = user.experiences[index];
+    await _deleteOnServer('/portfolio/experiences', experience.id);
     final updated = List<JobExperience>.from(user.experiences)..removeAt(index);
     _currentUser = user.copyWith(experiences: updated);
     notifyListeners();
@@ -1498,6 +1696,24 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
+    final created = await _createOnServer('/portfolio/projects', {
+      'title': title,
+      'description': blankToNull(description),
+      'link': blankToNull(link),
+      'role': blankToNull(role),
+      'technologies': technologies,
+      'features': features,
+      'github_link': blankToNull(githubLink),
+      'demo_link': blankToNull(demoLink),
+    });
+    if (created != null) {
+      if (imageBytes != null) await _uploadToServer('/portfolio/projects/${created['id']}/image', imageBytes, 'projet.jpg');
+      // Le serveur complète les liens sans schéma (https://).
+      link = created['link'] as String?;
+      githubLink = created['github_link'] as String?;
+      demoLink = created['demo_link'] as String?;
+    }
+
     final createdAt = DateTime.now();
     final technologiesText = technologies.isEmpty ? null : technologies.join(',');
     final featuresText = features.isEmpty ? null : features.join('\n');
@@ -1506,6 +1722,7 @@ class AuthService extends ChangeNotifier {
     if (userId != null && userId > 0) {
       final db = await AppDatabase.instance.database;
       id = await db.insert('job_seeker_portfolio_projects', {
+        'id': ?created?['id'],
         'user_id': userId,
         'title': title,
         'description': description,
@@ -1517,7 +1734,7 @@ class AuthService extends ChangeNotifier {
         'features': featuresText,
         'github_link': githubLink,
         'demo_link': demoLink,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     final project = PortfolioProject(
@@ -1547,6 +1764,7 @@ class AuthService extends ChangeNotifier {
     if (index < 0 || index >= user.portfolioProjects.length) return;
 
     final project = user.portfolioProjects[index];
+    await _deleteOnServer('/portfolio/projects', project.id);
     final updated = List<PortfolioProject>.from(user.portfolioProjects)..removeAt(index);
     _currentUser = user.copyWith(portfolioProjects: updated);
     notifyListeners();
@@ -1574,17 +1792,25 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
+    final created = await _createOnServer('/portfolio/formations', {
+      'etablissement': etablissement,
+      'filiere': blankToNull(filiere),
+      'date_debut': dateDebut,
+      'date_fin': blankToNull(dateFin),
+    });
+
     int? id;
     final userId = int.tryParse(user.id);
     if (userId != null && userId > 0) {
       final db = await AppDatabase.instance.database;
       id = await db.insert('job_seeker_formations', {
+        'id': ?created?['id'],
         'user_id': userId,
         'etablissement': etablissement,
         'filiere': filiere,
         'date_debut': dateDebut,
         'date_fin': dateFin,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     final formation = Formation(
@@ -1606,6 +1832,7 @@ class AuthService extends ChangeNotifier {
     if (index < 0 || index >= user.formations.length) return;
 
     final formation = user.formations[index];
+    await _deleteOnServer('/portfolio/formations', formation.id);
     final updated = List<Formation>.from(user.formations)..removeAt(index);
     _currentUser = user.copyWith(formations: updated);
     notifyListeners();
@@ -1630,18 +1857,32 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
+    final created = await _createOnServer('/portfolio/certifications', {
+      'name': name,
+      'organism': blankToNull(organism),
+      'date': blankToNull(date),
+      'verification_link': blankToNull(verificationLink),
+    });
+    if (created != null) {
+      if (imageBytes != null) {
+        await _uploadToServer('/portfolio/certifications/${created['id']}/image', imageBytes, 'certification.jpg');
+      }
+      verificationLink = created['verification_link'] as String?;
+    }
+
     int? id;
     final userId = int.tryParse(user.id);
     if (userId != null && userId > 0) {
       final db = await AppDatabase.instance.database;
       id = await db.insert('job_seeker_certifications', {
+        'id': ?created?['id'],
         'user_id': userId,
         'name': name,
         'organism': organism,
         'date': date,
         'image': imageBytes,
         'verification_link': verificationLink,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     final certification = Certification(
@@ -1664,6 +1905,7 @@ class AuthService extends ChangeNotifier {
     if (index < 0 || index >= user.certifications.length) return;
 
     final certification = user.certifications[index];
+    await _deleteOnServer('/portfolio/certifications', certification.id);
     final updated = List<Certification>.from(user.certifications)..removeAt(index);
     _currentUser = user.copyWith(certifications: updated);
     notifyListeners();
@@ -1687,15 +1929,19 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     if (user == null) return;
 
+    final created = await _createOnServer('/portfolio/links', {'label': label, 'url': url});
+    if (created != null) url = created['url'] as String;
+
     int? id;
     final userId = int.tryParse(user.id);
     if (userId != null && userId > 0) {
       final db = await AppDatabase.instance.database;
       id = await db.insert('job_seeker_professional_links', {
+        'id': ?created?['id'],
         'user_id': userId,
         'label': label,
         'url': url,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     final link = ProfessionalLink(id: id, label: label, url: url);
@@ -1711,6 +1957,7 @@ class AuthService extends ChangeNotifier {
     if (index < 0 || index >= user.professionalLinks.length) return;
 
     final link = user.professionalLinks[index];
+    await _deleteOnServer('/portfolio/links', link.id);
     final updated = List<ProfessionalLink>.from(user.professionalLinks)..removeAt(index);
     _currentUser = user.copyWith(professionalLinks: updated);
     notifyListeners();
@@ -1749,6 +1996,51 @@ class AuthService extends ChangeNotifier {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+    await _syncToServer('thème du portfolio', (account) => account.updateProfile({'portfolio_theme_color': colorKey}));
+  }
+
+  /// Mode API : envoie une modification du profil au serveur pour que les
+  /// autres téléphones la voient. Le téléphone est déjà à jour ; si le
+  /// serveur est injoignable, la modification reste locale et l'échec est
+  /// journalisé (les écrans ne gèrent pas d'erreur ici).
+  Future<void> _syncToServer(String what, Future<void> Function(AccountApi account) send) async {
+    final api = ApiClient.shared;
+    if (api == null) return;
+    try {
+      await send(AccountApi(api));
+    } on ApiException catch (error) {
+      debugPrint('AuthService : envoi au serveur ($what) échoué, conservé sur ce téléphone — $error');
+    }
+  }
+
+  /// Mode API : crée d'abord l'élément de portfolio sur le serveur, pour
+  /// que la ligne locale porte le même id (sans quoi une suppression
+  /// ultérieure viserait un autre élément). `null` en mode local. Un refus
+  /// du serveur remonte : rien n'est alors ajouté sur le téléphone.
+  Future<Map<String, dynamic>?> _createOnServer(String path, Map<String, Object?> fields) async {
+    final api = ApiClient.shared;
+    if (api == null) return null;
+    return await api.post(path, body: fields) as Map<String, dynamic>;
+  }
+
+  Future<void> _uploadToServer(String path, Uint8List bytes, String filename) async {
+    try {
+      await ApiClient.shared?.upload(path, bytes: bytes, filename: filename);
+    } on ApiException catch (error) {
+      debugPrint('AuthService : envoi de l\'image ($path) échoué, conservée sur ce téléphone — $error');
+    }
+  }
+
+  /// Mode API : supprime d'abord l'élément sur le serveur. Déjà absent (404)
+  /// : rien à faire de plus.
+  Future<void> _deleteOnServer(String collection, int? id) async {
+    final api = ApiClient.shared;
+    if (api == null || id == null) return;
+    try {
+      await api.delete('$collection/$id');
+    } on ApiException catch (error) {
+      if (error.statusCode != 404) rethrow;
+    }
   }
 
   /// Vérifier si l'utilisateur est un employeur
@@ -1774,6 +2066,16 @@ class AuthService extends ChangeNotifier {
   /// compte connecté — utilisé par l'écran "Changer le mot de passe" avant
   /// d'appeler [resetPassword], pour ne jamais laisser quelqu'un déjà dans
   /// la session en changer le mot de passe sans le connaître.
+  /// Change le mot de passe du compte serveur (`PATCH /auth/password`), qui
+  /// vérifie lui-même [currentPassword] : lève [ApiException] avec
+  /// `errors['current_password']` s'il est faux. Mode API uniquement — en
+  /// local, voir [verifyCurrentPassword] puis [resetPassword].
+  Future<void> changePassword({required String currentPassword, required String newPassword}) async {
+    final api = ApiClient.shared;
+    if (api == null) throw StateError('changePassword() requiert API_BASE_URL.');
+    await AccountApi(api).changePassword(currentPassword: currentPassword, newPassword: newPassword);
+  }
+
   Future<bool> verifyCurrentPassword(String password) async {
     final user = _currentUser;
     if (user == null) return false;
@@ -1806,6 +2108,9 @@ class AuthService extends ChangeNotifier {
   Future<bool> deleteAccount() async {
     final user = _currentUser;
     if (user == null) return false;
+    // `DELETE /auth/account` exige le mot de passe : l'écran de
+    // confirmation ne le demande pas encore, la suppression est refusée.
+    if (ApiClient.shared != null) return false;
 
     final userId = int.tryParse(user.id);
     if (userId == null || userId <= 0) return false;

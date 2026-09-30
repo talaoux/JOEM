@@ -9,6 +9,7 @@ import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Écrans de détail derrière les cartes chiffrées du recruteur — le
 /// "Tableau de bord" (`EmployerDashboard._buildStatisticsSection`) et le
@@ -110,7 +111,8 @@ class EmployerInterviewsScreen extends StatefulWidget {
   State<EmployerInterviewsScreen> createState() => _EmployerInterviewsScreenState();
 }
 
-class _EmployerInterviewsScreenState extends State<EmployerInterviewsScreen> {
+class _EmployerInterviewsScreenState extends State<EmployerInterviewsScreen>
+    with LiveRefresh<EmployerInterviewsScreen> {
   final AuthService _authService = AuthService();
   final InterviewRepository _interviewRepository = const InterviewRepository();
   final JobOfferRepository _jobOfferRepository = const JobOfferRepository();
@@ -122,6 +124,13 @@ class _EmployerInterviewsScreenState extends State<EmployerInterviewsScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 
@@ -287,7 +296,8 @@ class EmployerOfferViewsScreen extends StatefulWidget {
   State<EmployerOfferViewsScreen> createState() => _EmployerOfferViewsScreenState();
 }
 
-class _EmployerOfferViewsScreenState extends State<EmployerOfferViewsScreen> {
+class _EmployerOfferViewsScreenState extends State<EmployerOfferViewsScreen>
+    with LiveRefresh<EmployerOfferViewsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
   List<OfferView> _views = const [];
@@ -298,6 +308,13 @@ class _EmployerOfferViewsScreenState extends State<EmployerOfferViewsScreen> {
   @override
   void initState() {
     super.initState();
+    _load();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _load();
   }
 

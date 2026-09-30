@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:joem/core/theme/app_radius.dart';
 import 'package:joem/core/theme/app_spacing.dart';
@@ -45,6 +46,13 @@ class BottomNavigation extends StatelessWidget {
   /// d'origine (dashboard candidat).
   final bool softHomeButton;
 
+  /// Rendu d'après la maquette `assets/images/design_menu.jpg` : barre
+  /// pleine largeur collée en bas (coins hauts arrondis), encoche arrondie
+  /// au centre dans laquelle se loge un rond bleu océan "Accueil" qui dépasse
+  /// au-dessus, libellés en majuscules. Activé sur tous les écrans des deux
+  /// espaces (candidat et recruteur) ; `false` = capsule flottante d'origine.
+  final bool notched;
+
   const BottomNavigation({
     super.key,
     required this.currentIndex,
@@ -56,6 +64,7 @@ class BottomNavigation extends StatelessWidget {
     this.thirdItemIcon = Icons.add_box_outlined,
     this.thirdItemLabel = 'Publier',
     this.softHomeButton = false,
+    this.notched = false,
   });
 
   bool _isSmallScreen(BuildContext context) =>
@@ -96,6 +105,17 @@ class BottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (notched) {
+      return _NotchedNavBar(
+        currentIndex: currentIndex,
+        onTap: onTap,
+        notificationCount: notificationCount,
+        secondItemIcon: secondItemIcon,
+        secondItemLabel: secondItemLabel,
+        thirdItemIcon: thirdItemIcon,
+        thirdItemLabel: thirdItemLabel,
+      );
+    }
     final colors = AppSurfaceColors.of(context);
     final accent = accentColor ?? DashboardColors.accent;
     final iconSize = _getIconSize(context);
@@ -500,4 +520,361 @@ class _BumpedBarShadowPainter extends CustomPainter {
   bool shouldRepaint(covariant _BumpedBarShadowPainter oldDelegate) {
     return !oldDelegate.geometry.sameAs(geometry);
   }
+}
+
+/// Variante "encoche" de la barre basse, reproduite d'après la maquette
+/// `assets/images/design_menu.jpg` : barre blanche pleine largeur collée au
+/// bas de l'écran (coins hauts arrondis), bord du haut creusé au centre en
+/// une encoche arrondie (`_NotchedBarGeometry`) dans laquelle se loge un
+/// rond bleu océan "Accueil" qui dépasse au-dessus de la barre, avec une
+/// lueur de la même teinte. Icônes au trait gris, libellés en majuscules ; l'item actif passe
+/// en bleu nuit, comme le libellé "ACCUEIL" de la maquette.
+class _NotchedNavBar extends StatelessWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+  final int notificationCount;
+  final IconData secondItemIcon;
+  final String secondItemLabel;
+  final IconData thirdItemIcon;
+  final String thirdItemLabel;
+
+  const _NotchedNavBar({
+    required this.currentIndex,
+    required this.onTap,
+    required this.notificationCount,
+    required this.secondItemIcon,
+    required this.secondItemLabel,
+    required this.thirdItemIcon,
+    required this.thirdItemLabel,
+  });
+
+  /// Rond "Accueil" en bleu océan (`DashboardColors.accentStrong`), à la place
+  /// du jaune de la maquette, pour suivre la palette du projet.
+  static const Color _homeFill = DashboardColors.accentStrong;
+
+  /// Bleu nuit de l'icône "Accueil" et des libellés actifs.
+  static const Color _activeInk = DashboardColors.accentDeep;
+
+  static const double _barHeight = 72;
+  static const double _buttonSize = 54;
+
+  /// Centre du rond, mesuré depuis le bord haut de la barre : le rond
+  /// dépasse donc de `_buttonSize / 2 - _buttonCenterY` au-dessus.
+  static const double _buttonCenterY = 12;
+  static const double _popOut = _buttonSize / 2 - _buttonCenterY;
+
+  /// Jeu entre le rond et le fond de l'encoche.
+  static const double _notchMargin = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final isHomeActive = currentIndex == 0;
+
+    return SizedBox(
+      height: _popOut + _barHeight + bottomInset,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _barHeight + bottomInset,
+            child: CustomPaint(
+              painter: _NotchedBarPainter(
+                color: colors.background,
+                geometry: const _NotchedBarGeometry(
+                  cornerRadius: 22,
+                  notchCenterY: _buttonCenterY,
+                  notchRadius: _buttonSize / 2 + _notchMargin,
+                  filletRadius: 12,
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(left: 12, right: 12, bottom: bottomInset),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _item(colors, icon: secondItemIcon, label: secondItemLabel, index: 1),
+                    _item(colors, icon: thirdItemIcon, label: thirdItemLabel, index: 2),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => onTap(0),
+                        behavior: HitTestBehavior.opaque,
+                        child: SizedBox(
+                          height: _barHeight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 48),
+                            child: _label('Accueil', isActive: true, colors: colors),
+                          ),
+                        ),
+                      ),
+                    ),
+                    _item(
+                      colors,
+                      icon: Icons.notifications_none_rounded,
+                      label: 'Notification',
+                      index: 3,
+                      badgeCount: notificationCount,
+                    ),
+                    _item(colors, icon: Icons.person_outline_rounded, label: 'Profil', index: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _NotchedHomeButton(
+                size: _buttonSize,
+                color: _homeFill,
+                iconColor: Colors.white,
+                isActive: isHomeActive,
+                onTap: () => onTap(0),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _item(
+    AppSurfaceColors colors, {
+    required IconData icon,
+    required String label,
+    required int index,
+    int badgeCount = 0,
+  }) {
+    final isActive = currentIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTap(index),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: _barHeight,
+          child: Column(
+            children: [
+              const SizedBox(height: 15),
+              NotificationBadge(
+                count: badgeCount,
+                child: TweenAnimationBuilder<Color?>(
+                  duration: const Duration(milliseconds: 220),
+                  tween: ColorTween(end: isActive ? _activeInk : colors.textTertiary),
+                  builder: (context, color, _) => Icon(icon, color: color, size: 26),
+                ),
+              ),
+              const SizedBox(height: 5),
+              _label(label, isActive: isActive, colors: colors),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Libellé en majuscules ; rétrécit plutôt que de déborder quand le mot
+  /// est long ("NOTIFICATION") ou que "Texte agrandi" est actif.
+  Widget _label(String text, {required bool isActive, required AppSurfaceColors colors}) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 220),
+        style: AppTypography.navLabel.copyWith(
+          fontSize: 11,
+          fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+          letterSpacing: 0.3,
+          color: isActive ? _activeInk : colors.textTertiary,
+        ),
+        child: Text(text.toUpperCase(), maxLines: 1),
+      ),
+    );
+  }
+}
+
+/// Rond jaune "Accueil" de la variante encoche : lueur jaune douce en
+/// dessous, pictogramme maison + personne au trait (`_HomePersonIconPainter`).
+class _NotchedHomeButton extends StatelessWidget {
+  final double size;
+  final Color color;
+  final Color iconColor;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NotchedHomeButton({
+    required this.size,
+    required this.color,
+    required this.iconColor,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        scale: isActive ? 1.0 : 0.94,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.45),
+                blurRadius: 18,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: CustomPaint(
+            size: const Size.square(26),
+            painter: _HomePersonIconPainter(iconColor),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pictogramme de la maquette : maison au trait avec une silhouette de
+/// personne à l'intérieur (pas d'équivalent dans les icônes Material).
+class _HomePersonIconPainter extends CustomPainter {
+  final Color color;
+
+  const _HomePersonIconPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.085
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // Toit
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * 0.08, h * 0.48)
+        ..lineTo(w * 0.5, h * 0.12)
+        ..lineTo(w * 0.92, h * 0.48),
+      paint,
+    );
+    // Murs
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * 0.2, h * 0.39)
+        ..lineTo(w * 0.2, h * 0.88)
+        ..lineTo(w * 0.8, h * 0.88)
+        ..lineTo(w * 0.8, h * 0.39),
+      paint,
+    );
+    // Personne : tête + épaules
+    canvas.drawCircle(Offset(w * 0.5, h * 0.52), w * 0.095, paint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * 0.34, h * 0.8)
+        ..quadraticBezierTo(w * 0.5, h * 0.6, w * 0.66, h * 0.8),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomePersonIconPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+/// Forme de la barre encochée : rectangle pleine largeur à coins hauts
+/// arrondis, dont le bord du haut plonge au centre en une encoche
+/// circulaire (centrée sur le rond "Accueil", rayon = rond + jeu). Deux
+/// congés de rayon `filletRadius` raccordent en douceur le bord plat à
+/// l'encoche, sans arête vive.
+class _NotchedBarGeometry {
+  final double cornerRadius;
+  final double notchCenterY;
+  final double notchRadius;
+  final double filletRadius;
+
+  const _NotchedBarGeometry({
+    required this.cornerRadius,
+    required this.notchCenterY,
+    required this.notchRadius,
+    required this.filletRadius,
+  });
+
+  Path build(Size size) {
+    final cx = size.width / 2;
+    final r = notchRadius;
+    final s = filletRadius;
+    final cy = notchCenterY;
+
+    // Centre du congé gauche : tangent au bord du haut (y = s) et
+    // extérieurement tangent au cercle d'encoche (distance r + s).
+    final dy = s - cy;
+    final fx = math.sqrt(math.max(0, (r + s) * (r + s) - dy * dy));
+    // Point de raccord congé/encoche, sur la ligne des deux centres.
+    final tx = fx * r / (r + s);
+    final ty = cy + dy * r / (r + s);
+
+    return Path()
+      ..moveTo(0, size.height)
+      ..lineTo(0, cornerRadius)
+      ..arcToPoint(Offset(cornerRadius, 0), radius: Radius.circular(cornerRadius))
+      ..lineTo(cx - fx, 0)
+      ..arcToPoint(Offset(cx - tx, ty), radius: Radius.circular(s))
+      ..arcToPoint(
+        Offset(cx + tx, ty),
+        radius: Radius.circular(r),
+        clockwise: false,
+        largeArc: ty < cy,
+      )
+      ..arcToPoint(Offset(cx + fx, 0), radius: Radius.circular(s))
+      ..lineTo(size.width - cornerRadius, 0)
+      ..arcToPoint(Offset(size.width, cornerRadius), radius: Radius.circular(cornerRadius))
+      ..lineTo(size.width, size.height)
+      ..close();
+  }
+}
+
+class _NotchedBarPainter extends CustomPainter {
+  final Color color;
+  final _NotchedBarGeometry geometry;
+
+  const _NotchedBarPainter({required this.color, required this.geometry});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = geometry.build(size);
+    // Ombre très discrète vers le haut : c'est elle qui dessine le liseré
+    // léger du bord de la barre et de l'encoche visible sur la maquette.
+    canvas.save();
+    canvas.translate(0, -1);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.07)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.restore();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _NotchedBarPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

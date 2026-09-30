@@ -19,6 +19,7 @@ import 'candidate_full_portfolio_screen.dart';
 import 'portfolio_project_detail_screen.dart';
 import 'schedule_interview_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Détail d'une candidature reçue — ouvert depuis
 /// `EmployerNotificationsScreen` en tapant sur une notification "Nouvelle
@@ -36,8 +37,8 @@ class CandidateApplicationDetailScreen extends StatefulWidget {
       _CandidateApplicationDetailScreenState();
 }
 
-class _CandidateApplicationDetailScreenState
-    extends State<CandidateApplicationDetailScreen> {
+class _CandidateApplicationDetailScreenState extends State<CandidateApplicationDetailScreen>
+    with LiveRefresh<CandidateApplicationDetailScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
   final InterviewRepository _interviewRepository = const InterviewRepository();
   final AccountSearchRepository _accountSearchRepository = const AccountSearchRepository();
@@ -86,6 +87,15 @@ class _CandidateApplicationDetailScreenState
   @override
   void initState() {
     super.initState();
+    _loadProfile();
+    _loadInterview();
+    _loadPortfolio();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadProfile();
     _loadInterview();
     _loadPortfolio();

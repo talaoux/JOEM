@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:joem/core/database/app_database.dart';
+import 'package:joem/core/network/api_client.dart';
+import 'package:joem/core/network/server_registration.dart';
 import 'package:joem/core/utils/password_hasher.dart';
 
 /// Levée quand l'email choisi à l'étape "Compte" est déjà utilisé par un
@@ -31,10 +33,16 @@ class JobSeekerRegistrationData {
     required this.tarifJournalier,
     required this.disponibilite,
     required this.workModes,
+    this.googleIdToken,
   });
 
   final String email;
   final String password;
+
+  /// Jeton d'identité Google quand le compte est créé via "Continuer avec
+  /// Google" : le serveur en tire l'e-mail vérifié, et [password] n'est pas
+  /// envoyé (mode serveur uniquement).
+  final String? googleIdToken;
   final String nom;
   final String prenom;
   final String telephone;
@@ -62,7 +70,12 @@ class JobSeekerRegistrationResult {
 class JobSeekerRepository {
   const JobSeekerRepository();
 
+  /// Avec `API_BASE_URL`, le compte est créé sur le serveur (voir
+  /// [registerOnServer]) : un refus du serveur remonte en [ApiException].
   Future<JobSeekerRegistrationResult> register(JobSeekerRegistrationData data) async {
+    final api = ApiClient.shared;
+    if (api != null) return _registerOnServer(api, data);
+
     final db = await AppDatabase.instance.database;
 
     final existing = await db.query(
@@ -116,6 +129,43 @@ class JobSeekerRepository {
 
       return id;
     });
+
+    return JobSeekerRegistrationResult(userId: userId, email: data.email);
+  }
+
+  Future<JobSeekerRegistrationResult> _registerOnServer(ApiClient api, JobSeekerRegistrationData data) async {
+    final userId = await registerOnServer(
+      api,
+      fields: {
+        'role': 'candidate',
+        'email': data.email,
+        if (data.googleIdToken != null)
+          'google_id_token': data.googleIdToken
+        else ...{
+          'password': data.password,
+          // Le wizard a déjà vérifié la confirmation à l'étape "Compte".
+          'password_confirmation': data.password,
+        },
+        'nom': data.nom,
+        'prenom': data.prenom,
+        'telephone': blankToNull(data.telephone),
+        'localisation': blankToNull(data.localisation),
+        'titre_professionnel': data.titreProfessionnel,
+        'presentation': blankToNull(data.presentation),
+      },
+      profileFields: {
+        'tarif_journalier': blankToNull(data.tarifJournalier),
+        'disponibilite': blankToNull(data.disponibilite),
+        // L'API note de 1 à 5 (contrat §9) ; une compétence sans étoile compte pour 1.
+        'skills': [
+          for (final skill in data.skills) {'name': skill.name, 'rating': skill.rating.clamp(1, 5)},
+        ],
+        'work_modes': data.workModes.toSet().toList(),
+      },
+      photoBytes: data.photoBytes,
+      cvPath: data.cvPath,
+      cvFileName: data.cvFileName,
+    );
 
     return JobSeekerRegistrationResult(userId: userId, email: data.email);
   }

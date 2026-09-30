@@ -12,6 +12,7 @@ import 'candidate_application_detail_screen.dart';
 import 'candidate_search_screen.dart';
 import 'employer_profile_screen.dart';
 import 'job_offer_publish_screen.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Notifications recruteur — équivalent recruteur de
 /// `JobNotificationsScreen` : chaque candidature reçue sur une offre de ce
@@ -25,8 +26,8 @@ class EmployerNotificationsScreen extends StatefulWidget {
       _EmployerNotificationsScreenState();
 }
 
-class _EmployerNotificationsScreenState
-    extends State<EmployerNotificationsScreen> {
+class _EmployerNotificationsScreenState extends State<EmployerNotificationsScreen>
+    with LiveRefresh<EmployerNotificationsScreen> {
   final AuthService _authService = AuthService();
   final JobOfferRepository _repository = const JobOfferRepository();
 
@@ -45,6 +46,14 @@ class _EmployerNotificationsScreenState
   @override
   void initState() {
     super.initState();
+    _loadNotifications();
+    _loadNavNotificationCount();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadNotifications();
     _loadNavNotificationCount();
   }
@@ -314,6 +323,7 @@ class _EmployerNotificationsScreenState
         notificationCount: _navNotificationCount,
         accentColor: DashboardColors.accent,
         softHomeButton: true,
+        notched: true,
       ),
     );
   }

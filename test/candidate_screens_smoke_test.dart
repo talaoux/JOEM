@@ -23,17 +23,21 @@ import 'package:joem/features/dashboard/presentation/pages/portfolio_projects_sc
 import 'package:joem/features/dashboard/presentation/pages/portfolio_screen.dart';
 import 'package:joem/features/dashboard/presentation/pages/portfolio_skills_screen.dart';
 import 'package:joem/features/dashboard/presentation/pages/profile_stats_screens.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Fumée : chaque écran candidat s'ouvre et joue ses animations d'apparition
 /// (sections en cascade, listes décalées) sans erreur de mise en page.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
 
   final tempDir = Directory.systemTemp.createTempSync('joem_test');
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.flutter.io/path_provider'),
-    (call) async => tempDir.path,
-  );
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        (call) async => tempDir.path,
+      );
 
   late JobOffer offer;
 
@@ -64,44 +68,54 @@ void main() {
     'PortfolioSkillsScreen': () => const PortfolioSkillsScreen(),
     'PortfolioExperienceScreen': () => const PortfolioExperienceScreen(),
     'PortfolioProjectsScreen': () => const PortfolioProjectsScreen(),
-    'PortfolioCertificationsScreen': () => const PortfolioCertificationsScreen(),
+    'PortfolioCertificationsScreen': () =>
+        const PortfolioCertificationsScreen(),
     'CandidateFullPortfolioScreen': () => CandidateFullPortfolioScreen(
-          candidate: CandidateSearchResult.fromUser(AuthService().currentUser!),
-        ),
+      candidate: CandidateSearchResult.fromUser(AuthService().currentUser!),
+    ),
     'MyApplicationsScreen': () => const MyApplicationsScreen(),
     'MyInterviewsScreen': () => const MyInterviewsScreen(),
     'MySavedOffersScreen': () => const MySavedOffersScreen(),
   };
 
   for (final entry in screens.entries) {
-    testWidgets('${entry.key} opens and animates without error', (tester) async {
+    testWidgets('${entry.key} opens and animates without error', (
+      tester,
+    ) async {
       final otherErrors = <Object>[];
       final done = Completer<void>();
       // google_fonts : erreurs réseau en tâche de fond ignorées (voir
       // `reject_dialog_test.dart`) ; toute autre erreur fait échouer.
-      runZonedGuarded(() async {
-        try {
-          await tester.pumpWidget(MaterialApp(
-            theme: ThemeData(extensions: const [AppSurfaceColors.light]),
-            home: entry.value(),
-          ));
-          for (var i = 0; i < 10; i++) {
-            await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
-            await tester.pump(const Duration(milliseconds: 100));
+      runZonedGuarded(
+        () async {
+          try {
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: ThemeData(extensions: const [AppSurfaceColors.light]),
+                home: entry.value(),
+              ),
+            );
+            for (var i = 0; i < 10; i++) {
+              await tester.runAsync(
+                () => Future<void>.delayed(const Duration(milliseconds: 40)),
+              );
+              await tester.pump(const Duration(milliseconds: 100));
+            }
+            // Laisse finir toutes les apparitions (délais de cascade compris).
+            await tester.pump(const Duration(seconds: 2));
+            expect(tester.takeException(), isNull);
+            done.complete();
+          } catch (error, stack) {
+            done.completeError(error, stack);
           }
-          // Laisse finir toutes les apparitions (délais de cascade compris).
-          await tester.pump(const Duration(seconds: 2));
-          expect(tester.takeException(), isNull);
-          done.complete();
-        } catch (error, stack) {
-          done.completeError(error, stack);
-        }
-      }, (error, _) {
-        if (!error.toString().contains('google_fonts') &&
-            !error.toString().contains('Failed to load font')) {
-          otherErrors.add(error);
-        }
-      });
+        },
+        (error, _) {
+          if (!error.toString().contains('google_fonts') &&
+              !error.toString().contains('Failed to load font')) {
+            otherErrors.add(error);
+          }
+        },
+      );
       await done.future;
       expect(otherErrors, isEmpty);
     });

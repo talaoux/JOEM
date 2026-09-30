@@ -9,6 +9,7 @@ import '../../data/job_offer_repository.dart';
 import '../widgets/job_offer_post_card.dart';
 import 'job_offer_detail_screen.dart';
 import '../widgets/soft_ui.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Offres réellement publiées rangées dans [category] — catégories choisies
 /// par le recruteur à la publication (une offre peut en avoir plusieurs),
@@ -25,7 +26,8 @@ class CategoryOffersScreen extends StatefulWidget {
   State<CategoryOffersScreen> createState() => _CategoryOffersScreenState();
 }
 
-class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
+class _CategoryOffersScreenState extends State<CategoryOffersScreen>
+    with LiveRefresh<CategoryOffersScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
   final AuthService _authService = AuthService();
 
@@ -39,6 +41,13 @@ class _CategoryOffersScreenState extends State<CategoryOffersScreen> {
   @override
   void initState() {
     super.initState();
+    _loadOffers();
+  }
+
+  /// Données partagées modifiées depuis un autre téléphone (voir
+  /// `LiveUpdates`) : même rechargement qu'à l'ouverture.
+  @override
+  void onLiveUpdate() {
     _loadOffers();
   }
 

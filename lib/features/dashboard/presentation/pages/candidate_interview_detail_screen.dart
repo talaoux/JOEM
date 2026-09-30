@@ -37,6 +37,12 @@ class CandidateInterviewDetailScreen extends StatelessWidget {
             AppSpacing.xl,
           ),
           children: staggered([
+            // Entreprise inconnue (ancien entretien, compte supprimé) : pas de
+            // carte "Proposé par" vide, le poste reste indiqué plus bas.
+            if (_hasCompany) ...[
+              _companyCard(colors),
+              const SizedBox(height: AppSpacing.md),
+            ],
             // Bloc teinté ambre : heure en gros chiffres serif (comme le
             // "48 messages reçus" de la maquette), date et contexte.
             Container(
@@ -84,7 +90,7 @@ class CandidateInterviewDetailScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (interview.offerTitle.trim().isNotEmpty) ...[
+                  if (!_hasCompany && interview.offerTitle.trim().isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Pour le poste : ${interview.offerTitle.trim()}',
@@ -155,6 +161,56 @@ class CandidateInterviewDetailScreen extends StatelessWidget {
             ),
           ]),
         ),
+      ),
+    );
+  }
+
+  bool get _hasCompany =>
+      (interview.companyName?.trim().isNotEmpty ?? false) || interview.companyLogo != null;
+
+  /// Qui propose l'entretien : logo et nom de l'entreprise, comme sur ses
+  /// offres (`JobOfferPostCard`).
+  Widget _companyCard(AppSurfaceColors colors) {
+    final name = interview.companyName?.trim() ?? '';
+    final offer = interview.offerTitle.trim();
+    return SoftCard(
+      child: Row(
+        children: [
+          SoftAvatar(
+            name: name,
+            size: 52,
+            icon: Icons.business_rounded,
+            photo: interview.companyLogo != null ? MemoryImage(interview.companyLogo!) : null,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Proposé par',
+                  style: AppTypography.interRegular.copyWith(fontSize: 12, color: colors.textSecondary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  name.isNotEmpty ? name : 'Entreprise',
+                  style: AppTypography.interSemiBold.copyWith(fontSize: 16, color: colors.textPrimary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (offer.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    offer,
+                    style: AppTypography.interRegular.copyWith(fontSize: 13, color: colors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
