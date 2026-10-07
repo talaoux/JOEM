@@ -80,7 +80,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard>
   /// Problème persistant: Overflow de 18px même avec 80px de marge
   /// Solution: Utiliser un padding fixe très conservateur de 200px
   double _getBottomPadding(BuildContext context) {
-    return 200.0;
+    return 20.0;
   }
 
   @override

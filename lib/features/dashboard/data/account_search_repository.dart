@@ -31,6 +31,7 @@ class CandidateSearchResult {
     this.telephone,
     this.presentation,
     this.photo,
+    this.coverPhoto,
     this.skills = const [],
     this.experiences = const [],
     this.portfolioProjects = const [],
@@ -49,6 +50,10 @@ class CandidateSearchResult {
   final String? telephone;
   final String? presentation;
   final Uint8List? photo;
+
+  /// Photo de couverture du candidat (`job_seeker_profiles.cover_photo`) —
+  /// bannière de `CandidateProfileViewScreen`, `null` = bannière unie.
+  final Uint8List? coverPhoto;
   final List<String> skills;
 
   /// Clé du `PortfolioHeroTheme` choisi par ce candidat pour son Portfolio
@@ -103,6 +108,7 @@ class CandidateSearchResult {
       telephone: user.telephone,
       presentation: user.presentation,
       photo: user.photoBytes,
+      coverPhoto: user.coverPhotoBytes,
       skills: user.skills,
       experiences: user.experiences,
       portfolioProjects: user.portfolioProjects,
@@ -126,6 +132,7 @@ class CompanySearchResult {
     this.telephone,
     this.description,
     this.logo,
+    this.coverPhoto,
   });
 
   final String userId;
@@ -135,6 +142,7 @@ class CompanySearchResult {
   final String? telephone;
   final String? description;
   final Uint8List? logo;
+  final Uint8List? coverPhoto;
 }
 
 /// Un recruteur ayant consulté le profil du candidat connecté
@@ -247,7 +255,8 @@ class AccountSearchRepository {
         jsp.presentation AS presentation,
         jsp.objectifs AS objectifs,
         jsp.portfolio_theme_color AS portfolio_theme_color,
-        jsp.photo AS photo
+        jsp.photo AS photo,
+        jsp.cover_photo AS cover_photo
       FROM users u
       INNER JOIN job_seeker_profiles jsp ON jsp.user_id = u.id
       LEFT JOIN job_seeker_skills jss ON jss.user_id = u.id
@@ -350,6 +359,7 @@ class AccountSearchRepository {
         objectifs: row['objectifs'] as String?,
         portfolioThemeColor: row['portfolio_theme_color'] as String?,
         photo: row['photo'] as Uint8List?,
+        coverPhoto: row['cover_photo'] as Uint8List?,
         skills: skillsByUserId[userId] ?? const [],
         experiences: experiencesByUserId[userId] ?? const [],
         portfolioProjects: portfolioByUserId[userId] ?? const [],
@@ -382,7 +392,8 @@ class AccountSearchRepository {
         ep.localisation AS localisation,
         ep.telephone AS telephone,
         ep.description AS description,
-        ep.logo AS logo
+        ep.logo AS logo,
+        ep.cover_photo AS cover_photo
       FROM users u
       INNER JOIN employer_profiles ep ON ep.user_id = u.id
       WHERE u.role = 'employer'
@@ -410,6 +421,7 @@ class AccountSearchRepository {
         telephone: row['telephone'] as String?,
         description: row['description'] as String?,
         logo: row['logo'] as Uint8List?,
+        coverPhoto: row['cover_photo'] as Uint8List?,
       );
     }).toList();
   }
@@ -564,7 +576,8 @@ class AccountSearchRepository {
              ep.localisation AS localisation,
              ep.telephone AS telephone,
              ep.description AS description,
-             ep.logo AS logo
+             ep.logo AS logo,
+             ep.cover_photo AS cover_photo
       FROM job_seeker_profile_views v
       LEFT JOIN employer_profiles ep
         ON ep.user_id = CAST(v.viewer_user_id AS INTEGER)
@@ -594,8 +607,60 @@ class AccountSearchRepository {
           telephone: (row['telephone'] as String?)?.trim(),
           description: (row['description'] as String?)?.trim(),
           logo: row['logo'] as Uint8List?,
+          coverPhoto: row['cover_photo'] as Uint8List?,
         ),
       );
     }).toList();
+  }
+
+  /// Profil d'une entreprise précise — utilisé par `JobOfferDetailScreen`
+  /// pour permettre au candidat de voir le profil de l'entreprise qui a publié
+  /// l'offre. `null` si aucun compte réel ne correspond.
+  Future<CompanySearchResult?> fetchEmployerById(String userId) async {
+    final api = _api;
+    if (api != null) return api.fetchEmployerById(userId);
+
+    final id = int.tryParse(userId);
+    if (id == null) return null;
+
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        u.id AS user_id,
+        ep.nom_entreprise AS nom_entreprise,
+        ep.nom AS nom,
+        ep.prenom AS prenom,
+        ep.localisation AS localisation,
+        ep.telephone AS telephone,
+        ep.description AS description,
+        ep.logo AS logo,
+        ep.cover_photo AS cover_photo
+      FROM users u
+      INNER JOIN employer_profiles ep ON ep.user_id = u.id
+      WHERE u.role = 'employer'
+        AND ep.entreprise_visible = 1
+        AND u.id = ?
+      ''',
+      [id],
+    );
+
+    if (rows.isEmpty) return null;
+
+    final row = rows.first;
+    final userIdStr = row['user_id'] as int;
+    final prenom = row['prenom'] as String? ?? '';
+    final nom = row['nom'] as String? ?? '';
+    final contactName = '$prenom $nom'.trim();
+    return CompanySearchResult(
+      userId: userIdStr.toString(),
+      companyName: row['nom_entreprise'] as String? ?? '',
+      contactName: contactName.isEmpty ? null : contactName,
+      localisation: row['localisation'] as String?,
+      telephone: row['telephone'] as String?,
+      description: row['description'] as String?,
+      logo: row['logo'] as Uint8List?,
+      coverPhoto: row['cover_photo'] as Uint8List?,
+    );
   }
 }

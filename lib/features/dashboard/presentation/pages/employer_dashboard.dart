@@ -301,7 +301,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
 
   /// Padding inférieur pour éviter le contenu caché derrière BottomNavigationBar
   double _getBottomPadding(BuildContext context) {
-    return 200.0;
+    return 20.0;
   }
 
   late AnimationController _animationController;

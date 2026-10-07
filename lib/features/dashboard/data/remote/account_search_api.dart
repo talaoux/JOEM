@@ -31,6 +31,17 @@ class AccountSearchApi {
     return Future.wait(rows.map((row) => companyFromJson(row['id'] as int, row['employer_profile'] as Map<String, dynamic>)));
   }
 
+  /// `GET /companies/{id}` : profil d'une entreprise visible (404 sinon).
+  Future<CompanySearchResult?> fetchEmployerById(String userId) async {
+    try {
+      final json = await client.get('/companies/$userId') as Map<String, dynamic>;
+      return companyFromJson(json['id'] as int, json['employer_profile'] as Map<String, dynamic>);
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   Future<List<String>> fetchHistory(String searchType) async =>
       [for (final query in await client.get('/search/history', query: {'type': searchType}) as List) query as String];
 
@@ -61,6 +72,7 @@ class AccountSearchApi {
   static Future<CandidateSearchResult> candidateFromJson(Map<String, dynamic> json) async {
     final profile = json['candidate_profile'] as Map<String, dynamic>;
     final photo = RemoteImages.load(profile['photo_url']);
+    final coverPhoto = RemoteImages.load(profile['cover_photo_url']);
     final projects = Future.wait(jsonList(json['portfolio_projects']).map(portfolioProjectFromJson));
     final certifications = Future.wait(jsonList(json['certifications']).map(certificationFromJson));
 
@@ -73,6 +85,7 @@ class AccountSearchApi {
       telephone: profile['telephone'] as String?,
       presentation: profile['presentation'] as String?,
       photo: await photo,
+      coverPhoto: await coverPhoto,
       skills: [for (final skill in jsonList(json['skills'])) skill['name'] as String],
       experiences: [for (final row in jsonList(json['experiences'])) experienceFromJson(row)],
       portfolioProjects: await projects,
@@ -94,6 +107,7 @@ class AccountSearchApi {
       telephone: profile['telephone'] as String?,
       description: profile['description'] as String?,
       logo: await RemoteImages.load(profile['logo_url']),
+      coverPhoto: await RemoteImages.load(profile['cover_photo_url']),
     );
   }
 }

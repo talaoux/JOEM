@@ -24,7 +24,7 @@ void main() {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
-    
+
     await AppDatabase.instance.resetDatabase();
   });
 

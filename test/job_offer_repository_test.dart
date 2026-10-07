@@ -306,15 +306,34 @@ void main() {
 
   group('JobOfferRepository - Notifications', () {
     late JobOffer testOffer;
+    late String candidate1;
 
     setUp(() async {
       await AppDatabase.instance.resetDatabase();
       final repo = const JobOfferRepository();
-      
+
+      // Seules les offres qui correspondent au profil (titre + compétences)
+      // sont des notifications : candidat "Développeur Flutter", compétence Dart.
+      final db = await AppDatabase.instance.database;
+      final userId = await db.insert('users', {
+        'email': 'candidat.notifs@test.mg',
+        'password_hash': 'x',
+        'role': 'job_seeker',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      await db.insert('job_seeker_profiles', {
+        'user_id': userId,
+        'nom': 'Rabe',
+        'prenom': 'Lova',
+        'titre_professionnel': 'Développeur Flutter',
+      });
+      await db.insert('job_seeker_skills', {'user_id': userId, 'name': 'Dart', 'rating': 4});
+      candidate1 = '$userId';
+
       testOffer = await repo.publish(
         employerUserId: 1,
         companyName: 'Test Company',
-        title: 'Test Job',
+        title: 'Développeuse Flutter',
         description: 'Test Description',
         location: 'Tana',
         salary: '500000',
@@ -323,10 +342,36 @@ void main() {
       );
     });
 
+    test('une offre qui ne correspond pas au profil n\'est pas une notification', () async {
+      final repo = const JobOfferRepository();
+      final unrelated = await repo.publish(
+        employerUserId: 2,
+        companyName: 'Cabinet Compta',
+        title: 'Comptable confirmé',
+        description: 'Tenue des comptes',
+        location: 'Tana',
+        salary: '400000',
+        contractType: 'CDI',
+        categories: ['Finance'],
+      );
+
+      final notifications = await repo.fetchNotificationsForJobSeeker(candidate1);
+      expect(notifications.map((n) => n.offer.id), [testOffer.id]);
+      expect(await repo.countUnreadNotificationsForJobSeeker(candidate1), 1);
+      // L'offre reste visible dans le fil du candidat.
+      final feed = await repo.fetchAllForJobSeeker(candidate1);
+      expect(feed.map((o) => o.id), contains(unrelated.id));
+    });
+
+    test('un candidat sans titre ni compétence ne reçoit aucune notification d\'offre', () async {
+      final repo = const JobOfferRepository();
+      expect(await repo.fetchNotificationsForJobSeeker('candidat-sans-profil'), isEmpty);
+    });
+
     test('récupère les notifications pour un candidat', () async {
       final repo = const JobOfferRepository();
       
-      final notifications = await repo.fetchNotificationsForJobSeeker('candidate1');
+      final notifications = await repo.fetchNotificationsForJobSeeker(candidate1);
       
       expect(notifications.length, 1);
       expect(notifications.first.offer.id, testOffer.id);
@@ -336,30 +381,30 @@ void main() {
     test('marque une notification comme lue', () async {
       final repo = const JobOfferRepository();
       
-      await repo.markNotificationRead(testOffer.id, 'candidate1');
+      await repo.markNotificationRead(testOffer.id, candidate1);
       
-      final notifications = await repo.fetchNotificationsForJobSeeker('candidate1');
+      final notifications = await repo.fetchNotificationsForJobSeeker(candidate1);
       expect(notifications.first.isRead, true);
     });
 
     test('compte les notifications non lues', () async {
       final repo = const JobOfferRepository();
       
-      final count = await repo.countUnreadNotificationsForJobSeeker('candidate1');
+      final count = await repo.countUnreadNotificationsForJobSeeker(candidate1);
       expect(count, 1);
       
-      await repo.markNotificationRead(testOffer.id, 'candidate1');
+      await repo.markNotificationRead(testOffer.id, candidate1);
       
-      final countAfter = await repo.countUnreadNotificationsForJobSeeker('candidate1');
+      final countAfter = await repo.countUnreadNotificationsForJobSeeker(candidate1);
       expect(countAfter, 0);
     });
 
     test('supprime une notification', () async {
       final repo = const JobOfferRepository();
       
-      await repo.deleteNotification(testOffer.id, 'candidate1');
+      await repo.deleteNotification(testOffer.id, candidate1);
       
-      final notifications = await repo.fetchNotificationsForJobSeeker('candidate1');
+      final notifications = await repo.fetchNotificationsForJobSeeker(candidate1);
       expect(notifications.length, 0);
     });
 
@@ -370,7 +415,7 @@ void main() {
       await repo.publish(
         employerUserId: 2,
         companyName: 'Company 2',
-        title: 'Job 2',
+        title: 'Ingénieur Dart',
         description: 'Desc 2',
         location: 'Tana',
         salary: '400000',
@@ -378,9 +423,10 @@ void main() {
         categories: ['Marketing'],
       );
       
-      await repo.markAllNotificationsRead('candidate1');
-      
-      final notifications = await repo.fetchNotificationsForJobSeeker('candidate1');
+      await repo.markAllNotificationsRead(candidate1);
+
+      final notifications = await repo.fetchNotificationsForJobSeeker(candidate1);
+      expect(notifications.length, 2);
       expect(notifications.every((n) => n.isRead), true);
     });
   });

@@ -5,8 +5,10 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 import '../../data/account_search_repository.dart';
 import '../widgets/soft_ui.dart';
+import 'package:joem/core/network/live_updates.dart';
 import 'candidate_full_portfolio_screen.dart';
 import 'portfolio_project_detail_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
@@ -25,10 +27,27 @@ class CandidateProfileViewScreen extends StatefulWidget {
   State<CandidateProfileViewScreen> createState() => _CandidateProfileViewScreenState();
 }
 
-/// State uniquement pour lire les couleurs du thème (mode nuit) dans tous
-/// les helpers — aucune donnée mutable ici.
-class _CandidateProfileViewScreenState extends State<CandidateProfileViewScreen> {
-  CandidateSearchResult get candidate => widget.candidate;
+class _CandidateProfileViewScreenState extends State<CandidateProfileViewScreen>
+    with LiveRefresh<CandidateProfileViewScreen> {
+  /// Relu en base à l'ouverture (et sur `LiveUpdates` en mode API) : une
+  /// photo de profil/couverture ou un portfolio mis à jour par le candidat
+  /// depuis le chargement de la liste appelante s'affiche tel quel.
+  late CandidateSearchResult candidate = widget.candidate;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void onLiveUpdate() => _refresh();
+
+  Future<void> _refresh() async {
+    final fresh = await const AccountSearchRepository().fetchJobSeekerById(candidate.userId);
+    if (!mounted || fresh == null) return;
+    setState(() => candidate = fresh);
+  }
 
   AppSurfaceColors get _c => AppSurfaceColors.of(context);
 
@@ -201,13 +220,22 @@ class _CandidateProfileViewScreenState extends State<CandidateProfileViewScreen>
       clipBehavior: Clip.none,
       children: [
         const SizedBox(height: _bannerHeight + _avatarOverflow, width: double.infinity),
-        Container(
-          height: _bannerHeight,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(_c) ? 0.22 : 0.12),
+        if (candidate.coverPhoto != null)
+          Image.memory(
+            candidate.coverPhoto!,
+            height: _bannerHeight,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          )
+        else
+          Container(
+            height: _bannerHeight,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(_c) ? 0.22 : 0.12),
+            ),
           ),
-        ),
         Positioned(
           top: AppSpacing.sm,
           left: AppSpacing.sm,
@@ -228,16 +256,30 @@ class _CandidateProfileViewScreenState extends State<CandidateProfileViewScreen>
         Positioned(
           left: AppSpacing.safeAreaHorizontal,
           top: _bannerHeight + _avatarOverflow - _avatarBoxSize,
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: SoftUi.pageBackground(_c),
-              shape: BoxShape.circle,
-            ),
-            child: SoftAvatar(
-              name: candidate.fullName,
-              size: 90,
-              photo: candidate.photo != null ? MemoryImage(candidate.photo!) : null,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfilePhotoViewerScreen(
+                    imageBytes: candidate.photo,
+                    fallbackAsset: 'assets/images/avatar_portfolio1.jpg',
+                  ),
+                  fullscreenDialog: true,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: SoftUi.pageBackground(_c),
+                shape: BoxShape.circle,
+              ),
+              child: SoftAvatar(
+                name: candidate.fullName,
+                size: 90,
+                photo: candidate.photo != null ? MemoryImage(candidate.photo!) : null,
+              ),
             ),
           ),
         ),

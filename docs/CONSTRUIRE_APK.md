@@ -1,70 +1,36 @@
-# Construire l'APK JOEM pour un téléphone
+# Construire et installer un APK de test
 
-## 1. Démarrer l'API sur le PC
+Ce guide concerne les tests sur le réseau local avec l'API JOEM démarrée sur le PC. Pour publier sur Google Play ou distribuer un build de production, utilise build-apk-prod.bat et une URL HTTPS.
 
-Double-cliquer sur `joem_api\deploy\start-api.bat` (Apache de Laragon, port 8000).
-Vérifier depuis le navigateur du PC : http://192.168.1.70:8000/api/categories doit afficher du JSON.
+## 1. Démarrer et vérifier l'API
 
-## 2. Vérifier l'adresse IP du PC
+Démarre le serveur avec ..\joem_api\deploy\start-api.bat. Le PC et le téléphone doivent être sur le même Wi-Fi; autorise le port 8000 dans le pare-feu Windows sur un réseau privé.
 
-Dans un terminal : `ipconfig` → ligne « Adresse IPv4 » de la carte Wi-Fi/Ethernet
-(pas `192.168.56.1`, qui est la carte VirtualBox). Aujourd'hui : `192.168.1.70`.
+Trouve l'adresse IPv4 actuelle du PC avec ipconfig, puis vérifie depuis le téléphone :
 
-## 3. Construire l'APK
+    http://<IP-LAN-DU-PC>:8000/up
+    http://<IP-LAN-DU-PC>:8000/api/categories
 
-Dans le dossier `joem` :
+La seconde adresse doit renvoyer du JSON. N'utilise pas une adresse VirtualBox ou une ancienne adresse IP.
 
-```bat
-build-apk.bat
-```
+## 2. Construire l'APK de test
 
-ou, si l'IP du PC a changé :
+Depuis le dossier joem, lance le script en passant l'IP actuelle du PC :
 
-```bat
-build-apk.bat 192.168.1.42
-```
+    build-apk.bat <IP-LAN-DU-PC>
 
-Durée : quelques minutes (la première fois plus longtemps). Résultat : `joem\dist\JOEM.apk`.
+Le résultat est dist\JOEM.apk. L'adresse API est intégrée à l'APK; reconstruis-le si l'adresse du PC change. Ce build local utilise HTTP et une signature de test lorsqu'aucune clé de production n'est configurée : ne le distribue pas comme version de production.
 
-Commande équivalente sans le script :
+## 3. Installer sur le téléphone
 
-```bat
-flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.70:8000/api
-```
+Transfère dist\JOEM.apk au téléphone, ou installe-le avec adb install -r dist\JOEM.apk si le débogage USB est activé. Android peut demander l'autorisation d'installer depuis cette source. N'ignore pas un avertissement Play Protect sans avoir vérifié la provenance du fichier.
 
-→ `build\app\outputs\flutter-apk\app-release.apk`
+Pour mettre à jour l'application, le nouvel APK doit être signé avec la même clé que la version installée. Les builds de test et de production peuvent utiliser des signatures différentes.
 
-L'adresse de l'API est **gravée dans l'APK** : si l'IP du PC change, il faut reconstruire
-l'APK et le réinstaller.
+## 4. Connexion Google
 
-## 4. Copier l'APK sur le téléphone B
+La connexion Google dépend de la configuration OAuth du projet et de l'empreinte SHA-1 de la clé de signature utilisée. Vérifie lib/core/constants/google_config.dart et la configuration Google Cloud avant de diagnostiquer un échec de connexion.
 
-Au choix : câble USB (copier `JOEM.apk` dans « Téléchargements »), Google Drive,
-Telegram/WhatsApp « à soi-même », ou `adb install -r dist\JOEM.apk` si le débogage USB est activé.
+## Production
 
-## 5. Installer sur le téléphone B
-
-1. Ouvrir `JOEM.apk` depuis le gestionnaire de fichiers.
-2. Autoriser « Installer des applications inconnues » pour l'application utilisée (Fichiers, Drive...).
-3. Si Play Protect avertit : « Plus de détails » → « Installer quand même ».
-4. Mise à jour : installer le nouvel APK par-dessus, les données sont conservées.
-   Si Android refuse (« conflit de paquet ») : désinstaller JOEM puis réinstaller.
-
-## 6. Utiliser
-
-Le téléphone doit être **sur le même Wi-Fi que le PC**, avec l'API démarrée (étape 1).
-Si l'app affiche « Impossible de joindre le serveur JOEM » : ouvrir
-`http://192.168.1.70:8000/api/categories` dans le navigateur du téléphone.
-S'il n'affiche rien → problème de réseau/pare-feu/IP, pas de l'app.
-
-## Remarques
-
-- Sans `android/key.properties`, l'APK est signé avec la clé de debug : parfait pour tester,
-  refusé par le Play Store. Toujours construire depuis le même PC, sinon Android refusera
-  la mise à jour (signature différente) → désinstaller puis réinstaller.
-- La connexion Google ne marche pas tant que `kGoogleServerClientId` n'est pas configuré
-  (`lib/core/constants/google_config.dart`) et que l'empreinte SHA-1 de la clé qui signe
-  l'APK n'est pas déclarée sur Google Cloud Console.
-- Le HTTP non chiffré n'est autorisé que parce que l'adresse de l'API commence par
-  `http://` (voir `android/app/build.gradle.kts`). Avec un vrai serveur en `https://`,
-  il reste bloqué, comme il se doit.
+Utilise build-apk-prod.bat https://<domaine>/api apk pour un APK ou build-apk-prod.bat https://<domaine>/api aab pour un bundle Play Store. Le script refuse HTTP et exige android/key.properties.

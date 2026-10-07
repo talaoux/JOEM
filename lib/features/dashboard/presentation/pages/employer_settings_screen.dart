@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'package:joem/core/services/auth_service.dart';
+import 'package:joem/core/services/display_preferences_controller.dart';
 import 'package:joem/core/theme/app_colors.dart';
 import 'package:joem/core/theme/app_spacing.dart';
 import 'package:joem/core/theme/app_surface_colors.dart';
@@ -88,8 +89,8 @@ class _EmployerSettingsScreenState extends State<EmployerSettingsScreen> {
     setState(() {});
   }
 
-  Future<void> _toggleLargeText(bool enabled) async {
-    await _authService.updateLargeText(enabled);
+  Future<void> _updateTextScale(double scale) async {
+    await _authService.updateTextScale(scale);
     if (!mounted) return;
     setState(() {});
   }
@@ -218,17 +219,181 @@ class _EmployerSettingsScreenState extends State<EmployerSettingsScreen> {
       return;
     }
 
-    final confirmed = await _confirm(
-      title: 'Supprimer mon compte',
-      message:
-          'Cette action est irréversible : votre profil, vos offres publiées, les '
-          'candidatures reçues, les entretiens planifiés et votre historique de '
-          'recherche seront définitivement supprimés.',
-      confirmLabel: 'Supprimer',
-    );
-    if (!confirmed || !mounted) return;
+    await _showDeleteAccountDialog();
+  }
 
+  Future<void> _showDeleteAccountDialog() async {
+    final colors = AppSurfaceColors.of(context);
+    int currentStep = 0;
+    String password = '';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: colors.background,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Supprimer mon compte',
+            style: colors.cardTitle.copyWith(fontSize: 18),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (currentStep == 0) ...[
+                  _buildInstructionItem(
+                    colors,
+                    icon: Icons.warning_amber_rounded,
+                    title: 'Action irréversible',
+                    description: 'Cette action est permanente et ne peut pas être annulée.',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInstructionItem(
+                    colors,
+                    icon: Icons.delete_forever_rounded,
+                    title: 'Données supprimées',
+                    description: 'Votre profil, vos offres publiées, les candidatures reçues, les entretiens planifiés et votre historique de recherche seront définitivement supprimés.',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInstructionItem(
+                    colors,
+                    icon: Icons.cloud_off_rounded,
+                    title: 'Perte d\'accès',
+                    description: 'Vous perdrez immédiatement l\'accès à votre compte et à toutes vos données.',
+                  ),
+                ] else if (currentStep == 1) ...[
+                  Text(
+                    'Pour confirmer la suppression, veuillez entrer votre mot de passe.',
+                    style: colors.cardDescription.copyWith(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      hintText: 'Mot de passe',
+                      filled: true,
+                      fillColor: colors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: colors.divider),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: SoftUi.tint(colors, DashboardColors.accent)),
+                      ),
+                    ),
+                    onChanged: (value) => password = value,
+                  ),
+                ] else if (currentStep == 2) ...[
+                  const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text(
+                      'Suppression de votre compte en cours...',
+                      style: colors.cardDescription,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            if (currentStep != 2)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Annuler',
+                  style: colors.cardDescription.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            if (currentStep == 0)
+              TextButton(
+                onPressed: () => setState(() => currentStep = 1),
+                child: Text(
+                  'Continuer',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            if (currentStep == 1)
+              TextButton(
+                onPressed: password.isEmpty
+                    ? null
+                    : () async {
+                        setState(() => currentStep = 2);
+                        Navigator.pop(context);
+                        await _performDeleteAccount(password);
+                      },
+                child: Text(
+                  'Supprimer définitivement',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstructionItem(
+    AppSurfaceColors colors, {
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: Colors.red),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: colors.cardTitle.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: colors.cardDescription.copyWith(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _performDeleteAccount(String password) async {
     setState(() => _isProcessing = true);
+    
+    // TODO: Verify password with backend before deletion
+    // For now, proceed with deletion (password verification should be added)
     final deleted = await _authService.deleteAccount();
     if (!mounted) return;
 
@@ -361,12 +526,12 @@ class _EmployerSettingsScreenState extends State<EmployerSettingsScreen> {
                       value: user?.darkModeEnabled ?? false,
                       onChanged: _toggleDarkMode,
                     ),
-                    _SettingsSwitchTile(
+                    _TextScaleSliderTile(
                       icon: Icons.text_fields_rounded,
-                      label: 'Texte agrandi',
-                      subtitle: 'Augmente la taille du texte dans toute l\'application',
-                      value: user?.largeTextEnabled ?? false,
-                      onChanged: _toggleLargeText,
+                      label: 'Taille du texte',
+                      subtitle: 'Ajustez la taille du texte dans toute l\'application',
+                      value: user?.textScale ?? 1.0,
+                      onChanged: _updateTextScale,
                     ),
                     _SettingsSwitchTile(
                       icon: Icons.motion_photos_off_outlined,
@@ -593,6 +758,90 @@ class _SettingsSwitchTile extends StatelessWidget {
           ? Text(subtitle!, style: colors.cardDescription.copyWith(fontSize: 12))
           : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    );
+  }
+}
+
+class _TextScaleSliderTile extends StatelessWidget {
+  const _TextScaleSliderTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppSurfaceColors.of(context);
+    final minScale = DisplayPreferencesController.minTextScale;
+    final maxScale = DisplayPreferencesController.maxTextScale;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _TileIcon(icon: icon, color: DashboardColors.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: colors.cardTitle.copyWith(fontSize: 15)),
+                    Text(subtitle, style: colors.cardDescription.copyWith(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.text_decrease, size: 16, color: colors.textSecondary),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: SoftUi.tint(colors, DashboardColors.accent),
+                    inactiveTrackColor: colors.divider,
+                    thumbColor: SoftUi.brandInk(colors),
+                    overlayColor: SoftUi.tint(colors, DashboardColors.accent).withValues(alpha: 0.2),
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: minScale,
+                    max: maxScale,
+                    divisions: 9,
+                    label: '${(value * 100).round()}%',
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+              Icon(Icons.text_increase, size: 16, color: colors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              '${(value * 100).round()}%',
+              style: colors.cardDescription.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

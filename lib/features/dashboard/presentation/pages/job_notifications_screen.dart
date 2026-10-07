@@ -292,7 +292,7 @@ class _JobNotificationsScreenState extends State<JobNotificationsScreen>
                         child: SoftEmptyState(
                           icon: Icons.notifications_none_rounded,
                           text:
-                              'Aucune notification pour le moment. Vous serez prévenu dès qu\'une entreprise publie une offre ou vous propose un entretien.',
+                              'Aucune notification pour le moment. Vous serez prévenu dès qu\'une offre correspond à votre titre ou à vos compétences, ou qu\'une entreprise vous propose un entretien.',
                         ),
                       ),
                     )

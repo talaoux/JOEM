@@ -237,3 +237,12 @@ Sous-écrans du chercheur d'emploi (`lib/features/dashboard/presentation/pages/`
 - **Portfolio candidat (`PortfolioScreen` et ses sous-écrans) — limites actuelles et pistes envisagées** : aucune entrée (projet/formation/certification/lien) ne peut être modifiée, seulement supprimée puis réajoutée ; pas de catégories/tags par projet, pas de réordonnancement ni de mise en avant d'un projet en particulier ; pas de compteur "N vues du portfolio" côté recruteur (contrairement aux vues de profil, `job_seeker_profile_views`) ; l'ajout/suppression d'expérience ne se fait plus que depuis `PortfolioExperienceScreen` (l'ancien formulaire dupliqué de `JobProfileScreen` a disparu avec ses sections inline) ; un seul lien générique + GitHub + démo par projet, pas de galerie multi-images (une seule image de couverture) ; pas de partage/URL publique du portfolio (application 100% locale, sans backend, une URL de type `joem.mg/portfolio/...` impliquerait un vrai serveur). À prioriser seulement si demandé : édition d'une entrée existante en priorité (le plus gênant au quotidien), le reste restant secondaire.
 - Couverture de tests très partielle : `test/widget_test.dart` (welcome) et `test/candidate_application_portfolio_test.dart` (candidature → notification recruteur + portfolio accessible même profil masqué) sont lancés par `flutter test`, verts + 4 scratchs `test/_tmp_*.dart` non suffixés `_test` (connexion recruteur, notification de candidature employeur, visibilité des offres, splash) à lancer explicitement. `test/job_publish_screen_test.dart` a été supprimé avec `JobPublishScreen`. Rien sur les wizards d'inscription en tant que tels, l'écran de connexion, la recherche de comptes, les catégories, la connexion Google, "Mot de passe oublié", ou la navigation de bout en bout du dashboard.
 - `README.md` est encore le boilerplate par défaut de `flutter create` et n'a pas été mis à jour pour JOEM.
+
+Create JOEM.apk
+-  cd C:\Users\WINDOWS 10\Desktop\joem && build-apk.bat 
+- .\build-apk.bat
+- copy "C:\Users\WINDOWS 10\Desktop\joem\dist\JOEM.apk" "C:\Users\WINDOWS 10\Desktop\JOEM.apk"
+
+CLAUDE : 
+
+.\build-apk.bat 192.168.1.XX

@@ -95,9 +95,7 @@ class _JOEMAppState extends State<JOEMApp> {
       darkTheme: _buildTheme(AppSurfaceColors.dark),
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
-        final scale = _displayPreferences.isLargeText
-            ? DisplayPreferencesController.largeTextScaleFactor
-            : 1.0;
+        final scale = _displayPreferences.textScale;
         return MediaQuery(
           data: mediaQuery.copyWith(
             textScaler: TextScaler.linear(scale * mediaQuery.textScaler.scale(1.0)),

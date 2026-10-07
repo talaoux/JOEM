@@ -5,6 +5,8 @@ import 'package:sqflite/sqflite.dart';
 
 import 'package:joem/core/database/app_database.dart';
 import 'package:joem/core/network/api_client.dart';
+import 'package:joem/core/services/auth_service.dart';
+import 'package:joem/core/utils/offer_matcher.dart';
 import 'package:joem/features/dashboard/data/remote/job_offer_api.dart';
 
 const List<String> _shortMonths = [
@@ -609,17 +611,24 @@ class JobOfferRepository {
     return rows.map(_fromRow).toList();
   }
 
-  /// Notifications d'un chercheur d'emploi précis : toute offre publiée,
-  /// tous recruteurs confondus, qu'il n'a pas supprimée — les plus
-  /// récentes en premier, avec son propre état lu/non lue.
+  /// Notifications "Nouvelle offre" d'un chercheur d'emploi précis : les
+  /// offres publiées qui conviennent à son profil ([OfferMatcher] : intitulé
+  /// de l'offre vs titre professionnel et compétences) et qu'il n'a pas
+  /// supprimées — les plus récentes en premier, avec son propre état
+  /// lu/non lue. Toutes les offres restent dans son fil
+  /// ([fetchAllForJobSeeker]) ; avec l'API, le serveur applique la même règle.
   Future<List<JobOfferNotification>> fetchNotificationsForJobSeeker(
     String jobSeekerUserId,
   ) async {
     final api = _api;
     if (api != null) return api.fetchOfferNotifications();
 
+    final keywords = await _jobSeekerKeywords(jobSeekerUserId);
+    if (keywords.isEmpty) return const [];
+
     final db = await AppDatabase.instance.database;
-    final offerRows = await db.query('job_offers', orderBy: 'created_at DESC');
+    final offerRows = (await db.query('job_offers', orderBy: 'created_at DESC'))
+        .where((row) => OfferMatcher.matches(row['title'] as String? ?? '', keywords));
     final stateRows = await db.query(
       'job_offer_notification_reads',
       where: 'job_seeker_user_id = ?',
@@ -641,8 +650,39 @@ class JobOfferRepository {
     return notifications;
   }
 
-  /// Nombre d'offres publiées qu'un chercheur d'emploi n'a ni lues ni
-  /// supprimées — alimente la pastille de compteur (header + nav basse).
+  /// Mots-clés du profil (titre + compétences) d'un chercheur d'emploi. Le
+  /// candidat connecté est lu depuis la session, ce qui couvre aussi le
+  /// compte de démo (sans ligne en base) ; sinon depuis SQLite.
+  Future<Set<String>> _jobSeekerKeywords(String jobSeekerUserId) async {
+    final current = AuthService().currentUser;
+    if (current != null && current.id == jobSeekerUserId) {
+      return OfferMatcher.candidateKeywords(current.position, current.skills);
+    }
+
+    final userId = int.tryParse(jobSeekerUserId);
+    if (userId == null) return const {};
+    final db = await AppDatabase.instance.database;
+    final profile = await db.query(
+      'job_seeker_profiles',
+      columns: ['titre_professionnel'],
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+    final skills = await db.query(
+      'job_seeker_skills',
+      columns: ['name'],
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+    return OfferMatcher.candidateKeywords(
+      profile.isEmpty ? null : profile.first['titre_professionnel'] as String?,
+      skills.map((row) => row['name'] as String),
+    );
+  }
+
+  /// Nombre d'offres correspondant à son profil qu'un chercheur d'emploi n'a
+  /// ni lues ni supprimées — alimente la pastille de compteur (header + nav
+  /// basse).
   Future<int> countUnreadNotificationsForJobSeeker(String jobSeekerUserId) async {
     final api = _api;
     if (api != null) return api.countUnreadOfferNotifications();

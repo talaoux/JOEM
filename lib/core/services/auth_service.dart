@@ -345,6 +345,11 @@ class User {
   /// connecté.
   final bool largeTextEnabled;
 
+  /// Échelle de texte (0.85 à 1.3) pour le curseur de taille de texte
+  /// dans les paramètres d'affichage. Remplace l'ancien booléen
+  /// largeTextEnabled pour permettre un ajustement fin.
+  final double textScale;
+
   /// "Réduire les animations" — raccourcit le fondu d'apparition de
   /// `JobSeekerDashboard` et le glissement de `ProfileSidePanel`.
   final bool reducedAnimationsEnabled;
@@ -382,6 +387,7 @@ class User {
     this.marketingOptIn = false,
     this.darkModeEnabled = false,
     this.largeTextEnabled = false,
+    this.textScale = 1.0,
     this.reducedAnimationsEnabled = false,
   });
 
@@ -408,6 +414,7 @@ class User {
     bool? marketingOptIn,
     bool? darkModeEnabled,
     bool? largeTextEnabled,
+    double? textScale,
     bool? reducedAnimationsEnabled,
     String? portfolioThemeColor,
   }) {
@@ -444,6 +451,7 @@ class User {
       marketingOptIn: marketingOptIn ?? this.marketingOptIn,
       darkModeEnabled: darkModeEnabled ?? this.darkModeEnabled,
       largeTextEnabled: largeTextEnabled ?? this.largeTextEnabled,
+      textScale: textScale ?? this.textScale,
       reducedAnimationsEnabled: reducedAnimationsEnabled ?? this.reducedAnimationsEnabled,
     );
   }
@@ -709,7 +717,7 @@ class AuthService extends ChangeNotifier {
     final user = _currentUser;
     DisplayPreferencesController.instance.syncFrom(
       isDarkMode: user?.darkModeEnabled ?? false,
-      isLargeText: user?.largeTextEnabled ?? false,
+      textScale: user?.textScale ?? 1.0,
       reducedAnimations: user?.reducedAnimationsEnabled ?? false,
     );
   }
@@ -1382,6 +1390,33 @@ class AuthService extends ChangeNotifier {
       whereArgs: [userId],
     );
     await _syncToServer('texte_agrandi', (account) => account.updateProfile({'texte_agrandi': enabled}));
+  }
+
+  /// Change l'échelle de texte de l'utilisateur connecté (candidat ou
+  /// recruteur), le persiste et met à jour `DisplayPreferencesController`.
+  Future<void> updateTextScale(double scale) async {
+    final user = _currentUser;
+    if (user == null) return;
+
+    final clampedScale = scale.clamp(DisplayPreferencesController.minTextScale, DisplayPreferencesController.maxTextScale);
+    _currentUser = user.copyWith(textScale: clampedScale, largeTextEnabled: clampedScale > 1.0);
+    DisplayPreferencesController.instance.setTextScale(clampedScale);
+    notifyListeners();
+
+    final userId = int.tryParse(user.id);
+    if (userId == null || userId <= 0) return;
+
+    // Pour l'instant, on stocke comme texte_agrandi pour compatibilité
+    // Une migration future ajoutera une colonne text_scale
+    final db = await AppDatabase.instance.database;
+    await db.update(
+      _profileTableFor(user),
+      {'texte_agrandi': clampedScale > 1.0 ? 1 : 0},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+    // Note: le sync serveur utilisera texte_agrandi pour l'instant
+    await _syncToServer('texte_agrandi', (account) => account.updateProfile({'texte_agrandi': clampedScale > 1.0}));
   }
 
   /// Change "Réduire les animations" de l'utilisateur connecté (candidat ou

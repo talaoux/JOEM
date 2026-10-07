@@ -1,0 +1,26 @@
+
+Odoo est lancé et fonctionne. 🎉
+
+- Site : http://localhost:17069. L'accueil et le catalogue /atelier s'affichent bien.
+- Back-office : http://localhost:17069/web/login, avec les identifiants admin / admin.
+
+La base gasyrug a été créée et le module gasyrug_website installé, sans aucune erreur dans les journaux. Le serveur tourne en arrière-plan dans cette session Claude Code. Il s'arrêtera si tu fermes la session, ou si tu me demandes de l'arrêter.
+
+Pour les prochaines fois : l'installation est faite, il suffit de démarrer le serveur :
+
+& "C:\Users\WINDOWS 10\Desktop\blueseed\.venv\Scripts\python.exe" "C:\Users\WINDOWS 10\Desktop\blueseed\odoo-19.0\odoo-bin" -c odoo.local.conf
+
+Tu peux aussi utiliser la configuration PyCharm. Il faut d'abord y changer le chemin du script (blueseed\odoo-19.0\odoo-bin) et les paramètres (-c odoo.local.conf). Pense à arrêter le serveur lancé ici avant, sinon le port 17069 sera déjà pris.
+
+✻ Cooked for 31s · done 18:41 · 2 shells still running
+
+❯ mets à jour la config PyCharm
+
+● Bash(cd "/c/Users/WINDOWS 10/Desktop/odoo-gasyrug"; f=.idea/runConfigurations/Odoo_GASYRUG.xml; git diff $f; sed -i \
+       -e 's|name="SDK_HOME" value="[^"]*"|name="SDK_…)
+warning: in the working copy of '.idea/runConfigurations/Odoo_GASYRUG.xml', LF will be replaceduches it
+
+────────────────────────────────────────────────────────────────
+
+
+

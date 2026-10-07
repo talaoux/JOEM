@@ -5,6 +5,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/soft_ui.dart';
@@ -356,7 +357,19 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen>
                     color: _colors.textPrimary,
                   ),
                 ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfilePhotoViewerScreen(
+                        imageBytes: _currentLogoBytes,
+                        fallbackAsset: 'assets/images/avatar_portfolio1.jpg',
+                      ),
+                      fullscreenDialog: true,
+                    ),
+                  );
+                },
               ),
               ListTile(
                 leading: Icon(

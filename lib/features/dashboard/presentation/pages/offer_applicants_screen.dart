@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/account_search_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'candidate_application_detail_screen.dart';
+import 'candidate_profile_view_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
 import 'package:joem/core/network/live_updates.dart';
 
@@ -26,6 +29,7 @@ class OfferApplicantsScreen extends StatefulWidget {
 class _OfferApplicantsScreenState extends State<OfferApplicantsScreen>
     with LiveRefresh<OfferApplicantsScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
+  final AccountSearchRepository _accountRepository = const AccountSearchRepository();
 
   List<JobApplicationNotification> _applications = [];
   bool _loading = true;
@@ -62,6 +66,31 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen>
       ),
     );
     _load();
+  }
+
+  Future<void> _viewCandidateProfile(JobApplicationNotification application) async {
+    final candidate = await _accountRepository.fetchJobSeekerById(application.jobSeekerUserId);
+    if (!mounted) return;
+    if (candidate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Le profil de ce candidat n'est pas disponible.")),
+      );
+      return;
+    }
+    final viewerId = AuthService().currentUser?.id;
+    if (viewerId != null && viewerId.isNotEmpty) {
+      await _accountRepository.recordProfileView(
+        profileUserId: candidate.userId,
+        viewerUserId: viewerId,
+      );
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CandidateProfileViewScreen(candidate: candidate),
+      ),
+    );
   }
 
   @override
@@ -142,17 +171,31 @@ class _OfferApplicantsScreenState extends State<OfferApplicantsScreen>
       onTap: () => _openApplication(application),
       child: Row(
         children: [
-          SoftAvatar(name: name),
+          GestureDetector(
+            onTap: () => _viewCandidateProfile(application),
+            child: SoftAvatar(name: name),
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: _colors.textPrimary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                GestureDetector(
+                  onTap: () => _viewCandidateProfile(application),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: AppTypography.interSemiBold.copyWith(fontSize: 15, color: _colors.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded, size: 16, color: _colors.textTertiary),
+                    ],
+                  ),
                 ),
                 if (position.isNotEmpty) ...[
                   const SizedBox(height: 2),

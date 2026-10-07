@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/profile_photo_viewer_screen.dart';
 import 'soft_ui.dart';
 import 'stat_card.dart';
 
@@ -135,11 +136,39 @@ class EmployerProfileSidePanel extends StatelessWidget {
                             ),
                           ),
                         ),
-                        SoftAvatar(
-                          name: companyName,
-                          size: 104,
-                          icon: Icons.business_rounded,
-                          photo: logoBytes != null ? MemoryImage(logoBytes!) : null,
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProfilePhotoViewerScreen(
+                                  imageBytes: logoBytes,
+                                  fallbackAsset: 'assets/images/avatar_portfolio1.jpg',
+                                ),
+                                fullscreenDialog: true,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: SoftUi.tint(colors, DashboardColors.accent),
+                              shape: BoxShape.circle,
+                            ),
+                            child: CircleAvatar(
+                              radius: 50,
+                              backgroundImage: logoBytes != null
+                                  ? MemoryImage(logoBytes!) as ImageProvider
+                                  : null,
+                              child: logoBytes == null
+                                  ? Icon(
+                                      Icons.business_rounded,
+                                      size: 50,
+                                      color: SoftUi.brandInk(colors),
+                                    )
+                                  : null,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 14),
                         SizedBox(
@@ -159,7 +188,7 @@ class EmployerProfileSidePanel extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: Text(
-                            'Géré par $recruiterName',
+                            recruiterName,
                             style: colors.cardDescription,
                             textAlign: TextAlign.center,
                           ),

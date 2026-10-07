@@ -5,10 +5,12 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/account_search_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
 import 'package:joem/core/network/live_updates.dart';
+import 'company_profile_view_screen.dart';
 
 /// Détail complet d'une offre publiée par un recruteur (`job_offers`) —
 /// accessible depuis la liste "Recommandées pour vous" du dashboard
@@ -25,6 +27,7 @@ class JobOfferDetailScreen extends StatefulWidget {
 class _JobOfferDetailScreenState extends State<JobOfferDetailScreen>
     with LiveRefresh<JobOfferDetailScreen> {
   final JobOfferRepository _repository = const JobOfferRepository();
+  final AccountSearchRepository _accountRepository = const AccountSearchRepository();
   final AuthService _authService = AuthService();
 
   bool _hasApplied = false;
@@ -363,50 +366,78 @@ class _JobOfferDetailScreenState extends State<JobOfferDetailScreen>
     );
   }
 
+  Future<void> _viewCompanyProfile() async {
+    final company = await _accountRepository.fetchEmployerById(offer.employerUserId.toString());
+    if (!mounted) return;
+    if (company == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Le profil de cette entreprise n'est pas disponible.")),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CompanyProfileViewScreen(company: company),
+      ),
+    );
+  }
+
   Widget _buildCompanyHeader(AppSurfaceColors colors) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SoftAvatar(
-          name: offer.companyName,
-          size: 56,
-          icon: Icons.business_rounded,
-          photo: offer.companyLogo != null ? MemoryImage(offer.companyLogo!) : null,
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                offer.title,
-                style: AppTypography.frauncesBold.copyWith(
-                  fontSize: 21,
-                  color: colors.textPrimary,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(offer.companyName, style: colors.companyName),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.schedule_rounded,
-                    size: 12,
-                    color: colors.textTertiary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    offer.publishedLabel,
-                    style: colors.jobInfo,
-                  ),
-                ],
-              ),
-            ],
+    return InkWell(
+      onTap: _viewCompanyProfile,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SoftAvatar(
+            name: offer.companyName,
+            size: 56,
+            icon: Icons.business_rounded,
+            photo: offer.companyLogo != null ? MemoryImage(offer.companyLogo!) : null,
           ),
-        ),
-      ],
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  offer.title,
+                  style: AppTypography.frauncesBold.copyWith(
+                    fontSize: 21,
+                    color: colors.textPrimary,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(offer.companyName, style: colors.companyName),
+                    const SizedBox(width: 4),
+                    Icon(Icons.chevron_right_rounded, size: 16, color: colors.textTertiary),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 12,
+                      color: colors.textTertiary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      offer.publishedLabel,
+                      style: colors.jobInfo,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

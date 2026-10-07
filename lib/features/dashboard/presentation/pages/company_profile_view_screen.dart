@@ -5,16 +5,44 @@ import '../../../../core/theme/app_typography.dart';
 import '../../data/account_search_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
+import 'package:joem/core/network/live_updates.dart';
 
 /// Profil d'une entreprise trouvée via `JobSearchScreen` (recherche
 /// candidat) — même identité visuelle que `EmployerProfileScreen` (le
 /// profil de l'entreprise connectée), mais en lecture seule : pas
 /// d'édition de logo, pas de carte "Profil complété" (elle n'a de sens
 /// que pour son propriétaire).
-class CompanyProfileViewScreen extends StatelessWidget {
+///
+/// Le profil est relu en base à l'ouverture (et à chaque changement signalé
+/// par `LiveUpdates` en mode API) : un logo ou une photo de couverture
+/// ajoutés par le recruteur depuis la recherche s'affichent sans relancer.
+class CompanyProfileViewScreen extends StatefulWidget {
   const CompanyProfileViewScreen({super.key, required this.company});
 
   final CompanySearchResult company;
+
+  @override
+  State<CompanyProfileViewScreen> createState() => _CompanyProfileViewScreenState();
+}
+
+class _CompanyProfileViewScreenState extends State<CompanyProfileViewScreen>
+    with LiveRefresh<CompanyProfileViewScreen> {
+  late CompanySearchResult company = widget.company;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void onLiveUpdate() => _refresh();
+
+  Future<void> _refresh() async {
+    final fresh = await const AccountSearchRepository().fetchEmployerById(company.userId);
+    if (!mounted || fresh == null) return;
+    setState(() => company = fresh);
+  }
 
   static const double _bannerHeight = 130;
   static const double _avatarOverflow = 45;
@@ -73,14 +101,24 @@ class CompanyProfileViewScreen extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        const SizedBox(height: _bannerHeight + _avatarOverflow, width: double.infinity),
-        Container(
-          height: _bannerHeight,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(colors) ? 0.22 : 0.12),
+        SizedBox(height: _bannerHeight + _avatarOverflow, width: double.infinity),
+        if (company.coverPhoto != null)
+          ClipRRect(
+            child: Image.memory(
+              company.coverPhoto!,
+              height: _bannerHeight,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
+          )
+        else
+          Container(
+            height: _bannerHeight,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: DashboardColors.accent.withValues(alpha: SoftUi.isDark(colors) ? 0.22 : 0.12),
+            ),
           ),
-        ),
         Positioned(
           top: AppSpacing.sm,
           left: AppSpacing.sm,

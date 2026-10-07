@@ -52,6 +52,23 @@ class _RecruiterRegistrationScreenState
   /// `googleIdToken` des données d'inscription).
   String? _googleIdToken;
 
+  /// E-mail du compte Google choisi. Le serveur crée le compte avec l'e-mail
+  /// du jeton Google, pas avec celui du champ : dès que l'utilisateur
+  /// modifie le champ e-mail, l'inscription redevient classique (mot de
+  /// passe obligatoire) au lieu de renvoyer indéfiniment l'e-mail Google.
+  String? _googleEmail;
+
+  bool get _usesGoogleAccount =>
+      _googleAccountCreated &&
+      _googleEmail != null &&
+      _emailController.text.trim().toLowerCase() == _googleEmail;
+
+  void _forgetGoogleAccount() {
+    _googleAccountCreated = false;
+    _googleIdToken = null;
+    _googleEmail = null;
+  }
+
   // Étape 2 — Info personnelle
   final _imagePicker = ImagePicker();
   Uint8List? _logoBytes;
@@ -114,7 +131,7 @@ class _RecruiterRegistrationScreenState
   /// `kMinPasswordLength` caractères, et que les deux mots de passe
   /// correspondent.
   bool get _isStepOneValid =>
-      _googleAccountCreated ||
+      _usesGoogleAccount ||
       (_emailController.text.trim().isNotEmpty &&
           isPlausibleEmail(_emailController.text) &&
           isPasswordLongEnough(_passwordController.text) &&
@@ -188,7 +205,8 @@ class _RecruiterRegistrationScreenState
     final email = _emailController.text.trim().isNotEmpty
         ? _emailController.text.trim()
         : 'recruteur.$uniqueSuffix@google.joem';
-    final password = _passwordController.text.isNotEmpty
+    final usesGoogle = _usesGoogleAccount;
+    final password = !usesGoogle || _passwordController.text.isNotEmpty
         ? _passwordController.text
         : 'google-oauth-$uniqueSuffix';
 
@@ -206,7 +224,7 @@ class _RecruiterRegistrationScreenState
         RecruiterRegistrationData(
           email: email,
           password: password,
-          googleIdToken: _googleAccountCreated ? _googleIdToken : null,
+          googleIdToken: usesGoogle ? _googleIdToken : null,
           nom: nom,
           prenom: prenom,
           telephone: _telephoneController.text.trim(),
@@ -269,9 +287,10 @@ class _RecruiterRegistrationScreenState
         if (isAccountError) _currentStep = 0;
         // Jeton Google expiré ou refusé : il faut repasser par Google (ou
         // choisir un mot de passe).
-        if (isGoogleError) {
-          _googleAccountCreated = false;
-          _googleIdToken = null;
+        // Jeton refusé, ou e-mail Google déjà inscrit : l'utilisateur doit
+        // pouvoir saisir un autre e-mail et un mot de passe.
+        if (isGoogleError || (usesGoogle && error.errors.containsKey('email'))) {
+          _forgetGoogleAccount();
         }
         _isSubmitting = false;
       });
@@ -304,6 +323,7 @@ class _RecruiterRegistrationScreenState
           onGoogleSignIn: (account) => setState(() {
             _googleAccountCreated = true;
             _googleIdToken = account.authentication.idToken;
+            _googleEmail = account.email.trim().toLowerCase();
             final nameParts = (account.displayName ?? '').trim().split(RegExp(r'\s+'));
             if (nameParts.isNotEmpty && nameParts.first.isNotEmpty) {
               _prenomController.text = nameParts.first;

@@ -16,16 +16,21 @@ class DisplayPreferencesController extends ChangeNotifier {
   static final DisplayPreferencesController instance = DisplayPreferencesController._internal();
 
   bool _isDarkMode = false;
-  bool _isLargeText = false;
+  double _textScale = 1.0;
   bool _reducedAnimations = false;
 
   bool get isDarkMode => _isDarkMode;
-  bool get isLargeText => _isLargeText;
+  double get textScale => _textScale;
   bool get reducedAnimations => _reducedAnimations;
 
-  /// Facteur appliqué au `MediaQuery.textScaler` de tout l'arbre
-  /// (`JOEMApp`, voir `main.dart`) quand [isLargeText] est actif.
-  static const double largeTextScaleFactor = 1.15;
+  /// Pour compatibilité avec le code existant
+  bool get isLargeText => _textScale > 1.0;
+  double get largeTextScaleFactor => _textScale;
+
+  /// Plage de valeurs pour le curseur de taille de texte (0.85 à 1.3)
+  static const double minTextScale = 0.85;
+  static const double maxTextScale = 1.3;
+  static const double defaultTextScale = 1.0;
 
   void setDarkMode(bool value) {
     if (_isDarkMode == value) return;
@@ -33,10 +38,15 @@ class DisplayPreferencesController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLargeText(bool value) {
-    if (_isLargeText == value) return;
-    _isLargeText = value;
+  void setTextScale(double value) {
+    if (_textScale == value) return;
+    _textScale = value.clamp(minTextScale, maxTextScale);
     notifyListeners();
+  }
+
+  /// Pour compatibilité avec le code existant
+  void setLargeText(bool value) {
+    setTextScale(value ? 1.15 : 1.0);
   }
 
   void setReducedAnimations(bool value) {
@@ -50,20 +60,20 @@ class DisplayPreferencesController extends ChangeNotifier {
   /// `setSession`) — évite trois notifications séparées au démarrage.
   void syncFrom({
     required bool isDarkMode,
-    required bool isLargeText,
+    required double textScale,
     required bool reducedAnimations,
   }) {
     if (_isDarkMode == isDarkMode &&
-        _isLargeText == isLargeText &&
+        _textScale == textScale &&
         _reducedAnimations == reducedAnimations) {
       return;
     }
     _isDarkMode = isDarkMode;
-    _isLargeText = isLargeText;
+    _textScale = textScale.clamp(minTextScale, maxTextScale);
     _reducedAnimations = reducedAnimations;
     notifyListeners();
   }
 
   /// Remet l'affichage par défaut — appelé à la déconnexion.
-  void reset() => syncFrom(isDarkMode: false, isLargeText: false, reducedAnimations: false);
+  void reset() => syncFrom(isDarkMode: false, textScale: defaultTextScale, reducedAnimations: false);
 }

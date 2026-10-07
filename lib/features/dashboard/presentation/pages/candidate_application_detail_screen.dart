@@ -6,7 +6,7 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../core/services/auth_service.dart' show PortfolioProject;
+import '../../../../core/services/auth_service.dart' show AuthService, PortfolioProject;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_surface_colors.dart';
@@ -16,6 +16,7 @@ import '../../data/interview_repository.dart';
 import '../../data/job_offer_repository.dart';
 import '../widgets/soft_ui.dart';
 import 'candidate_full_portfolio_screen.dart';
+import 'candidate_profile_view_screen.dart';
 import 'portfolio_project_detail_screen.dart';
 import 'schedule_interview_screen.dart';
 import 'package:joem/core/widgets/animated_entrance.dart';
@@ -109,6 +110,33 @@ class _CandidateApplicationDetailScreenState extends State<CandidateApplicationD
       _portfolio = candidate;
       _loadingPortfolio = false;
     });
+  }
+
+  /// Tap sur le nom ou l'avatar du candidat : sa page profil complète
+  /// (`CandidateProfileViewScreen`), avec enregistrement de la vue comme
+  /// depuis la recherche.
+  Future<void> _openCandidateProfile() async {
+    final candidate = _portfolio ??
+        await _accountSearchRepository.fetchJobSeekerById(notification.jobSeekerUserId);
+    if (!mounted) return;
+    if (candidate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Le profil de ce candidat n'est pas disponible.")),
+      );
+      return;
+    }
+    final viewerId = AuthService().currentUser?.id;
+    if (viewerId != null && viewerId.isNotEmpty) {
+      await _accountSearchRepository.recordProfileView(
+        profileUserId: candidate.userId,
+        viewerUserId: viewerId,
+      );
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CandidateProfileViewScreen(candidate: candidate)),
+    );
   }
 
   void _openFullPortfolio() {
@@ -853,22 +881,36 @@ class _CandidateApplicationDetailScreenState extends State<CandidateApplicationD
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SoftAvatar(
-          name: _displayName,
-          size: 60,
-          photo: photo != null ? MemoryImage(photo) : null,
+        GestureDetector(
+          onTap: _openCandidateProfile,
+          child: SoftAvatar(
+            name: _displayName,
+            size: 60,
+            photo: photo != null ? MemoryImage(photo) : null,
+          ),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _displayName,
-                style: AppTypography.frauncesBold.copyWith(
-                  fontSize: 21,
-                  color: _colors.textPrimary,
-                  height: 1.15,
+              GestureDetector(
+                onTap: _openCandidateProfile,
+                child: Text.rich(
+                  TextSpan(
+                    text: _displayName,
+                    children: [
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Icon(Icons.chevron_right_rounded, size: 20, color: _colors.textTertiary),
+                      ),
+                    ],
+                  ),
+                  style: AppTypography.frauncesBold.copyWith(
+                    fontSize: 21,
+                    color: _colors.textPrimary,
+                    height: 1.15,
+                  ),
                 ),
               ),
               if (position != null && position.isNotEmpty) ...[
